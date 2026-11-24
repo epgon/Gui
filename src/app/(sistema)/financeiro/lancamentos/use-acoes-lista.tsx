@@ -27,23 +27,30 @@ type Resposta = { ok: boolean; erro?: string };
  * Ações da lista de lançamentos (novo, editar, pagar, voltar para não pago, excluir),
  * com as janelas que elas abrem. Usado na tela Lançamentos e na Agenda.
  */
-export function useAcoesLista({ opcoes, hoje, destino }: { opcoes: Opcoes; hoje: string; destino: string }) {
+export function useAcoesLista({ opcoes, hoje, destino, abrirNovo }: {
+  opcoes: Opcoes;
+  hoje: string;
+  destino: string;
+  /** Abre o Novo Lançamento assim que a tela aparece (botões Adicionar da Visão Geral). */
+  abrirNovo?: { aba: Aba; tipo?: "receita" | "despesa" } | null;
+}) {
   const router = useRouter();
-  const [pedido, setPedido] = useState<Pedido | null>(null);
+  const montarPedido = (chave: number, aba: Aba, tipo: "receita" | "despesa" = "despesa", data?: string): Pedido => {
+    const inicial = dadosVazios(opcoes, hoje, aba, tipo);
+    if (data) inicial.data = data;
+    // Filtrando por conta ou cartão, o novo lançamento já nasce nela.
+    if (destino && (aba !== "transferencia" || destino.startsWith("conta:"))) inicial.destino = destino;
+    if (aba === "transferencia") inicial.contaDestinoId = opcoes.destinos.find((d) => d.grupo === "Contas" && d.ativo && d.valor !== inicial.destino)?.valor.slice(6) ?? "";
+    return { chave, inicial };
+  };
+  const [pedido, setPedido] = useState<Pedido | null>(() => (abrirNovo ? montarPedido(0, abrirNovo.aba, abrirNovo.tipo) : null));
   const [aviso, setAviso] = useState("");
   const [pagar, setPagar] = useState<Alvo | null>(null);
   const [excluir, setExcluir] = useState<(Alvo & { parcelado: boolean; recorrente: boolean }) | null>(null);
   const [abrindo, iniciarAbertura] = useTransition();
   const [ocupado, iniciar] = useTransition();
 
-  const novo = (aba: Aba, tipo: "receita" | "despesa" = "despesa", data?: string) => {
-    const inicial = dadosVazios(opcoes, hoje, aba, tipo);
-    if (data) inicial.data = data;
-    // Filtrando por conta ou cartão, o novo lançamento já nasce nela.
-    if (destino && (aba !== "transferencia" || destino.startsWith("conta:"))) inicial.destino = destino;
-    if (aba === "transferencia") inicial.contaDestinoId = opcoes.destinos.find((d) => d.grupo === "Contas" && d.ativo && d.valor !== inicial.destino)?.valor.slice(6) ?? "";
-    setPedido({ chave: Date.now(), inicial });
-  };
+  const novo = (aba: Aba, tipo: "receita" | "despesa" = "despesa", data?: string) => setPedido(montarPedido(Date.now(), aba, tipo, data));
 
   const editar = (id: number) =>
     iniciarAbertura(async () => {

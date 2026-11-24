@@ -1,12 +1,13 @@
 "use client";
 
-import { Pencil, Power } from "lucide-react";
-import { useMemo } from "react";
+import { Eye, Pencil, Power } from "lucide-react";
+import { useMemo, useState } from "react";
 import { AsteriscoPadrao } from "@/components/cadastros/asterisco";
 import { BarraLista } from "@/components/cadastros/barra-lista";
 import { ChaveSituacao } from "@/components/cadastros/chave-situacao";
 import { IconeBanco } from "@/components/cadastros/icone-banco";
 import { MenuLinha } from "@/components/cadastros/menu-linha";
+import { DetalhandoConta } from "@/components/contas/detalhando-conta";
 import { ModalCadastro, useFormularioCadastro } from "@/components/cadastros/modal-cadastro";
 import { Paginacao } from "@/components/cadastros/paginacao";
 import { useSituacao } from "@/components/cadastros/use-situacao";
@@ -51,6 +52,7 @@ export function TelaContas({ linhas, total, filtros, caminho, bancos, hoje }: {
   );
   const form = useFormularioCadastro(vazio);
   const situacao = useSituacao(alterarSituacaoConta);
+  const [detalhando, setDetalhando] = useState<number | null>(null);
   const parametros = { busca: filtros.busca, tipo: filtros.tipo, situacao: filtros.situacao === "todos" ? "" : filtros.situacao };
   const bancoEscolhido = bancos.find((b) => String(b.id) === form.dados.bancoId);
 
@@ -84,7 +86,9 @@ export function TelaContas({ linhas, total, filtros, caminho, bancos, hoje }: {
               <span className={`flex items-center gap-3 ${l.ativo ? "" : "opacity-50"}`}>
                 <IconeBanco codigo={l.bancoCodigo} nome={l.bancoNome ?? "Outro"} />
                 <span>
-                  <span className="font-medium text-gray-900">{l.descricao}</span>
+                  <button type="button" onClick={() => setDetalhando(l.id)} className="font-medium text-gray-900 hover:text-verde hover:underline" title="Detalhar conta">
+                    {l.descricao}
+                  </button>
                   <AsteriscoPadrao mostrar={l.padraoSistema} />
                   <span className="block text-xs text-gray-500">{l.bancoNome ?? "Outro"}</span>
                 </span>
@@ -137,6 +141,7 @@ export function TelaContas({ linhas, total, filtros, caminho, bancos, hoje }: {
               <MenuLinha
                 rotulo={l.descricao}
                 itens={[
+                  { rotulo: "Detalhar", icone: <Eye className="h-4 w-4" />, aoClicar: () => setDetalhando(l.id) },
                   { rotulo: "Editar", icone: <Pencil className="h-4 w-4" />, aoClicar: () => editar(l) },
                   { rotulo: l.ativo ? "Inativar" : "Ativar", icone: <Power className="h-4 w-4" />, aoClicar: () => situacao.alternar(l.id, l.ativo) },
                 ]}
@@ -146,6 +151,8 @@ export function TelaContas({ linhas, total, filtros, caminho, bancos, hoje }: {
         ]}
       />
       <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={POR_PAGINA} total={total} />
+
+      {detalhando !== null && <DetalhandoConta key={detalhando} contaId={detalhando} aoFechar={() => setDetalhando(null)} />}
 
       <ModalCadastro
         formulario={form}

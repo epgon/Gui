@@ -4,7 +4,7 @@ import { ArrowDown, ArrowLeftRight, ArrowUp, CheckCircle2, ChevronLeft, ChevronR
 import Form from "next/form";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { IconeBanco } from "@/components/cadastros/icone-banco";
 import { MenuLinha } from "@/components/cadastros/menu-linha";
 import { Botao } from "@/components/ui/botao";
@@ -36,7 +36,9 @@ export const SITUACOES = [
 /** Linhas que podem ser marcadas: lançamentos gravados e recorrentes previstos (não a linha da fatura). */
 export const selecionavel = (l: LinhaLista) => l.id !== null || l.previsto !== null;
 
-export function TelaLancamentos({ linhas, resumo, filtros, opcoes, hoje, mes, caminho }: {
+export function TelaLancamentos({ linhas, resumo, filtros, opcoes, hoje, mes, caminho, abrirNovo }: {
+  /** "despesa", "receita" ou "transferencia": abre o Novo Lançamento ao entrar (vindo da Visão Geral). */
+  abrirNovo?: string;
   linhas: LinhaLista[];
   resumo: Resumo;
   filtros: Filtros;
@@ -46,7 +48,12 @@ export function TelaLancamentos({ linhas, resumo, filtros, opcoes, hoje, mes, ca
   caminho: string;
 }) {
   const router = useRouter();
-  const acoes = useAcoesLista({ opcoes, hoje, destino: filtros.destino });
+  const acoes = useAcoesLista({
+    opcoes,
+    hoje,
+    destino: filtros.destino,
+    abrirNovo: abrirNovo === "transferencia" ? { aba: "transferencia" } : abrirNovo === "receita" || abrirNovo === "despesa" ? { aba: "simples", tipo: abrirNovo } : null,
+  });
   // A seleção vale para a lista que está na tela; quando a lista muda (salvou, filtrou), ela é limpa.
   const [selecao, setSelecao] = useState<{ base: LinhaLista[]; chaves: string[] }>({ base: linhas, chaves: [] });
   const selecionados = selecao.base === linhas ? selecao.chaves : [];
@@ -75,6 +82,12 @@ export function TelaLancamentos({ linhas, resumo, filtros, opcoes, hoje, mes, ca
     setSelecionados([]);
     router.push(link(mudancas));
   };
+
+  // Tira o "?novo=" do endereço (a janela já abriu), para não abrir de novo ao recarregar.
+  useEffect(() => {
+    if (abrirNovo) router.replace(link({}), { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { novo, abrindo, aviso, ocupado } = acoes;
   const selecionaveis = linhas.filter(selecionavel).map((l) => l.chave);

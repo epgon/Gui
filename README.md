@@ -31,6 +31,15 @@ Fases prontas:
   "Gerar Recorrente" no Novo Lançamento. Financeiro > Agenda: calendário do mês com o anel de "% Realizado" e a janela
   Lançamentos do Dia.
 
+- **Fase 4 (Visão Geral e Meus Dados)**: a Visão Geral virou o painel do dia a dia: saudação com o **olho** para
+  esconder os valores, aviso do que vence hoje, botões Adicionar (Despesa, Receita, Transferência), **Saldo Atual**
+  com o mini gráfico dos últimos 30 dias, **Receitas e Despesas do mês** (com o quanto já foi recebido e pago),
+  **Vencidos**, **Vencendo** e **Futuro** (clique para ver a lista), **Saldo das Contas** e **Despesas por Categorias**
+  (rosca com as 5 maiores). Cada cartão tem "Opções" no menu de três pontinhos (dias para trás e para frente, período
+  das categorias, contas que aparecem). **Detalhando Conta Financeira** (abas Resumo e Lançamentos), aberto pela
+  Visão Geral ou pela lista de Contas Financeiras. **Administração > Meus Dados**: informações e endereço, troca de
+  senha e **Tempo da Sessão** (sai sozinho depois desse tempo sem uso; padrão 20 minutos).
+
 As outras telas dos menus ainda mostram "Em construção" com a fase em que chegam.
 
 ### Como os recorrentes funcionam
@@ -101,7 +110,7 @@ npm run dev             # abre em http://localhost:3000
 | `npm run db:gerar` | Gera uma nova migração depois de mudar `src/db/schema.ts`. |
 | `npm run criar-usuario` | Cria o usuário ou troca a senha. |
 | `npm run lint` / `npm run typecheck` | Conferências automáticas do código. |
-| `npm test` | Testes das contas de dinheiro (parcelas, fatura do cartão, saldos, datas dos recorrentes, dia útil e média). |
+| `npm test` | Testes das contas de dinheiro (parcelas, fatura do cartão, saldos, datas dos recorrentes, dia útil, média e os totais da Visão Geral). |
 
 ## Como o projeto está organizado
 
@@ -115,11 +124,14 @@ npm run dev             # abre em http://localhost:3000
 | `src/components/cadastros` | Peças comuns das listas: barra com Adicionar e busca, painel de Filtros, paginação, menu de três pontos, check de situação, janela de cadastro. |
 | `src/lib/categorias.ts` | Monta a árvore de categorias e calcula a numeração (1., 9.4.1.). |
 | `src/lib/menu.ts` | Itens dos menus e em qual fase cada tela chega. |
+| `src/lib/visao-geral` | Contas da Visão Geral (`regras.ts`, com testes) e a carga dos cartões do painel (`servidor.ts`). |
+| `src/lib/contas/detalhe.ts` | Dados do Detalhando Conta Financeira. |
+| `src/proxy.ts` | Renova a sessão a cada página aberta (o Tempo da Sessão conta a partir do último uso). |
 | `src/lib/recorrentes` | Regras dos recorrentes (`regras.ts`, com testes), cálculo das ocorrências previstas, gravação e "Realizar automaticamente" (`servidor.ts`). |
 | `src/app/(sistema)/financeiro/recorrentes` e `.../agenda` | Telas de Recorrentes (com Planos) e Agenda. |
 | `src/db/schema.ts` | As tabelas do banco. |
 | `drizzle/` | Migrações: `0000` cria as tabelas, `0001` faz a carga inicial, `0002` cria a auditoria e o saldo inicial das contas, `0003` os lançamentos, `0004` os recorrentes e planos. |
-| `src/auth.ts` | Login (Auth.js), sessão de 20 minutos sem atividade. |
+| `src/auth.ts` | Login (Auth.js). A sessão acaba depois do Tempo da Sessão sem uso (Meus Dados > Preferências; padrão 20 minutos). |
 | `scripts/` | Scripts de terminal: configurar, migrar, criar usuário. |
 
 ## Regras do projeto

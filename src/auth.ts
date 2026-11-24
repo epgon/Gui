@@ -1,10 +1,8 @@
 import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { z } from "zod";
-import { verificarCredenciais } from "@/lib/usuario";
-
-/** Tempo sem atividade até sair sozinho (padrão do Contas Online: 20 minutos). */
-export const TEMPO_SESSAO_MINUTOS = 20;
+import { TEMPO_SESSAO_MAXIMO, TEMPO_SESSAO_PADRAO } from "@/lib/preferencias";
+import { lerTempoSessao, verificarCredenciais } from "@/lib/usuario";
 
 const formularioLogin = z.object({
   email: z.string().trim().email(),
@@ -15,10 +13,14 @@ class CredenciaisInvalidas extends CredentialsSignin {
   code = "credenciais_invalidas";
 }
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+const agoraEmSegundos = () => Math.floor(Date.now() / 1000);
+
+export const { handlers, auth, signIn, signOut, unstable_update: atualizarSessao } = NextAuth({
   session: {
     strategy: "jwt",
-    maxAge: TEMPO_SESSAO_MINUTOS * 60,
+    // O cookie dura o tempo máximo; quem decide a saída por falta de uso é o callback "jwt" abaixo,
+    // com o "Tempo da Sessão" escolhido em Meus Dados (padrão: 20 minutos).
+    maxAge: TEMPO_SESSAO_MAXIMO * 60,
     updateAge: 60,
   },
   pages: { signIn: "/login" },
@@ -40,6 +42,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
+    async jwt({ token, user, trigger, session }) {
+      const agora = agoraEmSegundos();
+      if (user) {
+        // Acabou de entrar.
+        token.tempoSessao = await lerTempoSessao();
+        token.ultimaAtividade = agora;
+        return token;
+      }
+      if (trigger === "update") {
+        // Meus Dados mudou o nome, o e-mail ou o tempo da sessão.
+        const novo = (session as { user?: { name?: string; email?: string } } | undefined)?.user;
+        if (novo?.name) token.name = novo.name;
+        if (novo?.email) token.email = novo.email;
+        token.tempoSessao = await lerTempoSessao();
+      }
+      const limite = (typeof token.tempoSessao === "number" ? token.tempoSessao : TEMPO_SESSAO_PADRAO) * 60;
+      const ultima = typeof token.ultimaAtividade === "number" ? token.ultimaAtividade : agora;
+      if (agora - ultima > limite) return null; // ficou parado tempo demais: sai do sistema
+      token.ultimaAtividade = agora;
+      return token;
+    },
     session({ session, token }) {
       if (token.sub) session.user.id = token.sub;
       return session;
