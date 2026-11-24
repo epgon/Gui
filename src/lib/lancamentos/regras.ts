@@ -179,8 +179,16 @@ export function faturaDaCompra(dataCompra: string, diaFechamento: number, diaVen
   const [ano, mes] = partes(dataCompra);
   const fechamentoDoMes = dataComDia(ano, mes, diaFechamento);
   const mesFechamento = dataCompra < fechamentoDoMes ? mes : mes + 1;
-  const dataFechamento = dataComDia(ano, mesFechamento, diaFechamento);
-  const [af, mf] = partes(dataFechamento);
+  return faturaDaCompetencia(dataComDia(ano, mesFechamento, 1), diaFechamento, diaVencimento);
+}
+
+/**
+ * Datas da fatura de uma competência (mês em que ela fecha, ex.: "2026-12-01").
+ * Vencimento no mesmo mês do fechamento se o dia de vencimento for depois do fechamento; senão, no mês seguinte.
+ */
+export function faturaDaCompetencia(competencia: string, diaFechamento: number, diaVencimento: number) {
+  const [af, mf] = partes(competencia);
+  const dataFechamento = dataComDia(af, mf, diaFechamento);
   const dataVencimento = dataComDia(af, diaVencimento > diaFechamento ? mf : mf + 1, diaVencimento);
   return { competencia: montarData(af, mf, 1), dataFechamento, dataVencimento };
 }

@@ -2,6 +2,7 @@ import "server-only";
 import { and, asc, eq, gte, inArray, isNotNull, lt, lte, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { rotuloTipoConta } from "@/lib/cadastros/opcoes";
+import { faturasAtuais } from "@/lib/cartoes/servidor";
 import { montarArvore } from "@/lib/categorias";
 import { lerConfiguracao } from "@/lib/configuracao";
 import { hojeIso } from "@/lib/datas";
@@ -63,7 +64,7 @@ export async function carregarPainel(hoje = hojeIso()) {
   const prazos = separarPrazos(todas, hoje, opcoes);
   const mesAtual = totaisDoMes(porMes.get(hoje.slice(0, 7)) ?? []);
 
-  const [contas, saldos, serie, categorias] = await Promise.all([
+  const [contas, saldos, serie, categorias, faturas] = await Promise.all([
     db
       .select({
         id: conta.id,
@@ -80,6 +81,7 @@ export async function carregarPainel(hoje = hojeIso()) {
     saldosDasContas(hoje),
     evolucaoDoSaldo(hoje, 30),
     despesasPorCategoria(somarDias(hoje, -(opcoes.categoriasDias - 1)), hoje),
+    faturasAtuais(hoje),
   ]);
 
   const listaContas: ContaPainel[] = contas.map((c) => ({
@@ -90,7 +92,7 @@ export async function carregarPainel(hoje = hojeIso()) {
   }));
   const saldoAtual = listaContas.filter((c) => c.considerarNosSaldos).reduce((s, c) => s + c.saldoCentavos, 0);
 
-  return { opcoes, prazos, mesAtual, contas: listaContas, saldoAtual, serie, categorias };
+  return { opcoes, prazos, mesAtual, contas: listaContas, saldoAtual, serie, categorias, faturas };
 }
 
 /** Ids das contas marcadas "Considerar nos saldos". */

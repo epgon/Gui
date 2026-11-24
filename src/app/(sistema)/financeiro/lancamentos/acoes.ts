@@ -15,13 +15,16 @@ import { conferirOcorrencia, dadosDaOcorrencia, gravarOcorrencia } from "@/lib/r
 import { ErroValidacao, lerDatasRecorrencia } from "@/lib/recorrentes/validacao";
 import { exigirLogin } from "@/lib/sessao";
 
-const { lancamento: l, lancamentoItem: item, lancamentoTag, contaFinanceira: conta, cartaoCredito: cartao, categoria, parcelamento, transferencia, anexo, formaPagamento, contato, tag, recorrencia, recorrenciaItem, recorrenciaTag, recorrenciaExcecao } = schema;
+const { lancamento: l, lancamentoItem: item, lancamentoTag, contaFinanceira: conta, cartaoCredito: cartao, fatura, categoria, parcelamento, transferencia, anexo, formaPagamento, contato, tag, recorrencia, recorrenciaItem, recorrenciaTag, recorrenciaExcecao } = schema;
 const TELA = "Lançamentos";
 const ENTIDADE = "Lançamento";
 const MAXIMO_CENTAVOS = 99_999_999_999;
 const MAXIMO_PARCELAS = 360;
 
 type Linha = typeof l.$inferInsert;
+
+const COMPRA_PAGA = "Esta compra já foi paga junto com a fatura. Para mudar o valor, o cartão ou a fatura, desfaça antes o pagamento da fatura (em Cadastros > Cartões de Crédito > Faturas).";
+const PAGAMENTO_FATURA = "Este é o pagamento de uma fatura de cartão. Para mudar, abra a fatura e use **Desfazer pagamento**.";
 
 // ---------------------------------------------------------------------------
 // Validação
@@ -247,6 +250,7 @@ async function salvarSimplesOuDetalhado(tx: Transacao, id: number | null, d: Dad
   if (!antes) erro("Este lançamento não existe mais.");
   if (antes.tipo === "saldo_inicial") erro("O Saldo Inicial é alterado no cadastro da Conta Financeira.");
   if (antes.transferenciaId) erro("Este lançamento é uma transferência: edite pela aba **Transferência**.");
+  if (antes.tipo === "pagamento_fatura") erro(PAGAMENTO_FATURA);
   if (antes.parcelamentoId) {
     // Parcela: mantém o número e o total.
     base.parcelamentoId = antes.parcelamentoId;
@@ -260,11 +264,23 @@ async function salvarSimplesOuDetalhado(tx: Transacao, id: number | null, d: Dad
     base.valorPagoCentavos = antes.valorPagoCentavos;
   }
   if (base.cartaoId) {
-    const f = await garantirFatura(tx, base.cartaoId, data);
+    // Mesmo cartão e mesmo dia de compra: a compra fica na fatura em que está (pode ter sido movida à mão).
+    const mesmaFatura = antes.faturaId !== null && antes.cartaoId === base.cartaoId && (antes.dataCompra ?? antes.dataVencimento) === data;
+    const f = mesmaFatura
+      ? (await tx.select({ id: fatura.id, dataVencimento: fatura.dataVencimento }).from(fatura).where(eq(fatura.id, antes.faturaId!)))[0]
+      : await garantirFatura(tx, base.cartaoId, data);
     Object.assign(base, { dataVencimento: f.dataVencimento, faturaId: f.id, realizarAutomaticamente: false });
     if (!antes.cartaoId) Object.assign(base, { dataPagamento: null, valorPagoCentavos: null });
   } else {
     base.faturaId = null;
+  }
+  // Compra já paga junto com a fatura: valor, tipo, cartão e fatura não mudam (o pagamento já saiu da conta).
+  if (
+    antes.cartaoId &&
+    antes.dataPagamento &&
+    (base.cartaoId !== antes.cartaoId || base.faturaId !== antes.faturaId || base.valorCentavos !== antes.valorCentavos || base.tipo !== antes.tipo)
+  ) {
+    erro(COMPRA_PAGA);
   }
   await tx.update(l).set(base).where(eq(l.id, id));
   await tx.delete(lancamentoTag).where(eq(lancamentoTag.lancamentoId, id));
@@ -415,7 +431,7 @@ export async function carregarLancamento(id: number): Promise<LancamentoEdicao |
   if (!idValido.safeParse(id).success) return null;
   const db = getDb();
   const [x] = await db.select().from(l).where(eq(l.id, id));
-  if (!x) return null;
+  if (!x || x.tipo === "pagamento_fatura") return null;
   let par = x;
   let contaDestinoId = "";
   if (x.transferenciaId) {
@@ -562,7 +578,7 @@ export async function realizarLancamentos(ids: number[], dataPagamento: string, 
         const alvo = await tx.select().from(l).where(and(inArray(l.id, todos), isNull(l.cartaoId), isNull(l.dataPagamento)));
         const cartao = await tx.select({ id: l.id }).from(l).where(and(inArray(l.id, validos), sql`${l.cartaoId} is not null`));
         if (!alvo.length && !previstas.length) {
-          return falha(cartao.length ? "Compras no cartão são pagas junto com a fatura (chega na Fase 5)." : "Os lançamentos escolhidos já estão pagos ou recebidos.");
+          return falha(cartao.length ? "Compras no cartão são pagas junto com a fatura: use **Pagar fatura** na linha Fatura-Cartão." : "Os lançamentos escolhidos já estão pagos ou recebidos.");
         }
         for (const x of alvo) {
           await tx.update(l).set({ dataPagamento, valorPagoCentavos: x.valorCentavos }).where(eq(l.id, x.id));
@@ -587,7 +603,7 @@ export async function estornarLancamentos(ids: number[]): Promise<Resultado> {
     const alvo = await tx
       .select()
       .from(l)
-      .where(and(inArray(l.id, todos), isNull(l.cartaoId), ne(l.tipo, "saldo_inicial"), sql`${l.dataPagamento} is not null`));
+      .where(and(inArray(l.id, todos), isNull(l.cartaoId), ne(l.tipo, "saldo_inicial"), ne(l.tipo, "pagamento_fatura"), sql`${l.dataPagamento} is not null`));
     if (!alvo.length) return falha("Nenhum dos lançamentos escolhidos pode voltar para não pago.");
     for (const x of alvo) {
       await tx.update(l).set({ dataPagamento: null, valorPagoCentavos: null }).where(eq(l.id, x.id));
@@ -617,6 +633,10 @@ export async function excluirLancamentos(ids: number[], parcelas: "esta" | "prox
       }
     }
     const alvo = await tx.select().from(l).where(inArray(l.id, todos));
+    if (alvo.some((x) => x.tipo === "pagamento_fatura")) return falha(PAGAMENTO_FATURA);
+    if (alvo.some((x) => x.cartaoId && x.dataPagamento)) {
+      return falha("Há compras já pagas junto com a fatura na seleção. Para excluir, desfaça antes o pagamento da fatura (em Cadastros > Cartões de Crédito > Faturas).");
+    }
     const saldoInicial = alvo.filter((x) => x.tipo === "saldo_inicial");
     const apagar = alvo.filter((x) => x.tipo !== "saldo_inicial");
     if (!apagar.length) return falha(saldoInicial.length ? "O Saldo Inicial é alterado no cadastro da Conta Financeira." : "Lançamento não encontrado.");

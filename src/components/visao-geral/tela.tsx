@@ -1,5 +1,6 @@
 "use client";
 
+import { comoSaida } from "@/lib/cartoes/regras";
 import { AlertTriangle, ArrowDown, ArrowLeftRight, ArrowUp, CalendarCheck, CalendarClock, CalendarX, ChevronRight, ExternalLink, Settings2, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -7,6 +8,8 @@ import { useState, useTransition } from "react";
 import { salvarOpcoesVisaoGeral } from "@/app/(sistema)/visao-geral-acoes";
 import { IconeBanco } from "@/components/cadastros/icone-banco";
 import { MenuLinha } from "@/components/cadastros/menu-linha";
+import { DetalhandoCartao } from "@/components/cartoes/detalhando-cartao";
+import { EtiquetaFatura } from "@/components/cartoes/janela-fatura";
 import { DetalhandoConta } from "@/components/contas/detalhando-conta";
 import { Botao } from "@/components/ui/botao";
 import { CampoSelecao, TextoComDestaque } from "@/components/ui/campo";
@@ -21,7 +24,7 @@ import type { carregarPainel } from "@/lib/visao-geral/servidor";
 import { GraficoRosca, MiniGrafico } from "./graficos";
 
 export type Painel = Awaited<ReturnType<typeof carregarPainel>>;
-type QualOpcao = "vencidos" | "futuro" | "contas" | "categorias";
+type QualOpcao = "vencidos" | "futuro" | "contas" | "categorias" | "faturas";
 type QualPrazo = "vencidos" | "vencendo" | "futuro";
 
 const LANCAMENTOS = "/financeiro/lancamentos";
@@ -65,11 +68,13 @@ export function TelaVisaoGeral({ painel, hoje }: { painel: Painel; hoje: string 
   const [opcaoAberta, setOpcaoAberta] = useState<QualOpcao | null>(null);
   const [prazoAberto, setPrazoAberto] = useState<QualPrazo | null>(null);
   const [contaAberta, setContaAberta] = useState<number | null>(null);
+  const [cartaoAberto, setCartaoAberto] = useState<number | null>(null);
   const [ocultar] = useOcultarValores();
   const router = useRouter();
   const { prazos, mesAtual, opcoes } = painel;
   const mesRotulo = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" }).format(new Date(hoje + "T12:00:00Z"));
   const contasVisiveis = painel.contas.filter((c) => c.ativo && !opcoes.contasOcultas.includes(c.id));
+  const faturasVisiveis = painel.faturas.filter((f) => !opcoes.cartoesOcultos.includes(f.cartao.id));
 
   return (
     <ProvedorOcultar>
@@ -227,9 +232,86 @@ export function TelaVisaoGeral({ painel, hoje }: { painel: Painel; hoje: string 
         </CartaoPainel>
       </div>
 
+      {/* Faturas Atuais */}
+      <CartaoPainel titulo="Faturas Atuais" menu={[{ rotulo: "Opções", aoClicar: () => setOpcaoAberta("faturas") }]}>
+        {faturasVisiveis.length === 0 ? (
+          <Vazio
+            texto={painel.faturas.length ? "Nenhum cartão escolhido para aparecer aqui." : "Cadastre seus cartões para acompanhar as faturas."}
+            acao={painel.faturas.length ? { rotulo: "Opções", aoClicar: () => setOpcaoAberta("faturas") } : { rotulo: "Cartões de Crédito", href: "/cadastros/cartoes-de-credito" }}
+          />
+        ) : (
+          <>
+            <div className="-mt-1 mb-3 flex items-center justify-between text-xs text-gray-500">
+              <span>A fatura fechada que falta pagar ou, se não houver, a que está aberta agora</span>
+              <span className="flex items-center gap-1 text-sm font-semibold text-gray-700">
+                Total <ValorOcultavel centavos={comoSaida(faturasVisiveis.reduce((s, f) => s + Math.max(0, f.fatura.totalCentavos), 0))} />
+              </span>
+            </div>
+            <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {faturasVisiveis.map(({ cartao: c, fatura: f, limite }) => {
+                const vencida = f.situacao !== "paga" && f.pendenteCentavos > 0 && f.dataVencimento < hoje;
+                return (
+                  <li key={c.id}>
+                    <button
+                      type="button"
+                      onClick={() => setCartaoAberto(c.id)}
+                      className="w-full rounded-lg border border-borda p-3 text-left hover:border-verde hover:bg-verde-claro/30"
+                      title="Detalhar cartão e faturas"
+                    >
+                      <span className="flex items-center gap-2">
+                        <IconeBanco codigo={c.bancoCodigo} nome={c.bancoNome} className="h-7 w-7 text-[10px]" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-gray-900">{c.descricao}</span>
+                          <span className="block text-xs text-gray-500">
+                            Fatura de {f.rotulo} · vence {formatarData(f.dataVencimento)}
+                          </span>
+                        </span>
+                        <EtiquetaFatura situacao={f.situacao} vencida={vencida} />
+                      </span>
+                      <span className="mt-2 flex items-end justify-between gap-2">
+                        <ValorOcultavel centavos={comoSaida(Math.max(0, f.totalCentavos))} className="text-xl" />
+                        {f.pagoCentavos > 0 && f.pendenteCentavos > 0 && (
+                          <span className="text-xs text-gray-500">
+                            falta <ValorOcultavel centavos={comoSaida(f.pendenteCentavos)} className="text-xs" />
+                          </span>
+                        )}
+                      </span>
+                      {!limite.ilimitado && (
+                        <span className="mt-2 block">
+                          <span className="block h-1.5 overflow-hidden rounded-full bg-gray-100">
+                            <span
+                              className={cn("block h-full rounded-full", limite.percentualUsado >= 90 ? "bg-negativo" : limite.percentualUsado >= 70 ? "bg-dourado" : "bg-receita")}
+                              style={{ width: `${limite.percentualUsado}%` }}
+                            />
+                          </span>
+                          <span className="mt-1 flex justify-between text-[11px] text-gray-500">
+                            <span>Limite disponível</span>
+                            <ValorOcultavel centavos={limite.disponivel ?? 0} className="text-[11px]" />
+                          </span>
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
+      </CartaoPainel>
+
       {prazoAberto && <ModalPrazo qual={prazoAberto} prazo={prazos[prazoAberto]} periodo={prazos.periodos[prazoAberto]} aoFechar={() => setPrazoAberto(null)} />}
-      {opcaoAberta && <ModalOpcoes key={opcaoAberta} qual={opcaoAberta} opcoes={opcoes} contas={painel.contas.filter((c) => c.ativo)} aoFechar={() => setOpcaoAberta(null)} />}
+      {opcaoAberta && (
+        <ModalOpcoes
+          key={opcaoAberta}
+          qual={opcaoAberta}
+          opcoes={opcoes}
+          contas={painel.contas.filter((c) => c.ativo)}
+          cartoes={painel.faturas.map((f) => f.cartao)}
+          aoFechar={() => setOpcaoAberta(null)}
+        />
+      )}
       {contaAberta !== null && <DetalhandoConta key={contaAberta} contaId={contaAberta} aoFechar={() => setContaAberta(null)} />}
+      {cartaoAberto !== null && <DetalhandoCartao key={cartaoAberto} cartaoId={cartaoAberto} aoFechar={() => { setCartaoAberto(null); router.refresh(); }} />}
     </ProvedorOcultar>
   );
 }
@@ -362,12 +444,14 @@ const TITULOS_OPCOES: Record<QualOpcao, string> = {
   futuro: "Opções: Futuro",
   contas: "Opções: Saldo das Contas",
   categorias: "Opções: Despesas por Categorias",
+  faturas: "Opções: Faturas Atuais",
 };
 
-function ModalOpcoes({ qual, opcoes, contas, aoFechar }: {
+function ModalOpcoes({ qual, opcoes, contas, cartoes, aoFechar }: {
   qual: QualOpcao;
   opcoes: OpcoesVisaoGeral;
   contas: Painel["contas"];
+  cartoes: Painel["faturas"][number]["cartao"][];
   aoFechar: () => void;
 }) {
   const [dados, setDados] = useState(opcoes);
@@ -384,7 +468,9 @@ function ModalOpcoes({ qual, opcoes, contas, aoFechar }: {
             ? { futuroDias: dados.futuroDias }
             : qual === "categorias"
               ? { categoriasDias: dados.categoriasDias }
-              : { contasOcultas: dados.contasOcultas };
+              : qual === "faturas"
+                ? { cartoesOcultos: dados.cartoesOcultos }
+                : { contasOcultas: dados.contasOcultas };
       const r = await salvarOpcoesVisaoGeral(mudancas);
       if (r.ok) aoFechar();
       else setErro(r.erro);
@@ -434,6 +520,29 @@ function ModalOpcoes({ qual, opcoes, contas, aoFechar }: {
             aoMudar={(v) => setDados({ ...dados, categoriasDias: Number(v) })}
             opcoes={comAtual(OPCOES_PERIODO, dados.categoriasDias).map((o) => ({ ...o, rotulo: `Últimos ${o.rotulo}` }))}
           />
+        )}
+        {qual === "faturas" && (
+          <div>
+            <p className="mb-2 text-sm text-gray-600">Escolha os cartões que aparecem em Faturas Atuais.</p>
+            {cartoes.length === 0 && <p className="text-sm text-gray-500">Nenhum cartão ativo.</p>}
+            <ul className="divide-y divide-borda rounded-lg border border-borda">
+              {cartoes.map((c) => {
+                const visivel = !dados.cartoesOcultos.includes(c.id);
+                return (
+                  <li key={c.id} className="flex items-center gap-3 px-3 py-2">
+                    <IconeBanco codigo={c.bancoCodigo} nome={c.bancoNome} className="h-7 w-7 text-[10px]" />
+                    <Chave
+                      ligada={visivel}
+                      rotulo={c.descricao}
+                      aoMudar={() =>
+                        setDados({ ...dados, cartoesOcultos: visivel ? [...dados.cartoesOcultos, c.id] : dados.cartoesOcultos.filter((x) => x !== c.id) })
+                      }
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         )}
         {qual === "contas" && (
           <div>

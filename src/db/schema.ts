@@ -318,6 +318,8 @@ export const lancamento = pgTable(
     contaId: integer("conta_id").references(() => contaFinanceira.id),
     cartaoId: integer("cartao_id").references(() => cartaoCredito.id),
     faturaId: integer("fatura_id").references(() => fatura.id),
+    /** Pagamento de fatura (tipo "pagamento_fatura"): a fatura que este lançamento pagou. */
+    faturaPagaId: integer("fatura_paga_id").references(() => fatura.id),
     categoriaId: integer("categoria_id").references(() => categoria.id),
     formaPagamentoId: integer("forma_pagamento_id").references(() => formaPagamento.id),
     contatoId: integer("contato_id").references(() => contato.id),
@@ -346,6 +348,7 @@ export const lancamento = pgTable(
     index("lancamento_conta_idx").on(t.contaId),
     index("lancamento_cartao_idx").on(t.cartaoId),
     index("lancamento_fatura_idx").on(t.faturaId),
+    index("lancamento_fatura_paga_idx").on(t.faturaPagaId),
     index("lancamento_parcelamento_idx").on(t.parcelamentoId),
     index("lancamento_transferencia_idx").on(t.transferenciaId),
     uniqueIndex("lancamento_saldo_inicial_unico").on(t.contaId).where(sql`${t.tipo} = 'saldo_inicial'`),
@@ -527,6 +530,7 @@ export const acaoAuditoriaEnum = pgEnum("acao_auditoria", [
   "ativou",
   "inativou",
   "excluiu",
+  "pagou",
 ]);
 
 /**

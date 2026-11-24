@@ -1,4 +1,5 @@
 /** Tipos compartilhados entre a tela de Lançamentos (navegador) e o servidor. */
+import type { SituacaoFatura } from "@/lib/cartoes/regras";
 import type { Situacao, TipoLancamento } from "./regras";
 
 export type Aba = "todos" | "receitas" | "despesas" | "transferencias";
@@ -24,6 +25,8 @@ export type LinhaLista = {
   chave: string;
   id: number | null; // null para a linha da fatura
   faturaId: number | null;
+  /** Só na linha da fatura: Aberta, Fechada ou Paga. */
+  faturaSituacao: SituacaoFatura | null;
   tipo: TipoLancamento;
   formato: "simples" | "detalhado";
   descricao: string;
