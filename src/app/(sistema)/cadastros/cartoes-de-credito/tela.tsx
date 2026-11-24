@@ -1,0 +1,224 @@
+"use client";
+
+import { Pencil, Power } from "lucide-react";
+import { useMemo } from "react";
+import { AsteriscoPadrao } from "@/components/cadastros/asterisco";
+import { BarraLista } from "@/components/cadastros/barra-lista";
+import { ChaveSituacao } from "@/components/cadastros/chave-situacao";
+import { IconeBanco } from "@/components/cadastros/icone-banco";
+import { MenuLinha } from "@/components/cadastros/menu-linha";
+import { ModalCadastro, useFormularioCadastro } from "@/components/cadastros/modal-cadastro";
+import { Paginacao } from "@/components/cadastros/paginacao";
+import { useSituacao } from "@/components/cadastros/use-situacao";
+import { CampoSelecao, CampoTexto, CampoValor, TextoComDestaque } from "@/components/ui/campo";
+import { Chave } from "@/components/ui/chave";
+import { FaixaErro } from "@/components/ui/faixa-erro";
+import { Tabela } from "@/components/ui/tabela";
+import { Valor } from "@/components/ui/valor";
+import { POR_PAGINA, type Situacao } from "@/lib/cadastros/filtros";
+import { type BancoOpcao, DIAS_MES } from "@/lib/cadastros/opcoes";
+import { formatarCentavos, lerValorEmCentavos } from "@/lib/dinheiro";
+import { alterarSituacaoCartao, salvarCartao, type DadosCartao } from "./acoes";
+
+type Linha = {
+  id: number;
+  descricao: string;
+  bancoId: number | null;
+  bancoNome: string | null;
+  bancoCodigo: string | null;
+  limiteCentavos: number;
+  ilimitado: boolean;
+  diaFechamento: number;
+  diaVencimento: number;
+  contaPagamentoId: number | null;
+  contaPagamentoNome: string | null;
+  ativo: boolean;
+  padraoSistema: boolean;
+};
+type ContaOpcao = { id: number; descricao: string; ativo: boolean };
+
+export function TelaCartoes({ linhas, total, filtros, caminho, bancos, contas }: {
+  linhas: Linha[];
+  total: number;
+  filtros: { busca: string; situacao: Situacao; pagina: number; fechamento: string; vencimento: string };
+  caminho: string;
+  bancos: BancoOpcao[];
+  contas: ContaOpcao[];
+}) {
+  const bancoOutro = String(bancos.find((b) => b.codigo === null)?.id ?? bancos[0]?.id ?? "");
+  const vazio = useMemo<DadosCartao>(
+    () => ({ descricao: "", bancoId: bancoOutro, ilimitado: false, limite: "", diaFechamento: "", diaVencimento: "", contaPagamentoId: "" }),
+    [bancoOutro],
+  );
+  const form = useFormularioCadastro(vazio);
+  const situacao = useSituacao(alterarSituacaoCartao);
+  const parametros = {
+    busca: filtros.busca,
+    fechamento: filtros.fechamento,
+    vencimento: filtros.vencimento,
+    situacao: filtros.situacao === "todos" ? "" : filtros.situacao,
+  };
+  const bancoEscolhido = bancos.find((b) => String(b.id) === form.dados.bancoId);
+  const limitePreview = form.dados.ilimitado ? null : (lerValorEmCentavos(form.dados.limite || "0") ?? 0);
+
+  const editar = (l: Linha) =>
+    form.abrirEdicao(l.id, {
+      descricao: l.descricao,
+      bancoId: String(l.bancoId ?? bancoOutro),
+      ilimitado: l.ilimitado,
+      limite: l.ilimitado ? "" : formatarCentavos(l.limiteCentavos),
+      diaFechamento: String(l.diaFechamento),
+      diaVencimento: String(l.diaVencimento),
+      contaPagamentoId: l.contaPagamentoId ? String(l.contaPagamentoId) : "",
+    });
+
+  const opcoesDia = [{ valor: "", rotulo: "Selecione" }, ...DIAS_MES.map((d) => ({ valor: d, rotulo: d }))];
+  const opcoesConta = [
+    { valor: "", rotulo: "Não informado" },
+    ...contas
+      .filter((c) => c.ativo || String(c.id) === form.dados.contaPagamentoId)
+      .map((c) => ({ valor: String(c.id), rotulo: c.ativo ? c.descricao : `${c.descricao} (inativa)` })),
+  ];
+
+  return (
+    <>
+      <BarraLista aoAdicionar={() => form.abrirNovo()} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar cartão" />
+      <FaixaErro>{situacao.aviso && <TextoComDestaque texto={situacao.aviso} />}</FaixaErro>
+      <Tabela
+        linhas={linhas}
+        chaveLinha={(l) => l.id}
+        vazio={
+          filtros.busca || filtros.fechamento || filtros.vencimento
+            ? "Nenhum cartão encontrado com esses filtros."
+            : "Nenhum cartão cadastrado. Clique em Adicionar para cadastrar o seu."
+        }
+        colunas={[
+          {
+            chave: "cartao",
+            titulo: "Cartão de Crédito",
+            render: (l) => (
+              <span className={`flex items-center gap-3 ${l.ativo ? "" : "opacity-50"}`}>
+                <IconeBanco codigo={l.bancoCodigo} nome={l.bancoNome ?? "Outro"} />
+                <span>
+                  <span className="font-medium text-gray-900">{l.descricao}</span>
+                  <AsteriscoPadrao mostrar={l.padraoSistema} />
+                  <span className="block text-xs text-gray-500">{l.bancoNome ?? "Outro"}</span>
+                </span>
+              </span>
+            ),
+          },
+          { chave: "fechamento", titulo: "Fechamento", alinhar: "centro", render: (l) => `Dia ${l.diaFechamento}` },
+          { chave: "vencimento", titulo: "Vencimento", alinhar: "centro", render: (l) => `Dia ${l.diaVencimento}` },
+          {
+            chave: "pagamento",
+            titulo: "Conta para Pagamento",
+            render: (l) => l.contaPagamentoNome ?? <span className="text-gray-400">- - -</span>,
+          },
+          {
+            chave: "limite",
+            titulo: "Limite",
+            alinhar: "direita",
+            render: (l) => (l.ilimitado ? <span className="font-semibold text-receita">Ilimitado</span> : <Valor centavos={l.limiteCentavos} />),
+          },
+          {
+            chave: "situacao",
+            titulo: "Situação",
+            alinhar: "centro",
+            render: (l) => (
+              <ChaveSituacao ativo={l.ativo} ocupado={situacao.ocupadoId === l.id} aoMudar={() => situacao.alternar(l.id, l.ativo)} rotulo={`o cartão ${l.descricao}`} />
+            ),
+          },
+          {
+            chave: "menu",
+            titulo: <span className="sr-only">Opções</span>,
+            alinhar: "direita",
+            render: (l) => (
+              <MenuLinha
+                rotulo={l.descricao}
+                itens={[
+                  { rotulo: "Editar", icone: <Pencil className="h-4 w-4" />, aoClicar: () => editar(l) },
+                  { rotulo: l.ativo ? "Inativar" : "Ativar", icone: <Power className="h-4 w-4" />, aoClicar: () => situacao.alternar(l.id, l.ativo) },
+                ]}
+              />
+            ),
+          },
+        ]}
+      />
+      <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={POR_PAGINA} total={total} />
+
+      <ModalCadastro
+        formulario={form}
+        titulo={
+          <span className="flex items-center gap-3">
+            <IconeBanco codigo={bancoEscolhido?.codigo ?? null} nome={bancoEscolhido?.nome ?? "Outro"} />
+            {form.novo ? "Novo Cartão de Crédito" : "Editando Cartão de Crédito"}
+          </span>
+        }
+        resumo={
+          <span className="flex flex-wrap items-center gap-x-2">
+            <span>{form.dados.descricao || "Descrição"}</span>·<span>{bancoEscolhido?.nome ?? "Outro"}</span>·
+            {limitePreview === null ? <span className="font-semibold text-receita">Ilimitado</span> : <Valor centavos={limitePreview} />}
+          </span>
+        }
+        aoSalvar={() => form.salvar(salvarCartao)}
+      >
+        <CampoTexto
+          rotulo="Descrição"
+          obrigatorio
+          autoFocus
+          maxLength={60}
+          ajuda="Nome do cartão como você o reconhece. Ex.: Nubank Roxinho, Itaú Visa."
+          valor={form.dados.descricao}
+          aoMudar={(v) => form.mudar("descricao", v)}
+        />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <CampoSelecao
+            rotulo="Bandeira ou Emissor"
+            ajuda="O banco que emitiu o cartão. Serve para mostrar o ícone certo."
+            valor={form.dados.bancoId}
+            aoMudar={(v) => form.mudar("bancoId", v)}
+            opcoes={bancos.map((b) => ({ valor: String(b.id), rotulo: b.nome }))}
+          />
+          <div>
+            <CampoValor
+              rotulo="Limite"
+              obrigatorio={!form.dados.ilimitado}
+              desabilitado={form.dados.ilimitado}
+              ajuda="O limite total do cartão, como aparece no aplicativo do banco."
+              valor={form.dados.ilimitado ? "" : form.dados.limite}
+              aoMudar={(v) => form.mudar("limite", v)}
+            />
+            <div className="mt-2">
+              <Chave ligada={form.dados.ilimitado} aoMudar={(v) => form.mudar("ilimitado", v)} rotulo="Ilimitado" />
+            </div>
+          </div>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <CampoSelecao
+            rotulo="Dia do Fechamento"
+            obrigatorio
+            ajuda="Dia em que a fatura fecha. Compras a partir desse dia entram na fatura do mês seguinte."
+            valor={form.dados.diaFechamento}
+            aoMudar={(v) => form.mudar("diaFechamento", v)}
+            opcoes={opcoesDia}
+          />
+          <CampoSelecao
+            rotulo="Dia do Vencimento"
+            obrigatorio
+            ajuda="Dia em que a fatura vence (precisa ser paga)."
+            valor={form.dados.diaVencimento}
+            aoMudar={(v) => form.mudar("diaVencimento", v)}
+            opcoes={opcoesDia}
+          />
+        </div>
+        <CampoSelecao
+          rotulo="Conta Financeira Padrão para Pagamento"
+          ajuda="A conta de onde a fatura costuma ser paga. Pode ficar sem informar."
+          valor={form.dados.contaPagamentoId}
+          aoMudar={(v) => form.mudar("contaPagamentoId", v)}
+          opcoes={opcoesConta}
+        />
+      </ModalCadastro>
+    </>
+  );
+}

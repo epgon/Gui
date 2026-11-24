@@ -3,10 +3,16 @@
 Sistema de finanças pessoais inspirado no Contas Online, para **um único usuário**, em português do Brasil.
 Visual verde escuro e amarelo, com o mascote Gui.
 
-Este é o resultado da **Fase 0 (Fundação)** do plano: login, barra verde com os menus, layout base,
-componentes visuais e o banco de dados com as tabelas iniciais e a carga padrão
-(79 categorias, 5 formas de pagamento, 6 feriados nacionais e a lista de bancos).
-As telas dos menus ainda mostram "Em construção" com a fase em que chegam.
+Fases prontas:
+
+- **Fase 0 (Fundação)**: login, barra verde com os menus, layout base, componentes visuais e o banco
+  de dados com a carga padrão (79 categorias, 5 formas de pagamento, 6 feriados nacionais e a lista de bancos).
+- **Fase 1 (Cadastros)**: telas de Contas Financeiras (com saldo inicial), Cartões de Crédito, Categorias
+  (árvore numerada com abas por categoria principal), Clientes e Fornecedores, Formas de Pagamento e Tags.
+  Todas com lista, busca, filtros, criar, editar e ativar/inativar (nada é apagado). Toda operação fica
+  registrada na tabela `auditoria`. O checklist "primeiros passos" da Visão Geral marca o que já foi feito.
+
+As outras telas dos menus ainda mostram "Em construção" com a fase em que chegam.
 
 ## Publicar na Vercel (passo a passo)
 
@@ -73,9 +79,12 @@ npm run dev             # abre em http://localhost:3000
 | `src/app/(sistema)` | Telas internas (só com login): Visão Geral, "Em construção" e a vitrine `/componentes`. |
 | `src/components/layout` | Barra verde, logotipo, barra de favoritos, Central de Ajuda, cabeçalho das telas. |
 | `src/components/ui` | Componentes base: botão, janela (modal), tabela, chave liga/desliga, faixa amarela de erro, valor em reais. |
+| `src/app/(sistema)/cadastros` | Telas de Cadastros. Cada pasta tem `page.tsx` (lista e filtros), `tela.tsx` (tabela e janela de cadastro) e `acoes.ts` (gravação no banco, com auditoria). |
+| `src/components/cadastros` | Peças comuns das listas: barra com Adicionar e busca, painel de Filtros, paginação, menu de três pontos, check de situação, janela de cadastro. |
+| `src/lib/categorias.ts` | Monta a árvore de categorias e calcula a numeração (1., 9.4.1.). |
 | `src/lib/menu.ts` | Itens dos menus e em qual fase cada tela chega. |
 | `src/db/schema.ts` | As tabelas do banco. |
-| `drizzle/` | Migrações: `0000` cria as tabelas, `0001` faz a carga inicial. |
+| `drizzle/` | Migrações: `0000` cria as tabelas, `0001` faz a carga inicial, `0002` cria a auditoria e o saldo inicial das contas. |
 | `src/auth.ts` | Login (Auth.js), sessão de 20 minutos sem atividade. |
 | `scripts/` | Scripts de terminal: configurar, migrar, criar usuário. |
 

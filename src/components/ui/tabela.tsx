@@ -16,7 +16,7 @@ export function Tabela<T>({ colunas, linhas, chaveLinha, vazio }: {
 }) {
   const alinhamento = { esquerda: "text-left", direita: "text-right", centro: "text-center" } as const;
   return (
-    <div className="overflow-x-auto rounded-xl border border-borda bg-white shadow-cartao">
+    <div className="relative overflow-x-auto rounded-xl border border-borda bg-white shadow-cartao">
       <table className="w-full text-sm">
         <thead className="border-b border-borda bg-subcabecalho text-xs uppercase tracking-wide text-gray-500">
           <tr>

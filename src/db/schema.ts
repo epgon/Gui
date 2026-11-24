@@ -10,6 +10,7 @@
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
+  bigint,
   boolean,
   check,
   date,
@@ -149,6 +150,12 @@ export const contaFinanceira = pgTable("conta_financeira", {
   tipo: tipoContaEnum("tipo").notNull().default("outro"),
   considerarNosSaldos: boolean("considerar_nos_saldos").notNull().default(true),
   ordem: integer("ordem").notNull().default(0),
+  /**
+   * Saldo que a conta tinha no dia em que foi cadastrada (pode ser negativo).
+   * Na Fase 2, vira o lançamento "Saldo Inicial" (categoria Acerto de Saldo).
+   */
+  saldoInicialCentavos: bigint("saldo_inicial_centavos", { mode: "number" }).notNull().default(0),
+  saldoInicialData: date("saldo_inicial_data"),
 });
 
 export const cartaoCredito = pgTable(
@@ -219,3 +226,35 @@ export const tag = pgTable("tag", {
   ...camposPadrao,
   descricao: text("descricao").notNull(),
 });
+
+// ---------------------------------------------------------------------------
+// 4.8. Auditoria
+// ---------------------------------------------------------------------------
+
+export const acaoAuditoriaEnum = pgEnum("acao_auditoria", [
+  "cadastrou",
+  "alterou",
+  "ativou",
+  "inativou",
+  "excluiu",
+]);
+
+/**
+ * Histórico de tudo o que foi cadastrado, alterado, ativado ou inativado.
+ * Gravado na mesma transação da operação, para nunca faltar.
+ */
+export const auditoria = pgTable(
+  "auditoria",
+  {
+    id: serial("id").primaryKey(),
+    quando: timestamp("quando", { withTimezone: true }).notNull().defaultNow(),
+    tela: text("tela").notNull(),
+    entidade: text("entidade").notNull(),
+    entidadeId: integer("entidade_id"),
+    acao: acaoAuditoriaEnum("acao").notNull(),
+    descricao: text("descricao").notNull(),
+    /** Campos gravados; na alteração, { antes, depois }. */
+    dados: jsonb("dados"),
+  },
+  (t) => [index("auditoria_quando_idx").on(t.quando), index("auditoria_entidade_idx").on(t.entidade, t.entidadeId)],
+);

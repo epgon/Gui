@@ -1,3 +1,4 @@
+import { count, eq } from "drizzle-orm";
 import { CheckCircle2, Circle } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -5,16 +6,32 @@ import { auth } from "@/auth";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { PainelAjuda } from "@/components/layout/painel-ajuda";
 import { Cartao } from "@/components/ui/cartao";
+import { getDb, schema } from "@/db";
+import { cn } from "@/lib/cn";
 
 export const metadata = { title: "Visão Geral" };
 
-const PRIMEIROS_PASSOS = [
-  { texto: "Adicione uma Conta Financeira", href: "/cadastros/contas-financeiras" },
-  { texto: "Defina suas Categorias", href: "/cadastros/categorias" },
-  { texto: "Cadastre seu Cartão de Crédito", href: "/cadastros/cartoes-de-credito" },
-  { texto: "Registre um Lançamento", href: "/financeiro/lancamentos" },
-  { texto: "Crie um Lançamento Recorrente", href: "/financeiro/recorrentes" },
-];
+type Passo = { texto: string; href: string; feito: boolean; emBreve?: string };
+
+/** Confere no banco quais primeiros passos já foram dados. */
+async function primeirosPassos(): Promise<Passo[]> {
+  const db = getDb();
+  const { contaFinanceira, cartaoCredito, auditoria } = schema;
+  const [[contas], [cartoes], [categorias]] = await Promise.all([
+    db.select({ total: count() }).from(contaFinanceira),
+    db.select({ total: count() }).from(cartaoCredito),
+    // "Definir as categorias" = ter criado, editado ou inativado alguma.
+    db.select({ total: count() }).from(auditoria).where(eq(auditoria.entidade, "Categoria")),
+  ]);
+  return [
+    { texto: "Entrar no sistema", href: "/", feito: true },
+    { texto: "Adicione uma Conta Financeira", href: "/cadastros/contas-financeiras", feito: contas.total > 0 },
+    { texto: "Defina suas Categorias", href: "/cadastros/categorias", feito: categorias.total > 0 },
+    { texto: "Cadastre seu Cartão de Crédito", href: "/cadastros/cartoes-de-credito", feito: cartoes.total > 0 },
+    { texto: "Registre um Lançamento", href: "/financeiro/lancamentos", feito: false, emBreve: "chega na Fase 2" },
+    { texto: "Crie um Lançamento Recorrente", href: "/financeiro/recorrentes", feito: false, emBreve: "chega na Fase 4" },
+  ];
+}
 
 function saudacao() {
   const hora = Number(
@@ -29,6 +46,8 @@ export default async function VisaoGeral() {
   const sessao = await auth();
   const nome = sessao?.user?.name?.split(" ")[0] ?? "";
   const hoje = new Intl.DateTimeFormat("pt-BR", { dateStyle: "full", timeZone: "America/Sao_Paulo" }).format(new Date());
+  const passos = await primeirosPassos();
+  const feitos = passos.filter((p) => p.feito).length;
 
   return (
     <>
@@ -48,22 +67,44 @@ export default async function VisaoGeral() {
               <div>
                 <h3 className="text-lg font-semibold text-verde">Olá! Eu sou o Gui.</h3>
                 <p className="mt-1 text-sm text-gray-600">
-                  Vou ajudar você a organizar suas finanças. O sistema está sendo construído por etapas: os menus já
-                  estão no lugar e cada tela vai ganhando vida nas próximas fases.
+                  Vou ajudar você a organizar suas finanças. Comece pelos cadastros: suas contas com o saldo de hoje,
+                  seus cartões e as categorias do seu jeito. Os lançamentos chegam na próxima fase.
                 </p>
               </div>
-              <ul className="space-y-1.5">
-                <li className="flex items-center gap-2 text-sm text-pago-texto">
-                  <CheckCircle2 className="h-4 w-4" /> Entrar no sistema
-                </li>
-                {PRIMEIROS_PASSOS.map((p) => (
-                  <li key={p.href}>
-                    <Link href={p.href} className="flex items-center gap-2 text-sm text-gray-700 hover:text-verde">
-                      <Circle className="h-4 w-4 text-gray-300" /> {p.texto}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+              <div>
+                <div className="mb-2 flex items-center gap-3">
+                  <div
+                    className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={passos.length}
+                    aria-valuenow={feitos}
+                    aria-label="Primeiros passos"
+                  >
+                    <div className="h-full rounded-full bg-verde-vivo" style={{ width: `${(feitos / passos.length) * 100}%` }} />
+                  </div>
+                  <span className="text-xs font-medium text-gray-500">
+                    {feitos} de {passos.length}
+                  </span>
+                </div>
+                <ul className="space-y-1.5">
+                  {passos.map((p) => (
+                    <li key={p.texto}>
+                      <Link
+                        href={p.href}
+                        className={cn(
+                          "flex items-center gap-2 text-sm",
+                          p.feito ? "text-pago-texto" : p.emBreve ? "text-gray-400" : "text-gray-700 hover:text-verde",
+                        )}
+                      >
+                        {p.feito ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4 text-gray-300" />}
+                        <span>{p.texto}</span>
+                        {p.emBreve && <span className="text-xs">({p.emBreve})</span>}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </Cartao>
         </div>
