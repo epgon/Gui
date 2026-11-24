@@ -52,7 +52,29 @@ Fases prontas:
   Faturas e as opções Clonar, Detalhar, Faturas e Lançamentos. Na Visão Geral, o cartão **Faturas Atuais** mostra a fatura
   atual de cada cartão (com "Opções" para escolher os cartões).
 
+- **Fase 6 (Importação OFX e CSV)**: Financeiro > **Importações** (ou o botão **Importar** em Lançamentos). Um assistente
+  em etapas: **enviar o arquivo** (OFX, CSV ou TXT, até 2 MB; planilha do Excel é recusada com a explicação de como salvar em
+  CSV), **destino e checagem** (conta ou cartão, tolerância de datas e se procura em qualquer conta), **vínculo das colunas**
+  (só no CSV: o Gui sugere sozinho e **memoriza** para o próximo arquivo da mesma conta, com prévia das 10 primeiras linhas) e
+  **revisão**. Na revisão cada linha aparece como **Novo**, **Encontrado** (já existe um lançamento igual, inclusive um
+  recorrente previsto), **Pendente** (mais de um pode ser) ou **Ignorado** (por regra ou porque já foi importado antes).
+  Ações por linha e em lote: Adicionar Agora, Conciliar Agora, Ignorar, Preencher campos em branco, Editar Registro,
+  Encontrar Lançamento, Criar Regra e Desfazer. **Regras** (aba Regras) preenchem categoria, descrição, contato, forma e tags
+  ou ignoram registros; já vem pronta a que ignora o "Pagamento de fatura". Quando não há regra, a categoria é sugerida pelo
+  histórico (a usada da última vez para a mesma descrição). **Cancelar** guarda a importação como rascunho para continuar
+  depois; **Concluir** adiciona as novas que têm categoria e concilia as encontradas.
+
 As outras telas dos menus ainda mostram "Em construção" com a fase em que chegam.
+
+### Como a importação funciona
+
+- **Adicionar** cria o lançamento já pago (na conta) com a data e o valor do extrato. No cartão, vira compra na fatura certa.
+- **Conciliar** liga a linha a um lançamento que você já tinha registrado e marca esse lançamento como pago com a data e o
+  valor do extrato. Se era um recorrente previsto (ex.: salário), a ocorrência é gravada já paga.
+- Nada duplica: uma linha que já foi importada antes (mesmo código FITID do OFX, ou mesma data, valor e descrição no CSV)
+  aparece como "Já importada antes" e fica ignorada; e um lançamento só pode ser conciliado com uma linha.
+- Tudo dá para **desfazer** enquanto a importação está em rascunho. Excluir um rascunho desfaz o que ele já tinha feito.
+- A primeira regra (pela **Ordem**) que atende à linha vale. A comparação ignora maiúsculas e acentos.
 
 ### Como as faturas funcionam
 

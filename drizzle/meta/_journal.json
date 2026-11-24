@@ -43,6 +43,13 @@
       "when": 1795519015400,
       "tag": "0005_faturas",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795520427297,
+      "tag": "0006_importacao",
+      "breakpoints": true
     }
   ]
 }
