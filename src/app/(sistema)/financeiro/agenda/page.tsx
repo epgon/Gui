@@ -1,4 +1,5 @@
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
+import { PainelAjuda } from "@/components/layout/painel-ajuda";
 import type { ParametrosBusca } from "@/lib/cadastros/filtros";
 import { hojeIso } from "@/lib/datas";
 import { carregarOpcoes, lerFiltros, listarLancamentos } from "@/lib/lancamentos/consultas";
@@ -8,6 +9,7 @@ import { TelaAgenda } from "./tela";
 
 export const metadata = { title: "Agenda" };
 const CAMINHO = "/financeiro/agenda";
+const ARTIGOS = ["Como usar a Agenda", "O que significa o % Realizado", "Como pagar ou receber pelo dia da Agenda"];
 
 export default async function PaginaAgenda({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
   const hoje = hojeIso();
@@ -18,11 +20,14 @@ export default async function PaginaAgenda({ searchParams }: { searchParams: Pro
   const f = { ...base, aba: "todos" as const, situacao: "" as const, busca: "", detalhar: false, categoria: "", forma: "", contato: "", tag: "" };
   const [{ linhas, resumo }, opcoes] = await Promise.all([listarLancamentos(f, hoje), carregarOpcoes()]);
   return (
-    <main className="min-w-0 flex-1">
-      <CabecalhoPagina titulo="Agenda" trilha="Financeiro" />
-      <div className="space-y-4 p-6">
-        <TelaAgenda linhas={linhas} resumo={resumo} destino={f.destino} opcoes={opcoes} hoje={hoje} mes={mesDe(f.mes)} caminho={CAMINHO} />
-      </div>
-    </main>
+    <>
+      <main className="min-w-0 flex-1">
+        <CabecalhoPagina titulo="Agenda" trilha="Financeiro" />
+        <div className="space-y-4 p-6">
+          <TelaAgenda linhas={linhas} resumo={resumo} destino={f.destino} opcoes={opcoes} hoje={hoje} mes={mesDe(f.mes)} caminho={CAMINHO} />
+        </div>
+      </main>
+      <PainelAjuda artigos={ARTIGOS} trilha={["Financeiro", "Agenda"]} />
+    </>
   );
 }
