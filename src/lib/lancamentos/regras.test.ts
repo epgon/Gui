@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { faturaDaCompra, gerarParcelas, mesDe, situacaoDe, somarMeses, somarPeriodo, totalDetalhado, valorComSinal } from "./regras";
+import { calcularPagamento, faturaDaCompra, gerarParcelas, mesDe, situacaoDe, somarMeses, somarPeriodo, totalDetalhado, valorComSinal } from "./regras";
 
 describe("parcelas", () => {
   const base = {
@@ -93,5 +93,29 @@ describe("valores e situação", () => {
   it("detalhado: receitas menos despesas", () => {
     expect(totalDetalhado([{ tipo: "despesa", valorCentavos: 3000 }, { tipo: "despesa", valorCentavos: 2000 }, { tipo: "receita", valorCentavos: 1000 }])).toEqual({ tipo: "despesa", valorCentavos: 4000, saldo: -4000 });
     expect(totalDetalhado([{ tipo: "receita", valorCentavos: 5000 }]).tipo).toBe("receita");
+  });
+});
+
+describe("pagamento parcial", () => {
+  it("pagar o valor certo não muda nada", () => {
+    expect(calcularPagamento(10000, 10000, true)).toEqual({ tipo: "integral" });
+  });
+
+  it("pagar 60,00 de 100,00 deixa 40,00 de restante e a soma fecha 100,00", () => {
+    const r = calcularPagamento(10000, 6000, true);
+    expect(r).toEqual({ tipo: "parcial", valorCentavos: 6000, restanteCentavos: 4000 });
+    if (r.tipo === "parcial") expect(r.valorCentavos + r.restanteCentavos).toBe(10000);
+  });
+
+  it("centavos quebrados: 83,37 pagando 50,01 deixa 33,36", () => {
+    expect(calcularPagamento(8337, 5001, true)).toEqual({ tipo: "parcial", valorCentavos: 5001, restanteCentavos: 3336 });
+  });
+
+  it("pagar a menos sem gerar restante é desconto", () => {
+    expect(calcularPagamento(10000, 9500, false)).toEqual({ tipo: "desconto", valorCentavos: 9500, diferencaCentavos: 500 });
+  });
+
+  it("pagar a mais é juros ou multa, sem restante", () => {
+    expect(calcularPagamento(10000, 10250, true)).toEqual({ tipo: "acrescimo", valorCentavos: 10250, diferencaCentavos: 250 });
   });
 });

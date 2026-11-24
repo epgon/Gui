@@ -202,3 +202,29 @@ export function totalDetalhado(itens: { tipo: "receita" | "despesa"; valorCentav
   const saldo = itens.reduce((s, i) => s + (i.tipo === "receita" ? i.valorCentavos : -i.valorCentavos), 0);
   return { tipo: saldo > 0 ? ("receita" as const) : ("despesa" as const), valorCentavos: Math.abs(saldo), saldo };
 }
+
+// ---------------------------------------------------------------------------
+// Pagamento com valor diferente (parcial, desconto ou juros)
+// ---------------------------------------------------------------------------
+
+export type ResultadoPagamento =
+  /** Pago pelo valor do lançamento: nada muda além da baixa. */
+  | { tipo: "integral" }
+  /** Pago a menos, com o restante num novo lançamento ainda não pago. */
+  | { tipo: "parcial"; valorCentavos: number; restanteCentavos: number }
+  /** Pago a menos sem gerar restante (desconto) ou a mais (juros, multa): o lançamento passa a valer o que foi pago. */
+  | { tipo: "desconto" | "acrescimo"; valorCentavos: number; diferencaCentavos: number };
+
+/**
+ * O que acontece ao pagar ou receber `valorPagoCentavos` de um lançamento de `valorCentavos`.
+ * O lançamento passa a valer o que foi pago, assim saldos, relatórios e categorias somam
+ * o original pago mais o restante, sem contar nada duas vezes.
+ */
+export function calcularPagamento(valorCentavos: number, valorPagoCentavos: number, gerarRestante: boolean): ResultadoPagamento {
+  const valor = Math.abs(valorCentavos);
+  const pago = Math.abs(valorPagoCentavos);
+  if (pago === valor) return { tipo: "integral" };
+  if (pago > valor) return { tipo: "acrescimo", valorCentavos: pago, diferencaCentavos: pago - valor };
+  if (gerarRestante) return { tipo: "parcial", valorCentavos: pago, restanteCentavos: valor - pago };
+  return { tipo: "desconto", valorCentavos: pago, diferencaCentavos: valor - pago };
+}

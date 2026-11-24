@@ -4,11 +4,13 @@ import { AlertTriangle, ArrowDown, ArrowLeftRight, ArrowUp, CheckCircle2, Circle
 import { useState } from "react";
 import { IconeBanco } from "@/components/cadastros/icone-banco";
 import { Botao } from "@/components/ui/botao";
-import { CampoTexto } from "@/components/ui/campo";
+import { CampoTexto, CampoValor, TextoComDestaque } from "@/components/ui/campo";
+import { FaixaErro } from "@/components/ui/faixa-erro";
 import { Modal } from "@/components/ui/modal";
 import { Valor } from "@/components/ui/valor";
 import { cn } from "@/lib/cn";
 import { formatarData } from "@/lib/datas";
+import { formatarCentavos, lerValorEmCentavos } from "@/lib/dinheiro";
 import type { LinhaLista } from "@/lib/lancamentos/tipos";
 
 /* Peças da lista de lançamentos, usadas na tela Lançamentos e na Agenda. */
@@ -94,6 +96,17 @@ export function EtiquetaSituacao({ l }: { l: LinhaLista }) {
   );
 }
 
+/** Pago ou recebido com valor diferente do lançamento: parcial, desconto ou juros. */
+function EtiquetaValorDiferente({ atual, original, receita }: { atual: number; original: number; receita: boolean }) {
+  const verbo = receita ? "Recebido" : "Pago";
+  const texto = atual > original ? "Com juros" : "Parcial";
+  return (
+    <span className="rounded bg-gray-100 px-1.5 text-xs text-gray-600" title={`${verbo} R$ ${formatarCentavos(atual)} de R$ ${formatarCentavos(original)}.`}>
+      {texto}
+    </span>
+  );
+}
+
 export function LinhaComFilhos({ linha: l, ocultar, marcado, aoMarcar, aoAbrir, menu, expandida, filhos, aoEditarFilho }: {
   linha: LinhaLista;
   ocultar: boolean;
@@ -137,6 +150,12 @@ export function LinhaComFilhos({ linha: l, ocultar, marcado, aoMarcar, aoAbrir, 
                 )}
                 {l.parcela && !l.descricao.includes(l.parcela) && <span className="rounded bg-gray-100 px-1.5 text-xs text-gray-600">{l.parcela}</span>}
                 {l.formato === "detalhado" && <span className="rounded bg-verde-claro px-1.5 text-xs text-verde">Detalhado</span>}
+                {l.restante && (
+                  <span className="rounded bg-amarelo px-1.5 text-xs text-amarelo-texto" title="O que faltou pagar ou receber de um pagamento parcial.">
+                    Restante
+                  </span>
+                )}
+                {l.valorOriginalCentavos != null && <EtiquetaValorDiferente atual={Math.abs(l.valorCentavos)} original={l.valorOriginalCentavos} receita={l.valorCentavos >= 0} />}
                 {l.observacao && <MessageSquareText className="h-3.5 w-3.5 text-amarelo-texto" aria-label="Tem observação" />}
                 {l.anexos > 0 && <Paperclip className="h-3.5 w-3.5 text-gray-500" aria-label={`${l.anexos} anexo(s)`} />}
                 {l.tags.map((t) => (
@@ -199,27 +218,86 @@ export function LinhaComFilhos({ linha: l, ocultar, marcado, aoMarcar, aoAbrir, 
   );
 }
 
-export function ModalPagar({ titulo, hoje, ocupado, aoFechar, aoConfirmar }: { titulo: string; hoje: string; ocupado: boolean; aoFechar: () => void; aoConfirmar: (data: string) => void }) {
+/** Um lançamento pago sozinho: dá para pagar outro valor (parcial, desconto ou juros). */
+export type PagamentoUnico = { valorCentavos: number; vencimento: string; receita: boolean };
+export type EscolhaPagamento = { data: string; valor: { valorPago: string; gerarRestante: boolean; vencimentoRestante: string } | null };
+
+export function ModalPagar({ titulo, hoje, ocupado, unico, erro, aoFechar, aoConfirmar }: {
+  titulo: string;
+  erro?: string;
+  hoje: string;
+  ocupado: boolean;
+  /** Presente quando dá para informar o Valor Pago. */
+  unico?: PagamentoUnico | null;
+  aoFechar: () => void;
+  aoConfirmar: (e: EscolhaPagamento) => void;
+}) {
   const [data, setData] = useState(hoje);
+  const [valorPago, setValorPago] = useState(unico ? formatarCentavos(unico.valorCentavos) : "");
+  const [gerarRestante, setGerarRestante] = useState(true);
+  const [vencimentoRestante, setVencimentoRestante] = useState(unico ? (unico.vencimento < hoje ? hoje : unico.vencimento) : hoje);
+  const pago = unico ? lerValorEmCentavos(valorPago) : null;
+  const diferenca = unico && pago !== null && pago > 0 ? unico.valorCentavos - pago : 0;
+  const verbo = unico?.receita ? "recebido" : "pago";
+  const confirmar = () => aoConfirmar({ data, valor: unico && pago !== unico.valorCentavos ? { valorPago, gerarRestante, vencimentoRestante } : null });
   return (
     <Modal
       aberto
       aoFechar={aoFechar}
-      titulo="Pagar / Receber"
+      titulo={unico?.receita ? "Receber" : unico ? "Pagar" : "Pagar / Receber"}
       resumo={titulo}
       rodape={
         <>
           <Botao variante="secundario" type="button" onClick={aoFechar}>
             Voltar
           </Botao>
-          <Botao type="button" carregando={ocupado} onClick={() => aoConfirmar(data)} icone={<CheckCircle2 className="h-4 w-4" />}>
+          <Botao type="button" carregando={ocupado} onClick={confirmar} icone={<CheckCircle2 className="h-4 w-4" />}>
             Confirmar
           </Botao>
         </>
       }
     >
-      <CampoTexto rotulo="Data do Pagamento" type="date" valor={data} aoMudar={setData} ajuda="Dia em que o dinheiro saiu ou entrou na conta." />
-      <p className="mt-2 text-xs text-gray-500">O valor pago é o valor do lançamento. Compras no cartão são pagas junto com a fatura (menu da linha Fatura-Cartão).</p>
+      <FaixaErro className="mb-3">{erro && <TextoComDestaque texto={erro} />}</FaixaErro>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <CampoTexto rotulo={`Data do ${unico?.receita ? "Recebimento" : "Pagamento"}`} type="date" valor={data} aoMudar={setData} ajuda="Dia em que o dinheiro saiu ou entrou na conta." />
+        {unico && (
+          <CampoValor
+            rotulo={unico.receita ? "Valor Recebido" : "Valor Pago"}
+            valor={valorPago}
+            aoMudar={setValorPago}
+            ajuda={`Se ${verbo} menos que R$ ${formatarCentavos(unico.valorCentavos)}, o que faltou pode virar um novo lançamento (pagamento parcial). Se ${verbo} mais, a diferença fica como juros ou multa.`}
+          />
+        )}
+      </div>
+      {unico && diferenca > 0 && (
+        <div className="mt-4 space-y-3 rounded-md border border-amarelo-borda bg-amarelo px-3 py-3 text-sm text-amarelo-texto">
+          <p>
+            Faltam <strong>R$ {formatarCentavos(diferenca)}</strong> de R$ {formatarCentavos(unico.valorCentavos)}.
+          </p>
+          <label className="flex items-start gap-2">
+            <input type="radio" name="restante" checked={gerarRestante} onChange={() => setGerarRestante(true)} className="mt-0.5 accent-verde" />
+            <span>
+              <strong>Pagamento parcial:</strong> criar um novo lançamento com o restante, ainda não {verbo}.
+            </span>
+          </label>
+          {gerarRestante && (
+            <CampoTexto rotulo="Vencimento do Restante" type="date" valor={vencimentoRestante} aoMudar={setVencimentoRestante} ajuda="Quando o restante deve ser pago ou recebido." className="pl-6" />
+          )}
+          <label className="flex items-start gap-2">
+            <input type="radio" name="restante" checked={!gerarRestante} onChange={() => setGerarRestante(false)} className="mt-0.5 accent-verde" />
+            <span>
+              <strong>Desconto:</strong> não falta nada, o lançamento fica com o valor {verbo}.
+            </span>
+          </label>
+        </div>
+      )}
+      {unico && diferenca < 0 && (
+        <p className="mt-3 rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-600">
+          R$ {formatarCentavos(-diferenca)} a mais (juros ou multa). O lançamento passa a valer R$ {formatarCentavos(pago!)}.
+        </p>
+      )}
+      {!unico && <p className="mt-2 text-xs text-gray-500">O valor pago é o valor de cada lançamento. Para pagar outro valor (pagamento parcial), pague um lançamento por vez. Compras no cartão são pagas junto com a fatura (menu da linha Fatura-Cartão).</p>}
+      {unico && <p className="mt-3 text-xs text-gray-500">&quot;Voltar para não pago&quot; desfaz tudo: o lançamento volta ao valor de antes e o restante é apagado.</p>}
     </Modal>
   );
 }

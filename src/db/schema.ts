@@ -308,6 +308,11 @@ export const lancamento = pgTable(
     /** Sempre positivo; o sinal vem do tipo. Só "Saldo Inicial" e "Acerto de Saldo" podem ser negativos. */
     valorCentavos: bigint("valor_centavos", { mode: "number" }).notNull(),
     valorPagoCentavos: bigint("valor_pago_centavos", { mode: "number" }),
+    /**
+     * Pago com valor diferente (pagamento parcial, desconto ou juros): o valor que o lançamento tinha antes.
+     * "Voltar para não pago" devolve este valor. Vazio = pago pelo valor do lançamento.
+     */
+    valorOriginalCentavos: bigint("valor_original_centavos", { mode: "number" }),
     dataVencimento: date("data_vencimento").notNull(),
     /** Vazia = ainda não pago/recebido. */
     dataPagamento: date("data_pagamento"),
@@ -330,6 +335,8 @@ export const lancamento = pgTable(
     /** Lançamento gravado a partir de um recorrente: a regra e a data original da ocorrência. */
     recorrenciaId: integer("recorrencia_id").references((): AnyPgColumn => recorrencia.id, { onDelete: "set null" }),
     dataOcorrencia: date("data_ocorrencia"),
+    /** Restante de um pagamento parcial: o lançamento que foi pago em parte. */
+    lancamentoOrigemId: integer("lancamento_origem_id").references((): AnyPgColumn => lancamento.id, { onDelete: "set null" }),
     origem: origemLancamentoEnum("origem").notNull().default("manual"),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
     atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
@@ -351,6 +358,7 @@ export const lancamento = pgTable(
     index("lancamento_fatura_paga_idx").on(t.faturaPagaId),
     index("lancamento_parcelamento_idx").on(t.parcelamentoId),
     index("lancamento_transferencia_idx").on(t.transferenciaId),
+    index("lancamento_origem_idx").on(t.lancamentoOrigemId),
     uniqueIndex("lancamento_saldo_inicial_unico").on(t.contaId).where(sql`${t.tipo} = 'saldo_inicial'`),
     // Uma ocorrência de recorrente vira no máximo um lançamento (dois na transferência: saída e entrada).
     uniqueIndex("lancamento_ocorrencia_unica").on(t.recorrenciaId, t.dataOcorrencia, t.tipo).where(sql`${t.recorrenciaId} is not null`),

@@ -50,6 +50,13 @@
       "when": 1795520427297,
       "tag": "0006_importacao",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795521960015,
+      "tag": "0007_pagamento_parcial",
+      "breakpoints": true
     }
   ]
 }

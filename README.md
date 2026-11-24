@@ -64,7 +64,24 @@ Fases prontas:
   histórico (a usada da última vez para a mesma descrição). **Cancelar** guarda a importação como rascunho para continuar
   depois; **Concluir** adiciona as novas que têm categoria e concilia as encontradas.
 
+- **Fase 7 (Pagamento parcial)**: o lançamento detalhado, a observação (até 1000 caracteres) e os anexos já tinham chegado na
+  Fase 2; esta fase completa o bloco com o **pagamento parcial**. Ao **Pagar** ou **Receber** um lançamento sozinho, a janela
+  mostra o **Valor Pago** (já preenchido com o valor do lançamento). Se você pagar **menos**, escolhe entre **Pagamento parcial**
+  (o que faltou vira um novo lançamento, ainda não pago, com o **Vencimento do Restante** que você escolher) ou **Desconto**
+  (não falta nada). Se pagar **mais**, a diferença fica como juros ou multa. Na lista aparecem as etiquetas **Parcial**,
+  **Com juros** e **Restante**. **Voltar para não pago** desfaz tudo: o lançamento volta ao valor de antes e o restante é apagado.
+
 As outras telas dos menus ainda mostram "Em construção" com a fase em que chegam.
+
+### Como o pagamento parcial funciona
+
+- O lançamento pago passa a valer **o que foi pago** e o restante é outro lançamento ligado a ele. Assim saldo, Visão Geral e
+  categorias somam pago + restante = valor original, sem contar nada duas vezes.
+- Vale para receitas e despesas simples na conta, pagas uma por vez. Transferências, lançamentos detalhados e compras no cartão
+  são pagos pelo valor total. Pagando vários de uma vez, cada um é pago pelo seu valor.
+- O restante pode ser pago em parte de novo (gera outro restante).
+- **Voltar para não pago** num lançamento pago em parte apaga o restante e devolve o valor original. Se o restante já foi pago,
+  volte ele para não pago antes (ou escolha os dois juntos).
 
 ### Como a importação funciona
 
@@ -176,7 +193,7 @@ npm run dev             # abre em http://localhost:3000
 | `src/lib/cartoes` | Regras das faturas e do limite (`regras.ts`, com testes) e a carga das faturas, do Detalhando Cartão e das Faturas Atuais (`servidor.ts`). |
 | `src/components/cartoes` | Janelas Detalhando Cartão de Crédito e Fatura (pagar, desfazer, fechar, reabrir, mover compra). |
 | `src/db/schema.ts` | As tabelas do banco. |
-| `drizzle/` | Migrações: `0000` cria as tabelas, `0001` faz a carga inicial, `0002` cria a auditoria e o saldo inicial das contas, `0003` os lançamentos, `0004` os recorrentes e planos, `0005` liga o pagamento de fatura à fatura paga. |
+| `drizzle/` | Migrações: `0000` cria as tabelas, `0001` faz a carga inicial, `0002` cria a auditoria e o saldo inicial das contas, `0003` os lançamentos, `0004` os recorrentes e planos, `0005` liga o pagamento de fatura à fatura paga, `0006` a importação, `0007` o pagamento parcial. |
 | `src/auth.ts` | Login (Auth.js). A sessão acaba depois do Tempo da Sessão sem uso (Meus Dados > Preferências; padrão 20 minutos). |
 | `scripts/` | Scripts de terminal: configurar, migrar, criar usuário. |
 
