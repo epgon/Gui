@@ -29,6 +29,13 @@
       "when": 1795483702844,
       "tag": "0003_lancamentos",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795485113923,
+      "tag": "0004_recorrentes",
+      "breakpoints": true
     }
   ]
 }

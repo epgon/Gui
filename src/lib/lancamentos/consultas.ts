@@ -1,11 +1,12 @@
 import "server-only";
 import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql, type SQL } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { contemTexto, parametro, type ParametrosBusca } from "@/lib/cadastros/filtros";
+import { contemTexto, parametro, semAcento, type ParametrosBusca } from "@/lib/cadastros/filtros";
 import { descendentes, montarArvore, rotuloCategoria } from "@/lib/categorias";
 import { hojeIso } from "@/lib/datas";
 import { lerValorEmCentavos } from "@/lib/dinheiro";
-import { mesDe, situacaoDe, valorComSinal, type Situacao } from "./regras";
+import { carregarContexto, pendentes, type Contexto, type Pendente, type Perna } from "@/lib/recorrentes/servidor";
+import { mesDe, situacaoDe, somarDias, valorComSinal, type Situacao } from "./regras";
 import type { Aba, Filtros, FiltroSituacao, LinhaLista, Opcoes, Resumo } from "./tipos";
 
 const { lancamento: l, contaFinanceira: conta, cartaoCredito: cartao, banco, categoria, contato, formaPagamento: forma, tag, lancamentoTag, lancamentoItem, anexo, fatura } = schema;
@@ -119,6 +120,7 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
       parcelaTotal: l.parcelaTotal,
       parcelamentoId: l.parcelamentoId,
       transferenciaId: l.transferenciaId,
+      recorrenciaId: l.recorrenciaId,
       realizarAutomaticamente: l.realizarAutomaticamente,
       observacao: sql<boolean>`coalesce(length(${l.observacao}), 0) > 0`,
       anexos: sql<number>`(select count(*)::int from ${anexo} where ${anexo.lancamentoId} = ${l.id})`,
@@ -170,6 +172,8 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
       parcela: x.parcelaNumero && x.parcelaTotal ? `${x.parcelaNumero}/${x.parcelaTotal}` : null,
       parcelamentoId: x.parcelamentoId,
       transferenciaId: x.transferenciaId,
+      recorrenciaId: x.recorrenciaId,
+      previsto: null,
       realizarAutomaticamente: x.realizarAutomaticamente,
       observacao: x.observacao,
       anexos: Number(x.anexos),
@@ -228,6 +232,8 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
         parcela: null,
         parcelamentoId: null,
         transferenciaId: null,
+        recorrenciaId: null,
+        previsto: null,
         realizarAutomaticamente: false,
         observacao: false,
         anexos: 0,
@@ -236,6 +242,17 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
       });
     }
     linhas.sort((a, b) => a.data.localeCompare(b.data) || (a.id ?? 0) - (b.id ?? 0));
+  }
+
+  // Recorrentes previstos (calculados na hora, ainda não gravados).
+  const ctx = await carregarContexto(db, hoje);
+  const pendMes = pendentes(ctx, mes.fim, mes.inicio);
+  if (pendMes.length) {
+    const previstos = await linhasPrevistas(pendMes, f, { cartaoFiltro, contaFiltro, ctx, arvore, hoje });
+    if (previstos.length) {
+      linhas = [...linhas, ...previstos];
+      linhas.sort((a, b) => a.data.localeCompare(b.data) || (a.id ?? Number.MAX_SAFE_INTEGER) - (b.id ?? Number.MAX_SAFE_INTEGER));
+    }
   }
 
   linhas = linhas.filter((x) => passaAba(f.aba, x.tipo, x.valorCentavos) && passaSituacao(x.situacao, f.situacao));
@@ -274,12 +291,98 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
       })
       .from(l)
       .where(and(gte(l.dataVencimento, mes.inicio), lte(l.dataVencimento, mes.fim)));
-    saldoAnterior = Number(anterior.contas) + Number(anterior.cartoes);
-    saldoPrevisto = saldoAnterior + Number(doMes.contas) + Number(doMes.cartoes);
+    // Recorrentes previstos entram no Saldo Anterior e no Saldo Previsto (nunca no Saldo Atual).
+    const contasSet = new Set(contas);
+    const entraNoSaldo = (p: Perna) =>
+      p.contaId !== null ? contasSet.has(p.contaId) : contaFiltro === null || ctx.cartoes.get(p.cartaoId!)?.contaPagamentoId === contaFiltro;
+    const somaPrevistos = (lista: Pendente[]) => lista.reduce((s, x) => s + x.pernas.filter(entraNoSaldo).reduce((t, p) => t + p.valorComSinal, 0), 0);
+    saldoAnterior = Number(anterior.contas) + Number(anterior.cartoes) + somaPrevistos(pendentes(ctx, somarDias(mes.inicio, -1)));
+    saldoPrevisto = saldoAnterior + Number(doMes.contas) + Number(doMes.cartoes) + somaPrevistos(pendMes);
     saldoAtual = Number(atual.total);
   }
 
   return { linhas, resumo: { receitas, despesas, total: receitas - despesas, saldoAnterior, saldoPrevisto, saldoAtual } };
+}
+
+type Arvore = Map<number, ReturnType<typeof montarArvore>[number]>;
+
+/** Linhas das ocorrências previstas, com os mesmos filtros da lista. */
+async function linhasPrevistas(
+  lista: Pendente[],
+  f: Filtros,
+  o: { cartaoFiltro: number | null; contaFiltro: number | null; ctx: Contexto; arvore: Arvore; hoje: string },
+): Promise<LinhaLista[]> {
+  const db = getDb();
+  const [contas, cartoes, formas, contatos, tags] = await Promise.all([
+    db.select({ id: conta.id, nome: conta.descricao, bancoCodigo: banco.codigo, bancoNome: banco.nome }).from(conta).leftJoin(banco, eq(banco.id, conta.bancoId)),
+    db.select({ id: cartao.id, nome: cartao.descricao, bancoCodigo: banco.codigo, bancoNome: banco.nome }).from(cartao).leftJoin(banco, eq(banco.id, cartao.bancoId)),
+    db.select({ id: forma.id, nome: forma.descricao }).from(forma),
+    db.select({ id: contato.id, nome: contato.nome }).from(contato),
+    db.select({ id: tag.id, nome: tag.descricao }).from(tag),
+  ]);
+  const porId = <T extends { id: number }>(xs: T[]) => new Map(xs.map((x) => [x.id, x]));
+  const [mContas, mCartoes, mFormas, mContatos, mTags] = [porId(contas), porId(cartoes), porId(formas), porId(contatos), porId(tags)];
+
+  let categorias: Set<number> | null = null;
+  if (f.categoria) {
+    const todas = [...o.arvore.values()].map((c) => ({ id: c.id, categoriaPaiId: c.categoriaPaiId }));
+    categorias = new Set([Number(f.categoria), ...descendentes(todas, Number(f.categoria))]);
+  }
+  const busca = semAcento(f.busca).toLowerCase();
+  const centavos = f.busca ? lerValorEmCentavos(f.busca) : null;
+
+  const linhas: LinhaLista[] = [];
+  for (const p of lista) {
+    const g = p.regra;
+    if (busca && !semAcento(p.descricao).toLowerCase().includes(busca) && (centavos === null || Math.abs(centavos) !== p.valorCentavos)) continue;
+    if (categorias && !(g.categoriaId && categorias.has(g.categoriaId)) && !g.itens.some((i) => categorias!.has(i.categoriaId))) continue;
+    if (f.forma && g.formaPagamentoId !== Number(f.forma)) continue;
+    if (f.contato && g.contatoId !== Number(f.contato)) continue;
+    if (f.tag && !g.tagIds.includes(Number(f.tag))) continue;
+    const cat = g.categoriaId && g.formato !== "transferencia" ? o.arvore.get(g.categoriaId) : undefined;
+    for (const perna of p.pernas) {
+      if (o.cartaoFiltro !== null && perna.cartaoId !== o.cartaoFiltro) continue;
+      if (o.contaFiltro !== null && perna.contaId !== o.contaFiltro && !(perna.cartaoId && o.ctx.cartoes.get(perna.cartaoId)?.contaPagamentoId === o.contaFiltro)) continue;
+      const lugar = perna.contaId ? mContas.get(perna.contaId) : mCartoes.get(perna.cartaoId!);
+      linhas.push({
+        chave: `p${g.id}-${p.data}-${perna.tipo}`,
+        id: null,
+        faturaId: null,
+        tipo: perna.tipo,
+        formato: g.formato === "detalhado" ? "detalhado" : "simples",
+        descricao: p.descricao,
+        valorCentavos: perna.valorComSinal,
+        data: perna.dataVencimento,
+        dataPagamento: null,
+        dataCompra: perna.dataCompra,
+        situacao: situacaoDe(perna.dataVencimento, null, o.hoje),
+        contaOuCartao: lugar?.nome ?? "",
+        bancoCodigo: lugar?.bancoCodigo ?? null,
+        bancoNome: lugar?.bancoNome ?? null,
+        eCartao: perna.cartaoId !== null,
+        cartaoId: perna.cartaoId,
+        categoria: cat ? rotuloCategoria(cat) : null,
+        categoriaCor: cat?.corEfetiva ?? null,
+        contato: g.contatoId ? (mContatos.get(g.contatoId)?.nome ?? null) : null,
+        forma: g.formaPagamentoId ? (mFormas.get(g.formaPagamentoId)?.nome ?? null) : null,
+        tags: g.tagIds.map((t) => mTags.get(t)?.nome ?? "").filter(Boolean).sort(),
+        parcela: null,
+        parcelamentoId: null,
+        transferenciaId: null,
+        recorrenciaId: g.id,
+        previsto: { recorrenciaId: g.id, data: p.data },
+        realizarAutomaticamente: g.realizarAutomaticamente,
+        observacao: !!g.observacao,
+        anexos: 0,
+        itens: g.itens.map((i) => {
+          const c = o.arvore.get(i.categoriaId);
+          return { id: i.id, tipo: i.tipo, descricao: i.descricao, valorCentavos: i.tipo === "receita" ? i.valorCentavos : -i.valorCentavos, categoria: c ? rotuloCategoria(c) : "", categoriaCor: c?.corEfetiva ?? "#9CA3AF" };
+        }),
+        compras: [],
+      });
+    }
+  }
+  return linhas;
 }
 
 /** Saldo atual de cada conta (só o que já foi pago ou recebido até hoje). */

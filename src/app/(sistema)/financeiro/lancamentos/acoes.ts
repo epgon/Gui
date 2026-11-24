@@ -5,13 +5,17 @@ import { refresh } from "next/cache";
 import { getDb, schema } from "@/db";
 import { registrarAuditoria, type Transacao } from "@/lib/auditoria";
 import { falha, idValido, type Resultado } from "@/lib/cadastros/resultado";
-import { dataValida } from "@/lib/datas";
+import { dataValida, formatarData } from "@/lib/datas";
 import { formatarCentavos, lerValorEmCentavos } from "@/lib/dinheiro";
-import { faturaDaCompra, gerarParcelas, PERIODICIDADES, totalDetalhado, type Periodicidade, type TipoLancamento } from "@/lib/lancamentos/regras";
-import type { DadosLancamento, LancamentoEdicao } from "@/lib/lancamentos/tipos";
+import { garantirFatura, inserirLancamento } from "@/lib/lancamentos/gravacao";
+import { gerarParcelas, PERIODICIDADES, totalDetalhado, type Periodicidade, type TipoLancamento } from "@/lib/lancamentos/regras";
+import type { DadosLancamento, LancamentoEdicao, Ocorrencia } from "@/lib/lancamentos/tipos";
+import { aplicarVariaveis, primeiraOcorrencia } from "@/lib/recorrentes/regras";
+import { conferirOcorrencia, dadosDaOcorrencia, gravarOcorrencia } from "@/lib/recorrentes/servidor";
+import { ErroValidacao, lerDatasRecorrencia } from "@/lib/recorrentes/validacao";
 import { exigirLogin } from "@/lib/sessao";
 
-const { lancamento: l, lancamentoItem: item, lancamentoTag, contaFinanceira: conta, cartaoCredito: cartao, categoria, fatura, parcelamento, transferencia, anexo, formaPagamento, contato, tag } = schema;
+const { lancamento: l, lancamentoItem: item, lancamentoTag, contaFinanceira: conta, cartaoCredito: cartao, categoria, parcelamento, transferencia, anexo, formaPagamento, contato, tag, recorrencia, recorrenciaItem, recorrenciaTag, recorrenciaExcecao } = schema;
 const TELA = "Lançamentos";
 const ENTIDADE = "Lançamento";
 const MAXIMO_CENTAVOS = 99_999_999_999;
@@ -84,18 +88,6 @@ async function lerDestino(tx: Transacao, destino: string) {
   return { contaId: null, cartaoId: id };
 }
 
-/** Fatura em que a compra cai (cria a fatura se ainda não existir). */
-async function garantirFatura(tx: Transacao, cartaoId: number, dataCompra: string) {
-  const [c] = await tx.select({ diaFechamento: cartao.diaFechamento, diaVencimento: cartao.diaVencimento }).from(cartao).where(eq(cartao.id, cartaoId));
-  const f = faturaDaCompra(dataCompra, c.diaFechamento, c.diaVencimento);
-  await tx.insert(fatura).values({ cartaoId, ...f }).onConflictDoNothing();
-  const [linha] = await tx
-    .select({ id: fatura.id, dataVencimento: fatura.dataVencimento })
-    .from(fatura)
-    .where(and(eq(fatura.cartaoId, cartaoId), eq(fatura.competencia, f.competencia)));
-  return linha;
-}
-
 type Comum = {
   descricao: string;
   documento: string | null;
@@ -145,19 +137,6 @@ async function lerItens(tx: Transacao, d: DadosLancamento) {
   return { itens, ...total };
 }
 
-/** Grava um lançamento de conta ou cartão (com tags e itens). */
-async function inserir(tx: Transacao, linha: Linha, tagIds: number[], itens: Omit<typeof item.$inferInsert, "lancamentoId">[]) {
-  if (linha.cartaoId) {
-    const dataCompra = linha.dataCompra ?? linha.dataVencimento;
-    const f = await garantirFatura(tx, linha.cartaoId, dataCompra);
-    linha = { ...linha, dataCompra, dataVencimento: f.dataVencimento, faturaId: f.id, dataPagamento: null, valorPagoCentavos: null, realizarAutomaticamente: false };
-  }
-  const [novo] = await tx.insert(l).values(linha).returning();
-  if (tagIds.length) await tx.insert(lancamentoTag).values(tagIds.map((tagId) => ({ lancamentoId: novo.id, tagId })));
-  if (itens.length) await tx.insert(item).values(itens.map((i) => ({ ...i, lancamentoId: novo.id })));
-  return novo;
-}
-
 // ---------------------------------------------------------------------------
 // Salvar
 // ---------------------------------------------------------------------------
@@ -172,9 +151,43 @@ export async function salvarLancamento(id: number | null, d: DadosLancamento): P
       return r;
     });
   } catch (e) {
-    if (e instanceof ErroFormulario) return falha(e.message);
+    if (e instanceof ErroFormulario || e instanceof ErroValidacao) return falha(e.message);
     throw e;
   }
+}
+
+/** Ocorrência válida de recorrente (para editar uma prevista e gravá-la). */
+function lerOcorrencia(o: Ocorrencia | null | undefined): Ocorrencia | null {
+  if (!o) return null;
+  if (!idValido.safeParse(o.recorrenciaId).success || !dataValida(o.data)) erro("Ocorrência do recorrente não encontrada.");
+  return { recorrenciaId: o.recorrenciaId, data: o.data };
+}
+
+/** "Gerar Recorrente": cria a regra a partir do lançamento. O próprio lançamento é a primeira ocorrência. */
+async function criarRegra(tx: Transacao, base: Linha, d: DadosLancamento, tagIds: number[], itens: { tipo: "receita" | "despesa"; descricao: string; valorCentavos: number; categoriaId: number; ordem: number }[], contaDestinoId: number | null = null) {
+  const datas = lerDatasRecorrencia(d.recorrente!);
+  const [regra] = await tx
+    .insert(recorrencia)
+    .values({
+      formato: base.transferenciaId || contaDestinoId ? "transferencia" : base.formato,
+      tipo: base.tipo === "receita" ? "receita" : "despesa",
+      descricao: base.descricao,
+      valorCentavos: base.valorCentavos,
+      ...datas,
+      realizarAutomaticamente: !!base.realizarAutomaticamente,
+      contaId: base.contaId ?? null,
+      cartaoId: base.cartaoId ?? null,
+      contaDestinoId,
+      categoriaId: contaDestinoId ? null : (base.categoriaId ?? null),
+      formaPagamentoId: base.formaPagamentoId ?? null,
+      contatoId: contaDestinoId ? null : (base.contatoId ?? null),
+      observacao: base.observacao ?? null,
+    })
+    .returning();
+  if (tagIds.length) await tx.insert(recorrenciaTag).values(tagIds.map((tagId) => ({ recorrenciaId: regra.id, tagId })));
+  if (itens.length) await tx.insert(recorrenciaItem).values(itens.map((i) => ({ ...i, recorrenciaId: regra.id })));
+  await registrarAuditoria(tx, { tela: TELA, entidade: "Recorrente", entidadeId: regra.id, acao: "cadastrou", descricao: `o Recorrente ${regra.descricao}`, dados: { ...regra, tagIds, itens } });
+  return { recorrenciaId: regra.id, dataOcorrencia: primeiraOcorrencia(datas), origem: "recorrente" as const };
 }
 
 async function salvarSimplesOuDetalhado(tx: Transacao, id: number | null, d: DadosLancamento) {
@@ -213,8 +226,19 @@ async function salvarSimplesOuDetalhado(tx: Transacao, id: number | null, d: Dad
   };
 
   if (id === null) {
-    if (d.parcelar) return criarParcelas(tx, base, d, tagIds, itens);
-    const novo = await inserir(tx, base, tagIds, itens);
+    const ocorrencia = lerOcorrencia(d.ocorrencia);
+    if (ocorrencia) {
+      // Ocorrência prevista editada: vira lançamento ligado ao recorrente.
+      const regra = await conferirOcorrencia(tx, ocorrencia.recorrenciaId, ocorrencia.data);
+      if (regra.formato === "transferencia") erro("Este recorrente é uma transferência: use a aba **Transferência**.");
+      Object.assign(base, { recorrenciaId: regra.id, dataOcorrencia: ocorrencia.data, origem: "recorrente" });
+    } else if (d.parcelar) {
+      return criarParcelas(tx, base, d, tagIds, itens);
+    } else if (d.recorrente) {
+      Object.assign(base, await criarRegra(tx, base, d, tagIds, itens));
+      base.descricao = aplicarVariaveis(base.descricao, base.dataVencimento);
+    }
+    const novo = await inserirLancamento(tx, base, tagIds, itens);
     await registrarAuditoria(tx, { tela: TELA, entidade: ENTIDADE, entidadeId: novo.id, acao: "cadastrou", descricao: `o Lançamento ${novo.descricao}`, dados: { ...base, tagIds, itens } });
     return { ok: true as const, id: novo.id, ids: [novo.id] };
   }
@@ -287,7 +311,7 @@ async function criarParcelas(tx: Transacao, base: Linha, d: DadosLancamento, tag
   const ids: number[] = [];
   for (const [i, parcela] of parcelas.entries()) {
     const primeira = i === 0;
-    const novo = await inserir(
+    const novo = await inserirLancamento(
       tx,
       {
         ...base,
@@ -350,9 +374,19 @@ async function salvarTransferencia(tx: Transacao, id: number | null, d: DadosLan
   });
 
   if (id === null) {
+    let ligacao: Partial<Linha> = {};
+    const ocorrencia = lerOcorrencia(d.ocorrencia);
+    if (ocorrencia) {
+      const regra = await conferirOcorrencia(tx, ocorrencia.recorrenciaId, ocorrencia.data);
+      if (regra.formato !== "transferencia") erro("Este recorrente não é uma transferência.");
+      ligacao = { recorrenciaId: regra.id, dataOcorrencia: ocorrencia.data, origem: "recorrente" };
+    } else if (d.recorrente) {
+      ligacao = await criarRegra(tx, linha("transferencia_saida", origemId!), d, tagIds, [], destinoId);
+      ligacao.descricao = aplicarVariaveis(comum.descricao, data);
+    }
     const [grupo] = await tx.insert(transferencia).values({}).returning();
-    const saida = await inserir(tx, { ...linha("transferencia_saida", origemId!), transferenciaId: grupo.id }, tagIds, []);
-    const entrada = await inserir(tx, { ...linha("transferencia_entrada", destinoId!), transferenciaId: grupo.id }, tagIds, []);
+    const saida = await inserirLancamento(tx, { ...linha("transferencia_saida", origemId!), ...ligacao, transferenciaId: grupo.id }, tagIds, []);
+    const entrada = await inserirLancamento(tx, { ...linha("transferencia_entrada", destinoId!), ...ligacao, transferenciaId: grupo.id }, tagIds, []);
     await registrarAuditoria(tx, { tela: TELA, entidade: ENTIDADE, entidadeId: saida.id, acao: "cadastrou", descricao: `a Transferência ${comum.descricao}`, dados: { ...linha("transferencia_saida", origemId!), contaDestinoId: destinoId } });
     return { ok: true as const, id: saida.id, ids: [saida.id, entrada.id] };
   }
@@ -423,6 +457,73 @@ export async function carregarLancamento(id: number): Promise<LancamentoEdicao |
   };
 }
 
+/** Ocorrência prevista de um recorrente, pronta para editar (ao salvar, vira lançamento). */
+export async function carregarOcorrencia(o: Ocorrencia): Promise<{ dados: DadosLancamento } | { erro: string }> {
+  await exigirLogin();
+  try {
+    const oc = lerOcorrencia(o)!;
+    return await getDb().transaction(async (tx) => {
+      const regra = await conferirOcorrencia(tx, oc.recorrenciaId, oc.data);
+      const x = await dadosDaOcorrencia(tx, regra, oc.data);
+      const dados: DadosLancamento = {
+        aba: regra.formato,
+        tipo: x.tipo,
+        descricao: x.descricao,
+        valor: formatarCentavos(x.valorCentavos),
+        data: x.vencimento,
+        pago: false,
+        dataPagamento: "",
+        realizarAutomaticamente: regra.realizarAutomaticamente,
+        destino: regra.contaId ? `conta:${regra.contaId}` : `cartao:${regra.cartaoId}`,
+        contaDestinoId: regra.contaDestinoId ? String(regra.contaDestinoId) : "",
+        categoriaId: regra.categoriaId && regra.formato === "simples" ? String(regra.categoriaId) : "",
+        formaPagamentoId: regra.formaPagamentoId ? String(regra.formaPagamentoId) : "",
+        contatoId: regra.contatoId ? String(regra.contatoId) : "",
+        tagIds: regra.tagIds,
+        documento: "",
+        dataReferencia: "",
+        observacao: regra.observacao ?? "",
+        itens: regra.itens.map((i) => ({ chave: `r${i.id}`, tipo: i.tipo, descricao: i.descricao, valor: formatarCentavos(i.valorCentavos), categoriaId: String(i.categoriaId) })),
+        parcelar: null,
+        ocorrencia: oc,
+      };
+      return { dados };
+    });
+  } catch (e) {
+    if (e instanceof ErroFormulario || e instanceof ErroValidacao) return { erro: e.message };
+    throw e;
+  }
+}
+
+const lerOcorrencias = (lista: unknown): Ocorrencia[] | null => {
+  if (!Array.isArray(lista) || lista.length > 500) return null;
+  const validas = lista.filter((o) => o && idValido.safeParse(o.recorrenciaId).success && typeof o.data === "string" && dataValida(o.data)) as Ocorrencia[];
+  if (validas.length !== lista.length) return null;
+  const vistas = new Set<string>();
+  return validas.filter((o) => !vistas.has(`${o.recorrenciaId}|${o.data}`) && vistas.add(`${o.recorrenciaId}|${o.data}`)).map((o) => ({ recorrenciaId: o.recorrenciaId, data: o.data }));
+};
+
+/** Excluir uma ocorrência prevista: ela é pulada e não aparece mais. O recorrente continua. */
+export async function pularOcorrencias(lista: Ocorrencia[]): Promise<Resultado> {
+  await exigirLogin();
+  const ocorrencias = lerOcorrencias(lista);
+  if (!ocorrencias?.length) return falha("Selecione pelo menos um lançamento.");
+  try {
+    return await getDb().transaction(async (tx) => {
+      for (const o of ocorrencias) {
+        const regra = await conferirOcorrencia(tx, o.recorrenciaId, o.data);
+        await tx.insert(recorrenciaExcecao).values({ recorrenciaId: o.recorrenciaId, dataOcorrencia: o.data, motivo: "Excluída da lista" }).onConflictDoNothing();
+        await registrarAuditoria(tx, { tela: TELA, entidade: "Recorrente", entidadeId: regra.id, acao: "excluiu", descricao: `a ocorrência de ${formatarData(o.data)} do Recorrente ${regra.descricao}`, dados: o });
+      }
+      refresh();
+      return { ok: true as const };
+    });
+  } catch (e) {
+    if (e instanceof ErroValidacao) return falha(e.message);
+    throw e;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Pagar / receber, estornar e excluir
 // ---------------------------------------------------------------------------
@@ -442,25 +543,39 @@ async function comPares(tx: Transacao, ids: number[]) {
   return [...new Set([...ids, ...pares.map((p) => p.id)])];
 }
 
-export async function realizarLancamentos(ids: number[], dataPagamento: string): Promise<Resultado> {
+export async function realizarLancamentos(ids: number[], dataPagamento: string, ocorrencias: Ocorrencia[] = []): Promise<Resultado> {
   await exigirLogin();
-  const validos = lerIds(ids);
-  if (!validos) return falha("Selecione pelo menos um lançamento.");
+  const validos = Array.isArray(ids) && ids.length === 0 ? [] : lerIds(ids);
+  const previstas = lerOcorrencias(ocorrencias);
+  if (!validos || !previstas || validos.length + previstas.length === 0) return falha("Selecione pelo menos um lançamento.");
   if (!dataValida(dataPagamento)) return falha("Informe uma data válida no campo **Data do Pagamento**.");
-  return getDb().transaction(async (tx) => {
-    const todos = await comPares(tx, validos);
-    const alvo = await tx.select().from(l).where(and(inArray(l.id, todos), isNull(l.cartaoId), isNull(l.dataPagamento)));
-    const cartao = await tx.select({ id: l.id }).from(l).where(and(inArray(l.id, validos), sql`${l.cartaoId} is not null`));
-    if (!alvo.length) {
-      return falha(cartao.length ? "Compras no cartão são pagas junto com a fatura (chega na Fase 5)." : "Os lançamentos escolhidos já estão pagos ou recebidos.");
-    }
-    for (const x of alvo) {
-      await tx.update(l).set({ dataPagamento, valorPagoCentavos: x.valorCentavos }).where(eq(l.id, x.id));
-      await registrarAuditoria(tx, { tela: TELA, entidade: ENTIDADE, entidadeId: x.id, acao: "alterou", descricao: `a baixa do Lançamento ${x.descricao}`, dados: { dataPagamento: { antes: null, depois: dataPagamento } } });
-    }
-    refresh();
-    return { ok: true as const };
-  });
+  try {
+    return await getDb().transaction(async (tx) => {
+      // Recorrentes previstos: gravados já pagos (no cartão, a compra vai para a fatura).
+      for (const o of previstas) {
+        const regra = await conferirOcorrencia(tx, o.recorrenciaId, o.data);
+        const novos = await gravarOcorrencia(tx, regra, o.data, dataPagamento);
+        await registrarAuditoria(tx, { tela: TELA, entidade: ENTIDADE, entidadeId: novos[0], acao: "cadastrou", descricao: `o Lançamento ${regra.descricao} (recorrente${regra.cartaoId ? "" : ", já pago"})`, dados: { ...o, dataPagamento } });
+      }
+      if (validos.length) {
+        const todos = await comPares(tx, validos);
+        const alvo = await tx.select().from(l).where(and(inArray(l.id, todos), isNull(l.cartaoId), isNull(l.dataPagamento)));
+        const cartao = await tx.select({ id: l.id }).from(l).where(and(inArray(l.id, validos), sql`${l.cartaoId} is not null`));
+        if (!alvo.length && !previstas.length) {
+          return falha(cartao.length ? "Compras no cartão são pagas junto com a fatura (chega na Fase 5)." : "Os lançamentos escolhidos já estão pagos ou recebidos.");
+        }
+        for (const x of alvo) {
+          await tx.update(l).set({ dataPagamento, valorPagoCentavos: x.valorCentavos }).where(eq(l.id, x.id));
+          await registrarAuditoria(tx, { tela: TELA, entidade: ENTIDADE, entidadeId: x.id, acao: "alterou", descricao: `a baixa do Lançamento ${x.descricao}`, dados: { dataPagamento: { antes: null, depois: dataPagamento } } });
+        }
+      }
+      refresh();
+      return { ok: true as const };
+    });
+  } catch (e) {
+    if (e instanceof ErroValidacao) return falha(e.message);
+    throw e;
+  }
 }
 
 export async function estornarLancamentos(ids: number[]): Promise<Resultado> {
@@ -511,6 +626,14 @@ export async function excluirLancamentos(ids: number[], parcelas: "esta" | "prox
         tx.select().from(item).where(eq(item.lancamentoId, x.id)),
       ]);
       await registrarAuditoria(tx, { tela: TELA, entidade: ENTIDADE, entidadeId: x.id, acao: "excluiu", descricao: `o Lançamento ${x.descricao}`, dados: { ...x, tags: tags.map((t) => t.tagId), itens } });
+    }
+    // Ocorrência de recorrente excluída não volta a aparecer como prevista.
+    const deRecorrente = apagar.filter((x) => x.recorrenciaId && x.dataOcorrencia);
+    if (deRecorrente.length) {
+      await tx
+        .insert(recorrenciaExcecao)
+        .values(deRecorrente.map((x) => ({ recorrenciaId: x.recorrenciaId!, dataOcorrencia: x.dataOcorrencia!, motivo: "Lançamento excluído" })))
+        .onConflictDoNothing();
     }
     await tx.delete(l).where(inArray(l.id, apagar.map((x) => x.id)));
     // Transferências e parcelamentos que ficaram vazios.

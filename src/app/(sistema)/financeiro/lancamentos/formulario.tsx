@@ -16,6 +16,7 @@ import { faturaDaCompra, gerarParcelas, PERIODICIDADES, rotuloCompetencia, total
 import type { AnexoInfo, DadosLancamento, DadosParcelar, ItemFormulario, LancamentoEdicao, Opcoes, ParcelaFormulario } from "@/lib/lancamentos/tipos";
 import { salvarContato } from "../../cadastros/clientes-e-fornecedores/acoes";
 import { salvarTag } from "../../cadastros/tags/acoes";
+import { BlocoRecorrencia, recorrenciaPadrao } from "@/components/recorrentes/bloco-recorrencia";
 import { excluirAnexo, salvarLancamento } from "./acoes";
 import { AlternadorTipo, CampoCategoria, CampoComNovo, CampoDestino, CampoTags } from "./campos";
 
@@ -51,13 +52,15 @@ const PARCELAR_PADRAO: DadosParcelar = { periodicidade: "mensal", quantidade: "2
 const MAX_OBSERVACAO = 1000;
 let contadorItens = 0;
 
-export type Pedido = { chave: number; inicial: DadosLancamento; edicao?: LancamentoEdicao };
+/** ocorrencia = editando um recorrente previsto (ainda não gravado): ao salvar, ele vira lançamento. */
+export type Pedido = { chave: number; inicial: DadosLancamento; edicao?: LancamentoEdicao; ocorrencia?: boolean };
 
 /** Modal "Novo Lançamento" com as abas Simples, Detalhado e Transferência. */
 export function ModalLancamento({ pedido, opcoes, hoje, aoFechar }: { pedido: Pedido; opcoes: Opcoes; hoje: string; aoFechar: () => void }) {
   const router = useRouter();
   const edicao = pedido.edicao;
-  const novo = !edicao;
+  const ocorrencia = !!pedido.ocorrencia;
+  const novo = !edicao && !ocorrencia;
   const [dados, setDados] = useState<DadosLancamento>(edicao?.dados ?? pedido.inicial);
   const [erro, setErro] = useState("");
   const [salvando, iniciar] = useTransition();
@@ -150,7 +153,7 @@ export function ModalLancamento({ pedido, opcoes, hoje, aoFechar }: { pedido: Pe
     }
     iniciar(async () => {
       try {
-        const envio: DadosLancamento = { ...dados, tipo: tipoEfetivo, parcelar: novo && aba === "simples" ? dados.parcelar : null };
+        const envio: DadosLancamento = { ...dados, tipo: tipoEfetivo, parcelar: novo && aba === "simples" ? dados.parcelar : null, recorrente: novo && !dados.parcelar ? (dados.recorrente ?? null) : null };
         const r = await salvarLancamento(edicao?.id ?? null, envio);
         if (!r.ok) {
           setErro(r.erro);
@@ -189,11 +192,20 @@ export function ModalLancamento({ pedido, opcoes, hoje, aoFechar }: { pedido: Pe
     });
   };
 
-  const titulo = novo ? (transferencia ? "Nova Transferência" : "Novo Lançamento") : transferencia ? "Editando Transferência" : "Editando Lançamento";
+  const titulo = ocorrencia
+    ? "Editando Lançamento Recorrente"
+    : novo
+      ? transferencia
+        ? "Nova Transferência"
+        : "Novo Lançamento"
+      : transferencia
+        ? "Editando Transferência"
+        : "Editando Lançamento";
   const resumo = [
     dados.descricao || "Descrição",
     `${tipoEfetivo === "receita" && !transferencia ? "" : "-"}${formatarCentavos(valorCentavos)}`,
     edicao?.parcela ? `Parcela ${edicao.parcela}` : null,
+    ocorrencia ? "Previsto" : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -224,11 +236,17 @@ export function ModalLancamento({ pedido, opcoes, hoje, aoFechar }: { pedido: Pe
                   {
                     rotulo: dados.parcelar ? "Parcelar (aberto)" : "Parcelar",
                     icone: <Layers className="h-4 w-4" />,
-                    desabilitado: !novo || detalhado,
-                    dica: !novo ? "Só ao criar um lançamento" : detalhado ? "Use a aba Simples para parcelar" : undefined,
+                    desabilitado: !novo || detalhado || !!dados.recorrente,
+                    dica: !novo ? "Só ao criar um lançamento" : detalhado ? "Use a aba Simples para parcelar" : dados.recorrente ? "Feche Gerar Recorrente" : undefined,
                     aoClicar: () => setDados((d) => ({ ...d, parcelar: d.parcelar ?? { ...PARCELAR_PADRAO } })),
                   },
-                  { rotulo: "Gerar Recorrente", icone: <CalendarClock className="h-4 w-4" />, desabilitado: true, dica: "Chega na Fase 4", aoClicar: () => {} },
+                  {
+                    rotulo: dados.recorrente ? "Gerar Recorrente (aberto)" : "Gerar Recorrente",
+                    icone: <CalendarClock className="h-4 w-4" />,
+                    desabilitado: !novo || !!dados.parcelar,
+                    dica: !novo ? "Só ao criar um lançamento" : dados.parcelar ? "Feche Parcelar" : undefined,
+                    aoClicar: () => setDados((d) => ({ ...d, recorrente: d.recorrente ?? recorrenciaPadrao(/^\d{4}-\d{2}-\d{2}$/.test(d.data) ? d.data : hoje) })),
+                  },
                   { rotulo: `Anexar Arquivo${qtdAnexos ? ` (${qtdAnexos})` : ""}`, icone: <Paperclip className="h-4 w-4" />, aoClicar: () => setSub("anexos") },
                   { rotulo: dados.observacao ? "Editar Observação" : "Adicionar Observação", icone: <MessageSquareText className="h-4 w-4" />, aoClicar: () => setSub("observacao") },
                 ]}
@@ -438,6 +456,17 @@ export function ModalLancamento({ pedido, opcoes, hoje, aoFechar }: { pedido: Pe
             />
           )}
 
+          {dados.recorrente && (
+            <BlocoRecorrencia
+              valor={dados.recorrente}
+              aoMudar={(p) => setDados((d) => ({ ...d, recorrente: d.recorrente ? { ...d.recorrente, ...p } : null }))}
+              realizar={dados.realizarAutomaticamente}
+              aoMudarRealizar={(v) => mudar("realizarAutomaticamente", v)}
+              aoFechar={() => mudar("recorrente", null)}
+              eCartao={eCartao}
+            />
+          )}
+
           <div>
             <button type="button" onClick={() => setMaisInfo((m) => !m)} className="flex items-center gap-1 text-sm font-semibold text-verde">
               <ChevronDown className={cn("h-4 w-4 transition", maisInfo && "rotate-180")} /> Mais Informações
@@ -552,7 +581,7 @@ export function ModalLancamento({ pedido, opcoes, hoje, aoFechar }: { pedido: Pe
 }
 
 /** Junta as opções do servidor com as criadas agora (sem repetir). */
-function mesclar<T extends { id: number }>(base: T[], extras: T[]): T[] {
+export function mesclar<T extends { id: number }>(base: T[], extras: T[]): T[] {
   return [...base, ...extras.filter((e) => !base.some((b) => b.id === e.id))];
 }
 
@@ -609,7 +638,7 @@ function MenuOpcoes({ aberto, alternar, fechar, itens }: {
 // Detalhado
 // ---------------------------------------------------------------------------
 
-function ListaDetalhes({ itens, opcoes, aoEditar, aoExcluir }: { itens: ItemFormulario[]; opcoes: Opcoes; aoEditar: (i: ItemFormulario) => void; aoExcluir: (i: ItemFormulario) => void }) {
+export function ListaDetalhes({ itens, opcoes, aoEditar, aoExcluir }: { itens: ItemFormulario[]; opcoes: Opcoes; aoEditar: (i: ItemFormulario) => void; aoExcluir: (i: ItemFormulario) => void }) {
   return (
     <div>
       <Rotulo texto="Detalhes" obrigatorio ajuda="Cada item tem a sua categoria. O valor do lançamento é a soma dos itens." />
@@ -642,7 +671,7 @@ function ListaDetalhes({ itens, opcoes, aoEditar, aoExcluir }: { itens: ItemForm
   );
 }
 
-function ModalDetalhe({ item, opcoes, aoFechar, aoSalvar }: { item: ItemFormulario | null; opcoes: Opcoes; aoFechar: () => void; aoSalvar: (i: ItemFormulario) => void }) {
+export function ModalDetalhe({ item, opcoes, aoFechar, aoSalvar }: { item: ItemFormulario | null; opcoes: Opcoes; aoFechar: () => void; aoSalvar: (i: ItemFormulario) => void }) {
   const vazio = (tipo: "receita" | "despesa" = "despesa"): ItemFormulario => ({ chave: `n${++contadorItens}`, tipo, descricao: "", valor: "", categoriaId: "" });
   const [i, setI] = useState<ItemFormulario>(item ?? vazio());
   const [erro, setErro] = useState("");
@@ -978,7 +1007,7 @@ function ModalAnexos({ arquivos, setArquivos, anexos, aoExcluirAnexo, aoFechar }
 // Cadastros rápidos (sem sair do lançamento)
 // ---------------------------------------------------------------------------
 
-function ModalNovaTag({ aoFechar, aoCriar }: { aoFechar: () => void; aoCriar: (id: number, rotulo: string) => void }) {
+export function ModalNovaTag({ aoFechar, aoCriar }: { aoFechar: () => void; aoCriar: (id: number, rotulo: string) => void }) {
   const [descricao, setDescricao] = useState("");
   const [erro, setErro] = useState("");
   const [salvando, iniciar] = useTransition();
@@ -1012,7 +1041,7 @@ function ModalNovaTag({ aoFechar, aoCriar }: { aoFechar: () => void; aoCriar: (i
   );
 }
 
-function ModalNovoContato({ tipo, aoFechar, aoCriar }: { tipo: "receita" | "despesa"; aoFechar: () => void; aoCriar: (id: number, rotulo: string) => void }) {
+export function ModalNovoContato({ tipo, aoFechar, aoCriar }: { tipo: "receita" | "despesa"; aoFechar: () => void; aoCriar: (id: number, rotulo: string) => void }) {
   const [nome, setNome] = useState("");
   const [pessoa, setPessoa] = useState<"fisica" | "juridica">("fisica");
   const [eCliente, setCliente] = useState(tipo === "receita");

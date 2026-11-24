@@ -4,6 +4,7 @@ import type { ParametrosBusca } from "@/lib/cadastros/filtros";
 import { hojeIso } from "@/lib/datas";
 import { carregarOpcoes, lerFiltros, listarLancamentos } from "@/lib/lancamentos/consultas";
 import { mesDe } from "@/lib/lancamentos/regras";
+import { realizarAutomaticos } from "@/lib/recorrentes/servidor";
 import { TelaLancamentos } from "./tela";
 
 export const metadata = { title: "Lançamentos" };
@@ -11,6 +12,8 @@ const CAMINHO = "/financeiro/lancamentos";
 
 export default async function PaginaLancamentos({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
   const hoje = hojeIso();
+  // "Realizar automaticamente": dá baixa no que venceu até hoje (não precisa de tarefa agendada).
+  await realizarAutomaticos(hoje);
   const f = lerFiltros(await searchParams, hoje);
   const [{ linhas, resumo }, opcoes] = await Promise.all([listarLancamentos(f, hoje), carregarOpcoes()]);
   const todas = { valor: "", rotulo: "Todas" };
