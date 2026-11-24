@@ -632,6 +632,41 @@ export const importacaoLinha = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// 4.6. Orçamentos
+// ---------------------------------------------------------------------------
+
+/** Categorias raiz escolhidas para o orçamento (as filhas entram sozinhas). */
+export const orcamentoCategoria = pgTable("orcamento_categoria", {
+  id: serial("id").primaryKey(),
+  categoriaId: integer("categoria_id")
+    .notNull()
+    .unique()
+    .references(() => categoria.id, { onDelete: "cascade" }),
+  ordem: integer("ordem").notNull().default(0),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Limite de gasto de uma categoria (raiz ou filha) a partir de um mês.
+ * Replicação: um mês sem linha própria usa a do último mês anterior que tiver.
+ * valor_centavos vazio = "sem limite" daquele mês em diante.
+ */
+export const orcamentoLimite = pgTable(
+  "orcamento_limite",
+  {
+    id: serial("id").primaryKey(),
+    categoriaId: integer("categoria_id")
+      .notNull()
+      .references(() => categoria.id, { onDelete: "cascade" }),
+    /** Primeiro dia do mês (2026-11-01). */
+    competencia: date("competencia").notNull(),
+    valorCentavos: bigint("valor_centavos", { mode: "number" }),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("orcamento_limite_categoria_mes_idx").on(t.categoriaId, t.competencia)],
+);
+
+// ---------------------------------------------------------------------------
 // 4.8. Auditoria
 // ---------------------------------------------------------------------------
 
