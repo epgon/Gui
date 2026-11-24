@@ -29,7 +29,7 @@ export function TelaFormas({ linhas, total, filtros, caminho }: {
 
   return (
     <>
-      <BarraLista aoAdicionar={() => form.abrirNovo()} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar forma de pagamento" />
+      <BarraLista tela="formas-de-pagamento" aoAdicionar={() => form.abrirNovo()} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar forma de pagamento" />
       <FaixaErro>{situacao.aviso && <TextoComDestaque texto={situacao.aviso} />}</FaixaErro>
       <Tabela
         linhas={linhas}

@@ -1,10 +1,11 @@
-import { and, asc, count, desc, eq, sql } from "drizzle-orm";
+import { asc, count, desc, eq, sql } from "drizzle-orm";
 import { FiltroSelecao, FiltroTexto, OPCOES_SITUACAO, PainelFiltros } from "@/components/cadastros/painel-filtros";
 import { MolduraLista } from "@/components/cadastros/moldura-lista";
 import { getDb, schema } from "@/db";
 import { listarBancos } from "@/lib/cadastros/bancos";
-import { condicaoSituacao, contemTexto, lerFiltrosComuns, parametro, POR_PAGINA, type ParametrosBusca } from "@/lib/cadastros/filtros";
-import { TIPOS_CONTA, type TipoConta } from "@/lib/cadastros/opcoes";
+import { filtrosContas } from "@/lib/cadastros/condicoes";
+import { POR_PAGINA, type ParametrosBusca } from "@/lib/cadastros/filtros";
+import { TIPOS_CONTA } from "@/lib/cadastros/opcoes";
 import { hojeIso } from "@/lib/datas";
 import { saldosDasContas } from "@/lib/lancamentos/consultas";
 import { TelaContas } from "./tela";
@@ -14,15 +15,8 @@ const CAMINHO = "/cadastros/contas-financeiras";
 
 export default async function PaginaContas({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
   const sp = await searchParams;
-  const f = lerFiltrosComuns(sp);
-  const tipoParam = parametro(sp, "tipo");
-  const tipo = TIPOS_CONTA.some((t) => t.valor === tipoParam) ? (tipoParam as TipoConta) : "";
+  const { f, tipo, onde } = filtrosContas(sp);
   const { contaFinanceira: conta, banco } = schema;
-  const onde = and(
-    f.busca ? contemTexto(conta.descricao, f.busca) : undefined,
-    tipo ? eq(conta.tipo, tipo) : undefined,
-    condicaoSituacao(conta.ativo, f.situacao),
-  );
   const db = getDb();
   const [linhas, [{ total }], bancos, saldos] = await Promise.all([
     db

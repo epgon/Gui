@@ -71,7 +71,34 @@ Fases prontas:
   (não falta nada). Se pagar **mais**, a diferença fica como juros ou multa. Na lista aparecem as etiquetas **Parcial**,
   **Com juros** e **Restante**. **Voltar para não pago** desfaz tudo: o lançamento volta ao valor de antes e o restante é apagado.
 
+- **Fase 8 (Relatórios, PDF e exportação)**: **Relatórios > Fluxo de Caixa** (Diário, Mensal, Trimestral ou Anual) com Receitas,
+  Despesas e Saldo por período, **Média** e **Total**; Receitas e Despesas abrem por categoria (principal, filha e neta).
+  **Relatórios > Saldo Detalhado** por Dia, Mês, Ano, Categorias, Contas Financeiras, Clientes e Fornecedores, Formas de Pagamento
+  e Tags, com Receitas, Despesas, Resultado e a linha "Total do Período". Os dois têm o intervalo "de ... a ...", os filtros
+  Conta ou Cartão, Situação e **Considerar: Data** (vencimento, pagamento, referência ou compra), o painel de filtros (categoria,
+  forma, contato e tag) e a engrenagem **Incluir as categorias** (Acerto de Saldo e Transferência, desligadas no início).
+  O botão **Imprimir** gera o PDF com a faixa "Filtros Utilizados" e pergunta se você quer **Visualizar** ou fazer o **Download**;
+  no mesmo botão há **Exportar para Excel** e **Exportar para CSV**. Esse botão também está em Lançamentos, Recorrentes e em todas
+  as listas de Cadastros (Impressão Padrão), sempre com os filtros que estão na tela. Em **Cadastros > Categorias**, a opção
+  **Detalhar** (menu de três pontinhos) mostra o gráfico dos últimos 12 meses e os últimos 10 lançamentos da categoria.
+
 As outras telas dos menus ainda mostram "Em construção" com a fase em que chegam.
+
+### Como os relatórios funcionam
+
+- Os totais batem com a lista de Lançamentos do mesmo período: entram os lançamentos gravados e também as parcelas e os
+  **recorrentes previstos** (meses futuros), como na lista.
+- Compras no cartão contam pelas **compras** (cada uma na sua categoria), na data de vencimento da fatura (ou na data da compra,
+  com "Considerar: Data de Compra"). O **pagamento da fatura** não entra, para a despesa não contar duas vezes.
+- Lançamento detalhado entra **item por item**, cada um na sua categoria.
+- O saldo do Fluxo de Caixa é só o do período (receitas mais despesas); não inclui o dinheiro que as contas já tinham.
+  O **Saldo Inicial** das contas e os acertos só entram com "Acerto de Saldo" ligado; transferências entre contas, com "Transferência".
+- "Considerar: Data de Pagamento" mostra só o que já foi pago ou recebido. Referência e compra usam o vencimento quando o
+  lançamento não tem essa data.
+- Filtrar por uma categoria inclui as filhas dela. No relatório de Tags, um lançamento com duas tags aparece nas duas, por isso
+  não há "Total do Período".
+- Limites para a tela não travar: Diário até 62 dias, Mensal e Trimestral até 60 meses, Anual até 20 anos.
+- Excel e CSV: valores como número (dá para somar na planilha). O CSV usa ";" e vírgula nos centavos, o padrão do Excel em português.
 
 ### Como o pagamento parcial funciona
 

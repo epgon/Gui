@@ -91,7 +91,7 @@ export function TelaCartoes({ linhas, total, filtros, caminho, bancos, contas, a
 
   return (
     <>
-      <BarraLista aoAdicionar={() => form.abrirNovo()} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar cartão" />
+      <BarraLista tela="cartoes-de-credito" aoAdicionar={() => form.abrirNovo()} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar cartão" />
       <FaixaErro>{situacao.aviso && <TextoComDestaque texto={situacao.aviso} />}</FaixaErro>
       <Tabela
         linhas={linhas}

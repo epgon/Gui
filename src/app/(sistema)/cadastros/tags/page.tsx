@@ -1,17 +1,17 @@
-import { and, asc, count, desc, sql } from "drizzle-orm";
+import { asc, count, desc, sql } from "drizzle-orm";
 import { FiltroSelecao, FiltroTexto, OPCOES_SITUACAO, PainelFiltros } from "@/components/cadastros/painel-filtros";
 import { MolduraLista } from "@/components/cadastros/moldura-lista";
 import { getDb, schema } from "@/db";
-import { condicaoSituacao, contemTexto, lerFiltrosComuns, POR_PAGINA, type ParametrosBusca } from "@/lib/cadastros/filtros";
+import { filtrosTags } from "@/lib/cadastros/condicoes";
+import { POR_PAGINA, type ParametrosBusca } from "@/lib/cadastros/filtros";
 import { TelaTags } from "./tela";
 
 export const metadata = { title: "Tags" };
 const CAMINHO = "/cadastros/tags";
 
 export default async function PaginaTags({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
-  const f = lerFiltrosComuns(await searchParams);
+  const { f, onde } = filtrosTags(await searchParams);
   const { tag } = schema;
-  const onde = and(f.busca ? contemTexto(tag.descricao, f.busca) : undefined, condicaoSituacao(tag.ativo, f.situacao));
   const db = getDb();
   const [linhas, [{ total }]] = await Promise.all([
     db

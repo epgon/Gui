@@ -141,7 +141,7 @@ export function TelaContatos({ linhas, total, filtros, caminho }: {
 
   return (
     <>
-      <BarraLista aoAdicionar={abrirNovo} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar por nome ou documento" />
+      <BarraLista tela="clientes-e-fornecedores" aoAdicionar={abrirNovo} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar por nome ou documento" />
       <FaixaErro>{situacao.aviso && <TextoComDestaque texto={situacao.aviso} />}</FaixaErro>
       <Tabela
         linhas={linhas}

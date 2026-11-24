@@ -68,7 +68,7 @@ export function TelaContas({ linhas, total, filtros, caminho, bancos, hoje }: {
 
   return (
     <>
-      <BarraLista aoAdicionar={() => form.abrirNovo()} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar conta" />
+      <BarraLista tela="contas-financeiras" aoAdicionar={() => form.abrirNovo()} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar conta" />
       <FaixaErro>{situacao.aviso && <TextoComDestaque texto={situacao.aviso} />}</FaixaErro>
       <Tabela
         linhas={linhas}

@@ -3,7 +3,7 @@ import Form from "next/form";
 import Link from "next/link";
 
 /** Painel da direita nas listas: "Filtros", com o botão Filtrar e o link Limpar. */
-export function PainelFiltros({ caminho, children }: { caminho: string; children: React.ReactNode }) {
+export function PainelFiltros({ caminho, children, limpar }: { caminho: string; children: React.ReactNode; /** Para onde "Limpar" leva (padrão: a tela sem filtros). */ limpar?: string }) {
   return (
     <aside className="hidden w-72 shrink-0 border-l border-borda-painel bg-painel xl:block" aria-label="Filtros">
       <Form action={caminho} className="sticky top-14 space-y-4 p-4">
@@ -15,7 +15,7 @@ export function PainelFiltros({ caminho, children }: { caminho: string; children
           <button type="submit" className="h-9 flex-1 rounded-md bg-verde px-4 text-sm font-semibold text-white hover:bg-verde-escuro">
             Filtrar
           </button>
-          <Link href={caminho} className="h-9 rounded-md px-3 text-sm leading-9 text-gray-600 hover:bg-gray-100">
+          <Link href={limpar ?? caminho} className="h-9 rounded-md px-3 text-sm leading-9 text-gray-600 hover:bg-gray-100">
             Limpar
           </Link>
         </div>
