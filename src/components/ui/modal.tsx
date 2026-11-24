@@ -7,13 +7,14 @@ import { useEffect, useRef } from "react";
  * Janela de cadastro: cabeçalho com título e resumo, conteúdo e rodapé
  * com os botões (Salvar / Voltar / "Salvar e Adicionar Novo").
  */
-export function Modal({ aberto, aoFechar, titulo, resumo, rodape, children }: {
+export function Modal({ aberto, aoFechar, titulo, resumo, rodape, children, largura = "normal" }: {
   aberto: boolean;
   aoFechar: () => void;
   titulo: React.ReactNode;
   resumo?: React.ReactNode;
   rodape?: React.ReactNode;
   children: React.ReactNode;
+  largura?: "normal" | "larga";
 }) {
   const ref = useRef<HTMLDialogElement>(null);
 
@@ -29,7 +30,7 @@ export function Modal({ aberto, aoFechar, titulo, resumo, rodape, children }: {
       ref={ref}
       onClose={aoFechar}
       onClick={(e) => e.target === ref.current && aoFechar()}
-      className="m-auto w-[min(640px,calc(100vw-2rem))] rounded-xl border border-borda bg-white p-0 shadow-xl backdrop:bg-black/40"
+      className={`m-auto ${largura === "larga" ? "w-[min(820px,calc(100vw-2rem))]" : "w-[min(640px,calc(100vw-2rem))]"} max-h-[calc(100vh-2rem)] rounded-xl border border-borda bg-white p-0 shadow-xl backdrop:bg-black/40`}
     >
       <header className="flex items-start justify-between gap-4 border-b border-borda px-5 py-4">
         <div>

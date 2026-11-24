@@ -30,7 +30,7 @@ export const MENU_PRINCIPAL: GrupoMenu[] = [
     titulo: "Cadastros",
     itens: [
       { titulo: "Contas Financeiras", href: "/cadastros/contas-financeiras", fase: 1, descricao: "Suas contas bancárias, carteira e investimentos." },
-      { titulo: "Cartões de Crédito", href: "/cadastros/cartoes-de-credito", fase: 5, descricao: "Cartões, limites e faturas." },
+      { titulo: "Cartões de Crédito", href: "/cadastros/cartoes-de-credito", fase: 1, descricao: "Cartões, limites e dias de fechamento e vencimento." },
       { titulo: "Categorias", href: "/cadastros/categorias", fase: 1, descricao: "Organize receitas e despesas em categorias." },
       { titulo: "Clientes e Fornecedores", href: "/cadastros/clientes-e-fornecedores", fase: 1, descricao: "Pessoas e empresas com quem você paga ou recebe." },
       { titulo: "Formas de Pagamento", href: "/cadastros/formas-de-pagamento", fase: 1, descricao: "Pix, boleto, dinheiro, cartão..." },
