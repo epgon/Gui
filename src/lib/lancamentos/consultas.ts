@@ -18,7 +18,7 @@ export const valorComSinalSql = sql<number>`(case
   else -abs(${l.valorCentavos}) end)`;
 
 /** Valor realizado com sinal (usa o valor pago quando existe). */
-const valorRealizadoSql = sql<number>`(case
+export const valorRealizadoSql = sql<number>`(case
   when ${l.tipo} in ('receita', 'transferencia_entrada') then abs(coalesce(${l.valorPagoCentavos}, ${l.valorCentavos}))
   when ${l.tipo} in ('saldo_inicial', 'acerto_saldo') then coalesce(${l.valorPagoCentavos}, ${l.valorCentavos})
   else -abs(coalesce(${l.valorPagoCentavos}, ${l.valorCentavos})) end)`;

@@ -2,6 +2,7 @@ import "server-only";
 import bcrypt from "bcryptjs";
 import { count, eq, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { CHAVE_TEMPO_SESSAO, TEMPO_SESSAO_PADRAO, tempoSessaoValido } from "@/lib/preferencias";
 
 export type UsuarioSessao = { id: string; nome: string; email: string };
 
@@ -56,4 +57,18 @@ async function criarPrimeiroUsuarioSePermitido(email: string, senha: string) {
 export async function buscarUsuario(id: number) {
   const [u] = await getDb().select().from(schema.usuario).where(eq(schema.usuario.id, id)).limit(1);
   return u ?? null;
+}
+
+/** Tempo da sessão escolhido em Meus Dados > Preferências (em minutos). */
+export async function lerTempoSessao(): Promise<number> {
+  try {
+    const [linha] = await getDb()
+      .select({ valor: schema.configuracao.valor })
+      .from(schema.configuracao)
+      .where(eq(schema.configuracao.chave, CHAVE_TEMPO_SESSAO))
+      .limit(1);
+    return tempoSessaoValido(linha?.valor);
+  } catch {
+    return TEMPO_SESSAO_PADRAO;
+  }
 }

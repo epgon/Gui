@@ -1,6 +1,6 @@
 import { FiltroSelecao, PainelFiltros } from "@/components/cadastros/painel-filtros";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import type { ParametrosBusca } from "@/lib/cadastros/filtros";
+import { parametro, type ParametrosBusca } from "@/lib/cadastros/filtros";
 import { hojeIso } from "@/lib/datas";
 import { carregarOpcoes, lerFiltros, listarLancamentos } from "@/lib/lancamentos/consultas";
 import { mesDe } from "@/lib/lancamentos/regras";
@@ -14,7 +14,8 @@ export default async function PaginaLancamentos({ searchParams }: { searchParams
   const hoje = hojeIso();
   // "Realizar automaticamente": dá baixa no que venceu até hoje (não precisa de tarefa agendada).
   await realizarAutomaticos(hoje);
-  const f = lerFiltros(await searchParams, hoje);
+  const sp = await searchParams;
+  const f = lerFiltros(sp, hoje);
   const [{ linhas, resumo }, opcoes] = await Promise.all([listarLancamentos(f, hoje), carregarOpcoes()]);
   const todas = { valor: "", rotulo: "Todas" };
   const mantidos = { mes: f.mes, aba: f.aba === "todos" ? "" : f.aba, destino: f.destino, situacao: f.situacao, busca: f.busca, detalhar: f.detalhar ? "1" : "" };
@@ -24,7 +25,7 @@ export default async function PaginaLancamentos({ searchParams }: { searchParams
       <main className="min-w-0 flex-1">
         <CabecalhoPagina titulo="Lançamentos" trilha="Financeiro" />
         <div className="space-y-4 p-6">
-          <TelaLancamentos linhas={linhas} resumo={resumo} filtros={f} opcoes={opcoes} hoje={hoje} mes={mesDe(f.mes)} caminho={CAMINHO} />
+          <TelaLancamentos linhas={linhas} resumo={resumo} filtros={f} opcoes={opcoes} hoje={hoje} mes={mesDe(f.mes)} caminho={CAMINHO} abrirNovo={parametro(sp, "novo")} />
         </div>
       </main>
       <PainelFiltros caminho={CAMINHO}>

@@ -9,6 +9,9 @@ import { Cartao } from "@/components/ui/cartao";
 import { getDb, schema } from "@/db";
 import { cn } from "@/lib/cn";
 import { realizarAutomaticos } from "@/lib/recorrentes/servidor";
+import { hojeIso } from "@/lib/datas";
+import { carregarPainel } from "@/lib/visao-geral/servidor";
+import { CabecalhoVisaoGeral, TelaVisaoGeral } from "@/components/visao-geral/tela";
 
 export const metadata = { title: "Visão Geral" };
 
@@ -45,76 +48,87 @@ function saudacao() {
   return "Boa noite";
 }
 
+function avisoDoDia(vencendo: { valorCentavos: number }[]) {
+  const pagar = vencendo.filter((l) => l.valorCentavos < 0).length;
+  const receber = vencendo.length - pagar;
+  if (!pagar && !receber) return { texto: "Não há nada a pagar no dia de hoje.", alerta: false };
+  const partes = [
+    pagar ? `${pagar} ${pagar === 1 ? "conta vence" : "contas vencem"} hoje` : "",
+    receber ? `${receber} ${receber === 1 ? "recebimento previsto" : "recebimentos previstos"} para hoje` : "",
+  ].filter(Boolean);
+  return { texto: partes.join(" e ") + ".", alerta: pagar > 0 };
+}
+
 export default async function VisaoGeral() {
   const sessao = await auth();
   const nome = sessao?.user?.name?.split(" ")[0] ?? "";
-  const hoje = new Intl.DateTimeFormat("pt-BR", { dateStyle: "full", timeZone: "America/Sao_Paulo" }).format(new Date());
+  const hoje = hojeIso();
+  const dataExtenso = new Intl.DateTimeFormat("pt-BR", { dateStyle: "full", timeZone: "America/Sao_Paulo" }).format(new Date());
   // "Realizar automaticamente" dos lançamentos e recorrentes que venceram até hoje.
-  await realizarAutomaticos().catch(() => 0);
-  const passos = await primeirosPassos();
+  await realizarAutomaticos(hoje).catch(() => 0);
+  const [passos, painel] = await Promise.all([primeirosPassos(), carregarPainel(hoje)]);
   const feitos = passos.filter((p) => p.feito).length;
 
   return (
     <>
       <main className="min-w-0 flex-1">
         <CabecalhoPagina titulo="Visão Geral" />
-        <div className="space-y-5 p-6">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">
-              {saudacao()}, {nome}!
-            </h2>
-            <p className="text-sm text-gray-500 first-letter:uppercase">{hoje}</p>
-          </div>
+        <div className="space-y-4 p-6">
+          <CabecalhoVisaoGeral saudacao={`${saudacao()}${nome ? `, ${nome}` : ""}!`} data={dataExtenso} aviso={avisoDoDia(painel.prazos.vencendo.linhas)} />
 
-          <Cartao>
-            <div className="grid items-center gap-6 md:grid-cols-[auto_1fr_1fr]">
-              <Image src="/gui-mascote.jpg" alt="Mascote Gui" width={300} height={164} className="h-auto w-52 mix-blend-multiply" priority />
-              <div>
-                <h3 className="text-lg font-semibold text-verde">Olá! Eu sou o Gui.</h3>
-                <p className="mt-1 text-sm text-gray-600">
-                  Vou ajudar você a organizar suas finanças. Comece pelos cadastros: suas contas com o saldo de hoje,
-                  seus cartões e as categorias do seu jeito. Depois, registre o dia a dia em Financeiro &gt; Lançamentos.
-                </p>
-              </div>
-              <div>
-                <div className="mb-2 flex items-center gap-3">
-                  <div
-                    className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100"
-                    role="progressbar"
-                    aria-valuemin={0}
-                    aria-valuemax={passos.length}
-                    aria-valuenow={feitos}
-                    aria-label="Primeiros passos"
-                  >
-                    <div className="h-full rounded-full bg-verde-vivo" style={{ width: `${(feitos / passos.length) * 100}%` }} />
-                  </div>
-                  <span className="text-xs font-medium text-gray-500">
-                    {feitos} de {passos.length}
-                  </span>
+          {feitos < passos.length && (
+            <Cartao>
+              <div className="grid items-center gap-6 md:grid-cols-[auto_1fr_1fr]">
+                <Image src="/gui-mascote.jpg" alt="Mascote Gui" width={300} height={164} className="h-auto w-44 mix-blend-multiply" priority />
+                <div>
+                  <h3 className="text-lg font-semibold text-verde">Olá! Eu sou o Gui.</h3>
+                  <p className="mt-1 text-sm text-gray-600">
+                    Vou ajudar você a organizar suas finanças. Comece pelos cadastros: suas contas com o saldo de hoje,
+                    seus cartões e as categorias do seu jeito. Depois, registre o dia a dia em Financeiro &gt; Lançamentos.
+                  </p>
                 </div>
-                <ul className="space-y-1.5">
-                  {passos.map((p) => (
-                    <li key={p.texto}>
-                      <Link
-                        href={p.href}
-                        className={cn(
-                          "flex items-center gap-2 text-sm",
-                          p.feito ? "text-pago-texto" : p.emBreve ? "text-gray-400" : "text-gray-700 hover:text-verde",
-                        )}
-                      >
-                        {p.feito ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4 text-gray-300" />}
-                        <span>{p.texto}</span>
-                        {p.emBreve && <span className="text-xs">({p.emBreve})</span>}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
+                <div>
+                  <div className="mb-2 flex items-center gap-3">
+                    <div
+                      className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100"
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={passos.length}
+                      aria-valuenow={feitos}
+                      aria-label="Primeiros passos"
+                    >
+                      <div className="h-full rounded-full bg-verde-vivo" style={{ width: `${(feitos / passos.length) * 100}%` }} />
+                    </div>
+                    <span className="text-xs font-medium text-gray-500">
+                      {feitos} de {passos.length}
+                    </span>
+                  </div>
+                  <ul className="space-y-1.5">
+                    {passos.map((p) => (
+                      <li key={p.texto}>
+                        <Link
+                          href={p.href}
+                          className={cn(
+                            "flex items-center gap-2 text-sm",
+                            p.feito ? "text-pago-texto" : p.emBreve ? "text-gray-400" : "text-gray-700 hover:text-verde",
+                          )}
+                        >
+                          {p.feito ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-4 w-4 text-gray-300" />}
+                          <span>{p.texto}</span>
+                          {p.emBreve && <span className="text-xs">({p.emBreve})</span>}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
-            </div>
-          </Cartao>
+            </Cartao>
+          )}
+
+          <TelaVisaoGeral painel={painel} hoje={hoje} />
         </div>
       </main>
-      <PainelAjuda artigos={["Como navegar pela interface", "Configurações iniciais e primeiro lançamento", "Cadastrar e organizar categorias"]} />
+      <PainelAjuda artigos={["Como navegar pela interface", "Visão Geral: o que cada cartão mostra", "Configurações iniciais e primeiro lançamento"]} />
     </>
   );
 }
