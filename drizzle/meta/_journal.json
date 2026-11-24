@@ -36,6 +36,13 @@
       "when": 1795485113923,
       "tag": "0004_recorrentes",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795519015400,
+      "tag": "0005_faturas",
+      "breakpoints": true
     }
   ]
 }

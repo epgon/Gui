@@ -1,7 +1,8 @@
 "use client";
 
-import { Pencil, Power } from "lucide-react";
-import { useMemo } from "react";
+import { Copy, CreditCard, Eye, FileText, ListOrdered, Pencil, Power } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 import { AsteriscoPadrao } from "@/components/cadastros/asterisco";
 import { BarraLista } from "@/components/cadastros/barra-lista";
 import { ChaveSituacao } from "@/components/cadastros/chave-situacao";
@@ -15,6 +16,8 @@ import { Chave } from "@/components/ui/chave";
 import { FaixaErro } from "@/components/ui/faixa-erro";
 import { Tabela } from "@/components/ui/tabela";
 import { Valor } from "@/components/ui/valor";
+import { DetalhandoCartao, type AbaCartao } from "@/components/cartoes/detalhando-cartao";
+import type { limiteDoCartao } from "@/lib/cartoes/regras";
 import { POR_PAGINA, type Situacao } from "@/lib/cadastros/filtros";
 import { type BancoOpcao, DIAS_MES } from "@/lib/cadastros/opcoes";
 import { formatarCentavos, lerValorEmCentavos } from "@/lib/dinheiro";
@@ -34,17 +37,21 @@ type Linha = {
   contaPagamentoNome: string | null;
   ativo: boolean;
   padraoSistema: boolean;
+  limite: ReturnType<typeof limiteDoCartao>;
 };
 type ContaOpcao = { id: number; descricao: string; ativo: boolean };
 
-export function TelaCartoes({ linhas, total, filtros, caminho, bancos, contas }: {
+export function TelaCartoes({ linhas, total, filtros, caminho, bancos, contas, abrir }: {
   linhas: Linha[];
   total: number;
   filtros: { busca: string; situacao: Situacao; pagina: number; fechamento: string; vencimento: string };
   caminho: string;
   bancos: BancoOpcao[];
   contas: ContaOpcao[];
+  abrir: { id: number; aba: AbaCartao } | null;
 }) {
+  const router = useRouter();
+  const [detalhe, setDetalhe] = useState<{ id: number; aba: AbaCartao } | null>(abrir);
   const bancoOutro = String(bancos.find((b) => b.codigo === null)?.id ?? bancos[0]?.id ?? "");
   const vazio = useMemo<DadosCartao>(
     () => ({ descricao: "", bancoId: bancoOutro, ilimitado: false, limite: "", diaFechamento: "", diaVencimento: "", contaPagamentoId: "" }),
@@ -61,16 +68,18 @@ export function TelaCartoes({ linhas, total, filtros, caminho, bancos, contas }:
   const bancoEscolhido = bancos.find((b) => String(b.id) === form.dados.bancoId);
   const limitePreview = form.dados.ilimitado ? null : (lerValorEmCentavos(form.dados.limite || "0") ?? 0);
 
-  const editar = (l: Linha) =>
-    form.abrirEdicao(l.id, {
-      descricao: l.descricao,
-      bancoId: String(l.bancoId ?? bancoOutro),
-      ilimitado: l.ilimitado,
-      limite: l.ilimitado ? "" : formatarCentavos(l.limiteCentavos),
-      diaFechamento: String(l.diaFechamento),
-      diaVencimento: String(l.diaVencimento),
-      contaPagamentoId: l.contaPagamentoId ? String(l.contaPagamentoId) : "",
-    });
+  const valoresDe = (l: Linha): DadosCartao => ({
+    descricao: l.descricao,
+    bancoId: String(l.bancoId ?? bancoOutro),
+    ilimitado: l.ilimitado,
+    limite: l.ilimitado ? "" : formatarCentavos(l.limiteCentavos),
+    diaFechamento: String(l.diaFechamento),
+    diaVencimento: String(l.diaVencimento),
+    contaPagamentoId: l.contaPagamentoId ? String(l.contaPagamentoId) : "",
+  });
+  /** Clonar: abre um cadastro novo com os dados do cartão (só muda o nome). */
+  const clonar = (l: Linha) => form.abrirNovo({ ...valoresDe(l), descricao: `${l.descricao} (cópia)`.slice(0, 60) });
+  const editar = (l: Linha) => form.abrirEdicao(l.id, valoresDe(l));
 
   const opcoesDia = [{ valor: "", rotulo: "Selecione" }, ...DIAS_MES.map((d) => ({ valor: d, rotulo: d }))];
   const opcoesConta = [
@@ -115,6 +124,36 @@ export function TelaCartoes({ linhas, total, filtros, caminho, bancos, contas }:
             render: (l) => l.contaPagamentoNome ?? <span className="text-gray-400">- - -</span>,
           },
           {
+            chave: "uso",
+            titulo: "Uso do Limite",
+            render: (l) =>
+              l.limite.ilimitado ? (
+                <span className="text-xs text-gray-500">
+                  Usado <Valor centavos={-l.limite.usado} className="text-xs" />
+                </span>
+              ) : (
+                <button type="button" onClick={() => setDetalhe({ id: l.id, aba: "resumo" })} className="block w-40 text-left" title="Detalhar o cartão">
+                  <span
+                    className="block h-2 overflow-hidden rounded-full bg-gray-100"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={l.limite.percentualUsado}
+                    aria-label={`Limite usado de ${l.descricao}`}
+                  >
+                    <span
+                      className={`block h-full rounded-full ${l.limite.percentualUsado >= 90 ? "bg-negativo" : l.limite.percentualUsado >= 70 ? "bg-dourado" : "bg-receita"}`}
+                      style={{ width: `${l.limite.percentualUsado}%` }}
+                    />
+                  </span>
+                  <span className="mt-1 flex justify-between text-xs text-gray-500">
+                    <span>Disponível</span>
+                    <Valor centavos={l.limite.disponivel ?? 0} className="text-xs" />
+                  </span>
+                </button>
+              ),
+          },
+          {
             chave: "limite",
             titulo: "Limite",
             alinhar: "direita",
@@ -129,6 +168,16 @@ export function TelaCartoes({ linhas, total, filtros, caminho, bancos, contas }:
             ),
           },
           {
+            chave: "faturas",
+            titulo: <span className="sr-only">Faturas</span>,
+            alinhar: "centro",
+            render: (l) => (
+              <button type="button" onClick={() => setDetalhe({ id: l.id, aba: "faturas" })} title="Faturas" aria-label={`Faturas de ${l.descricao}`} className="rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-verde">
+                <FileText className="h-4 w-4" />
+              </button>
+            ),
+          },
+          {
             chave: "menu",
             titulo: <span className="sr-only">Opções</span>,
             alinhar: "direita",
@@ -137,6 +186,10 @@ export function TelaCartoes({ linhas, total, filtros, caminho, bancos, contas }:
                 rotulo={l.descricao}
                 itens={[
                   { rotulo: "Editar", icone: <Pencil className="h-4 w-4" />, aoClicar: () => editar(l) },
+                  { rotulo: "Clonar", icone: <Copy className="h-4 w-4" />, aoClicar: () => clonar(l) },
+                  { rotulo: "Detalhar", icone: <Eye className="h-4 w-4" />, aoClicar: () => setDetalhe({ id: l.id, aba: "resumo" }) },
+                  { rotulo: "Faturas", icone: <CreditCard className="h-4 w-4" />, aoClicar: () => setDetalhe({ id: l.id, aba: "faturas" }) },
+                  { rotulo: "Lançamentos", icone: <ListOrdered className="h-4 w-4" />, aoClicar: () => router.push(`/financeiro/lancamentos?destino=cartao:${l.id}`) },
                   { rotulo: l.ativo ? "Inativar" : "Ativar", icone: <Power className="h-4 w-4" />, aoClicar: () => situacao.alternar(l.id, l.ativo) },
                 ]}
               />
@@ -145,6 +198,7 @@ export function TelaCartoes({ linhas, total, filtros, caminho, bancos, contas }:
         ]}
       />
       <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={POR_PAGINA} total={total} />
+      {detalhe && <DetalhandoCartao key={`${detalhe.id}-${detalhe.aba}`} cartaoId={detalhe.id} abaInicial={detalhe.aba} aoFechar={() => setDetalhe(null)} />}
 
       <ModalCadastro
         formulario={form}

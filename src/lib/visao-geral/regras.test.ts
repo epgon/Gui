@@ -14,14 +14,15 @@ const linha = (p: Partial<LinhaPainel>): LinhaPainel => ({
 
 describe("opções", () => {
   it("usa o padrão quando não há nada guardado", () => {
-    expect(normalizarOpcoes(null)).toEqual({ vencidosDias: 7, futuroDias: 7, categoriasDias: 28, contasOcultas: [] });
+    expect(normalizarOpcoes(null)).toEqual({ vencidosDias: 7, futuroDias: 7, categoriasDias: 28, contasOcultas: [], cartoesOcultos: [] });
   });
   it("descarta valores fora do limite", () => {
-    expect(normalizarOpcoes({ vencidosDias: 0, futuroDias: 500, categoriasDias: 30, contasOcultas: [2, 2, "x", -1] })).toEqual({
+    expect(normalizarOpcoes({ vencidosDias: 0, futuroDias: 500, categoriasDias: 30, contasOcultas: [2, 2, "x", -1], cartoesOcultos: [4, 0, 4] })).toEqual({
       vencidosDias: 7,
       futuroDias: 7,
       categoriasDias: 30,
       contasOcultas: [2],
+      cartoesOcultos: [4],
     });
   });
 });

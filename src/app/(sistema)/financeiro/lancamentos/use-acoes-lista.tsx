@@ -1,9 +1,10 @@
 "use client";
 
-import { CalendarClock, CheckCircle2, CreditCard, Pencil, RotateCcw, Trash2 } from "lucide-react";
+import { CalendarClock, CheckCircle2, CreditCard, FileText, Pencil, RotateCcw, Trash2, Wallet } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { ItemMenuLinha } from "@/components/cadastros/menu-linha";
+import { JanelaFatura } from "@/components/cartoes/janela-fatura";
 import type { LinhaLista, Ocorrencia, Opcoes } from "@/lib/lancamentos/tipos";
 import { carregarLancamento, carregarOcorrencia, estornarLancamentos, excluirLancamentos, pularOcorrencias, realizarLancamentos } from "./acoes";
 import { dadosVazios, ModalLancamento, type Aba, type Pedido } from "./formulario";
@@ -46,6 +47,7 @@ export function useAcoesLista({ opcoes, hoje, destino, abrirNovo }: {
   const [pedido, setPedido] = useState<Pedido | null>(() => (abrirNovo ? montarPedido(0, abrirNovo.aba, abrirNovo.tipo) : null));
   const [aviso, setAviso] = useState("");
   const [pagar, setPagar] = useState<Alvo | null>(null);
+  const [faturaAberta, setFaturaAberta] = useState<number | null>(null);
   const [excluir, setExcluir] = useState<(Alvo & { parcelado: boolean; recorrente: boolean }) | null>(null);
   const [abrindo, iniciarAbertura] = useTransition();
   const [ocupado, iniciar] = useTransition();
@@ -131,7 +133,14 @@ export function useAcoesLista({ opcoes, hoje, destino, abrirNovo }: {
       ];
     }
     if (l.id === null) {
-      return aoVerFatura ? [{ rotulo: "Ver compras desta fatura", icone: <CreditCard className="h-4 w-4" />, aoClicar: () => aoVerFatura(l.cartaoId!) }] : [];
+      const faturaId = l.faturaId;
+      const itens: ItemMenuLinha[] = [];
+      if (faturaId !== null) {
+        if (l.situacao !== "realizado") itens.push({ rotulo: "Pagar fatura", icone: <Wallet className="h-4 w-4" />, aoClicar: () => setFaturaAberta(faturaId) });
+        itens.push({ rotulo: "Abrir fatura (fechar, desfazer pagamento)", icone: <FileText className="h-4 w-4" />, aoClicar: () => setFaturaAberta(faturaId) });
+      }
+      if (aoVerFatura) itens.push({ rotulo: "Ver compras desta fatura", icone: <CreditCard className="h-4 w-4" />, aoClicar: () => aoVerFatura(l.cartaoId!) });
+      return itens;
     }
     if (l.tipo === "saldo_inicial") {
       return [{ rotulo: "Alterar na Conta Financeira", icone: <Pencil className="h-4 w-4" />, aoClicar: () => router.push("/cadastros/contas-financeiras") }];
@@ -152,6 +161,7 @@ export function useAcoesLista({ opcoes, hoje, destino, abrirNovo }: {
 
   const modais = (
     <>
+      {faturaAberta !== null && <JanelaFatura key={faturaAberta} faturaId={faturaAberta} aoFechar={() => setFaturaAberta(null)} aoMudar={() => router.refresh()} />}
       {pedido && <ModalLancamento key={pedido.chave} pedido={pedido} opcoes={opcoes} hoje={hoje} aoFechar={() => setPedido(null)} />}
       {pagar && (
         <ModalPagar

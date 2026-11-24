@@ -1,27 +1,19 @@
 import "server-only";
-import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, ne, or, sql, type SQL } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { contemTexto, parametro, semAcento, type ParametrosBusca } from "@/lib/cadastros/filtros";
 import { descendentes, montarArvore, rotuloCategoria } from "@/lib/categorias";
 import { hojeIso } from "@/lib/datas";
 import { lerValorEmCentavos } from "@/lib/dinheiro";
 import { carregarContexto, pendentes, type Contexto, type Pendente, type Perna } from "@/lib/recorrentes/servidor";
+import { listarFaturas } from "@/lib/cartoes/servidor";
 import { mesDe, situacaoDe, somarDias, valorComSinal, type Situacao } from "./regras";
+import { valorComSinalSql, valorRealizadoSql } from "./sql";
 import type { Aba, Filtros, FiltroSituacao, LinhaLista, Opcoes, Resumo } from "./tipos";
 
 const { lancamento: l, contaFinanceira: conta, cartaoCredito: cartao, banco, categoria, contato, formaPagamento: forma, tag, lancamentoTag, lancamentoItem, anexo, fatura } = schema;
 
-/** Valor com sinal, em SQL (mesma regra de valorComSinal). */
-export const valorComSinalSql = sql<number>`(case
-  when ${l.tipo} in ('receita', 'transferencia_entrada') then abs(${l.valorCentavos})
-  when ${l.tipo} in ('saldo_inicial', 'acerto_saldo') then ${l.valorCentavos}
-  else -abs(${l.valorCentavos}) end)`;
-
-/** Valor realizado com sinal (usa o valor pago quando existe). */
-export const valorRealizadoSql = sql<number>`(case
-  when ${l.tipo} in ('receita', 'transferencia_entrada') then abs(coalesce(${l.valorPagoCentavos}, ${l.valorCentavos}))
-  when ${l.tipo} in ('saldo_inicial', 'acerto_saldo') then coalesce(${l.valorPagoCentavos}, ${l.valorCentavos})
-  else -abs(coalesce(${l.valorPagoCentavos}, ${l.valorCentavos})) end)`;
+export { valorComSinalSql, valorRealizadoSql } from "./sql";
 
 export function lerFiltros(sp: ParametrosBusca, hoje = hojeIso()): Filtros {
   const mes = parametro(sp, "mes");
@@ -109,6 +101,7 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
       contaId: l.contaId,
       cartaoId: l.cartaoId,
       faturaId: l.faturaId,
+      faturaPagaId: l.faturaPagaId,
       contaNome: conta.descricao,
       cartaoNome: cartao.descricao,
       bancoCodigo: banco.codigo,
@@ -132,7 +125,8 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
     .leftJoin(banco, sql`${banco.id} = coalesce(${conta.bancoId}, ${cartao.bancoId})`)
     .leftJoin(contato, eq(contato.id, l.contatoId))
     .leftJoin(forma, eq(forma.id, l.formaPagamentoId))
-    .where(and(gte(l.dataVencimento, mes.inicio), lte(l.dataVencimento, mes.fim), escopo, ...filtrosConteudo))
+    // Pagamentos de fatura entram na linha "Fatura-Cartão"; sem ela (compras separadas), ficam de fora para não contar duas vezes.
+    .where(and(gte(l.dataVencimento, mes.inicio), lte(l.dataVencimento, mes.fim), escopo, agruparFaturas ? undefined : ne(l.tipo, "pagamento_fatura"), ...filtrosConteudo))
     .orderBy(asc(l.dataVencimento), asc(l.id));
 
   // Categorias (com numeração) e itens dos detalhados.
@@ -151,6 +145,7 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
       chave: `l${x.id}`,
       id: x.id,
       faturaId: x.faturaId,
+      faturaSituacao: null,
       tipo: x.tipo,
       formato: x.formato,
       descricao: x.descricao,
@@ -189,41 +184,50 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
 
   let linhas: LinhaLista[] = [];
   const porFatura = new Map<number, LinhaLista[]>();
+  const pagamentosPorFatura = new Map<number, LinhaLista[]>();
   for (const x of linhasDb) {
     const linha = paraLinha(x);
     if (agruparFaturas && x.faturaId !== null) {
       porFatura.set(x.faturaId, [...(porFatura.get(x.faturaId) ?? []), linha]);
+    } else if (agruparFaturas && x.faturaPagaId !== null) {
+      pagamentosPorFatura.set(x.faturaPagaId, [...(pagamentosPorFatura.get(x.faturaPagaId) ?? []), linha]);
     } else {
       linhas.push(linha);
     }
   }
-  if (porFatura.size) {
-    const faturas = await db
-      .select({ id: fatura.id, cartaoId: fatura.cartaoId, dataVencimento: fatura.dataVencimento, competencia: fatura.competencia, cartao: cartao.descricao, bancoCodigo: banco.codigo, bancoNome: banco.nome })
-      .from(fatura)
-      .innerJoin(cartao, eq(cartao.id, fatura.cartaoId))
-      .leftJoin(banco, eq(banco.id, cartao.bancoId))
-      .where(inArray(fatura.id, [...porFatura.keys()]));
+  const idsFaturas = [...new Set([...porFatura.keys(), ...pagamentosPorFatura.keys()])];
+  if (idsFaturas.length) {
+    const [faturas, cartoes] = await Promise.all([
+      listarFaturas(inArray(fatura.id, idsFaturas), hoje),
+      db.select({ id: cartao.id, nome: cartao.descricao, bancoCodigo: banco.codigo, bancoNome: banco.nome }).from(cartao).leftJoin(banco, eq(banco.id, cartao.bancoId)),
+    ]);
+    const mCartoes = new Map(cartoes.map((c) => [c.id, c]));
     for (const fa of faturas) {
       const compras = porFatura.get(fa.id) ?? [];
-      const paga = compras.every((c) => c.dataPagamento);
+      const pagamentos = pagamentosPorFatura.get(fa.id) ?? [];
+      const c = mCartoes.get(fa.cartaoId);
+      const paga = fa.situacao === "paga";
+      const dataPagamento = paga ? fa.ultimoPagamento : null;
       linhas.push({
-        ...compras[0],
+        ...(compras[0] ?? pagamentos[0]),
         chave: `f${fa.id}`,
         id: null,
         faturaId: fa.id,
+        faturaSituacao: fa.situacao,
         tipo: "pagamento_fatura",
         formato: "simples",
-        descricao: `Fatura-${fa.cartao}`,
-        valorCentavos: compras.reduce((s, c) => s + c.valorCentavos, 0),
+        descricao: `Fatura-${c?.nome ?? ""}`,
+        // Com as compras no filtro, a linha vale o total delas; só com o pagamento (pago por outra conta), vale o pagamento.
+        valorCentavos: compras.length ? compras.reduce((s, x) => s + x.valorCentavos, 0) : pagamentos.reduce((s, x) => s + x.valorCentavos, 0),
         data: fa.dataVencimento,
-        dataPagamento: paga ? (compras[0].dataPagamento ?? null) : null,
+        dataPagamento,
         dataCompra: null,
-        situacao: situacaoDe(fa.dataVencimento, paga ? fa.dataVencimento : null, hoje),
-        contaOuCartao: fa.cartao,
+        situacao: situacaoDe(fa.dataVencimento, dataPagamento, hoje),
+        contaOuCartao: c?.nome ?? "",
+        eCartao: true,
         cartaoId: fa.cartaoId,
-        bancoCodigo: fa.bancoCodigo,
-        bancoNome: fa.bancoNome,
+        bancoCodigo: c?.bancoCodigo ?? null,
+        bancoNome: c?.bancoNome ?? null,
         categoria: null,
         categoriaCor: null,
         contato: null,
@@ -348,6 +352,7 @@ async function linhasPrevistas(
         chave: `p${g.id}-${p.data}-${perna.tipo}`,
         id: null,
         faturaId: null,
+        faturaSituacao: null,
         tipo: perna.tipo,
         formato: g.formato === "detalhado" ? "detalhado" : "simples",
         descricao: p.descricao,

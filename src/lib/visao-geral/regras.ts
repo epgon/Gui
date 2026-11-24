@@ -18,9 +18,13 @@ export type OpcoesVisaoGeral = {
   categoriasDias: number;
   /** Contas que não aparecem em "Saldo das Contas". */
   contasOcultas: number[];
+  /** Cartões que não aparecem em "Faturas Atuais". */
+  cartoesOcultos: number[];
 };
 
-export const OPCOES_PADRAO: OpcoesVisaoGeral = { vencidosDias: 7, futuroDias: 7, categoriasDias: 28, contasOcultas: [] };
+export const OPCOES_PADRAO: OpcoesVisaoGeral = { vencidosDias: 7, futuroDias: 7, categoriasDias: 28, contasOcultas: [], cartoesOcultos: [] };
+
+const listaDeIds = (v: unknown): number[] => (Array.isArray(v) ? [...new Set(v.filter((x): x is number => Number.isInteger(x) && x > 0))] : []);
 
 export const LIMITES = { prazoDias: 90, categoriasDias: 365 };
 
@@ -34,7 +38,8 @@ export function normalizarOpcoes(valor: unknown): OpcoesVisaoGeral {
     vencidosDias: inteiroEntre(v.vencidosDias, 1, LIMITES.prazoDias, OPCOES_PADRAO.vencidosDias),
     futuroDias: inteiroEntre(v.futuroDias, 1, LIMITES.prazoDias, OPCOES_PADRAO.futuroDias),
     categoriasDias: inteiroEntre(v.categoriasDias, 1, LIMITES.categoriasDias, OPCOES_PADRAO.categoriasDias),
-    contasOcultas: Array.isArray(v.contasOcultas) ? [...new Set(v.contasOcultas.filter((x): x is number => Number.isInteger(x) && x > 0))] : [],
+    contasOcultas: listaDeIds(v.contasOcultas),
+    cartoesOcultos: listaDeIds(v.cartoesOcultos),
   };
 }
 

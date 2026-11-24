@@ -49,13 +49,23 @@ export function IconeTipo({ l }: { l: LinhaLista }) {
 
 export function EtiquetaSituacao({ l }: { l: LinhaLista }) {
   if (eFatura(l)) {
-    return l.situacao === "realizado" ? (
-      <span className="inline-flex items-center gap-1 rounded-full bg-pago-fundo px-2 py-0.5 text-xs font-semibold text-pago-texto">
-        <CheckCircle2 className="h-3.5 w-3.5" /> Paga
-      </span>
-    ) : (
-      <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold", l.situacao === "vencido" ? "bg-orange-100 text-despesa" : "bg-gray-100 text-gray-600")}>
-        <CreditCard className="h-3.5 w-3.5" /> {l.situacao === "vencido" ? "Vencida" : "Em aberto"}
+    if (l.situacao === "realizado") {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-pago-fundo px-2 py-0.5 text-xs font-semibold text-pago-texto" title={l.dataPagamento ? `Paga em ${formatarData(l.dataPagamento)}` : undefined}>
+          <CheckCircle2 className="h-3.5 w-3.5" /> Paga
+        </span>
+      );
+    }
+    const fechada = l.faturaSituacao === "fechada";
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold",
+          l.situacao === "vencido" ? "bg-orange-100 text-despesa" : fechada ? "bg-amber-100 text-amber-800" : "bg-gray-100 text-gray-600",
+        )}
+        title={fechada ? "Fatura fechada: já pode ser paga" : "Fatura aberta: ainda recebe compras"}
+      >
+        <CreditCard className="h-3.5 w-3.5" /> {l.situacao === "vencido" ? "Vencida" : fechada ? "Fechada" : "Aberta"}
       </span>
     );
   }
@@ -209,7 +219,7 @@ export function ModalPagar({ titulo, hoje, ocupado, aoFechar, aoConfirmar }: { t
       }
     >
       <CampoTexto rotulo="Data do Pagamento" type="date" valor={data} aoMudar={setData} ajuda="Dia em que o dinheiro saiu ou entrou na conta." />
-      <p className="mt-2 text-xs text-gray-500">O valor pago é o valor do lançamento. Compras no cartão são pagas junto com a fatura.</p>
+      <p className="mt-2 text-xs text-gray-500">O valor pago é o valor do lançamento. Compras no cartão são pagas junto com a fatura (menu da linha Fatura-Cartão).</p>
     </Modal>
   );
 }

@@ -40,7 +40,29 @@ Fases prontas:
   Visão Geral ou pela lista de Contas Financeiras. **Administração > Meus Dados**: informações e endereço, troca de
   senha e **Tempo da Sessão** (sai sozinho depois desse tempo sem uso; padrão 20 minutos).
 
+- **Fase 5 (Cartões de crédito e faturas)**: as compras no cartão ficam agrupadas na **fatura** de cada mês (pelo dia de
+  fechamento). A fatura fica **Aberta** até o dia do fechamento, **Fechada** a partir dele (ou antes, se você fechar à mão)
+  e **Paga** depois do pagamento. **Pagar fatura** (no menu da linha "Fatura-Cartão" em Lançamentos, ou em Cadastros >
+  Cartões de Crédito > Faturas) escolhe a conta e a data e grava uma saída na conta com o valor que falta pagar; as compras
+  ficam como pagas. A despesa continua contada **uma vez só**, pelas compras (cada uma na sua categoria): o pagamento só
+  mexe no saldo da conta. **Desfazer pagamento** volta tudo como estava. Compras ainda não pagas podem ser **movidas** para
+  a fatura anterior ou seguinte. **Detalhando Cartão** (abas Resumo e Faturas): fatura atual, próximas faturas, anel do
+  limite com o **limite disponível** (limite menos tudo o que ainda não foi pago, inclusive parcelas futuras), e a lista de
+  faturas por ano com filtro Todas, Abertas, Fechadas e Pagas. A lista de cartões ganhou a barra de uso do limite, o botão
+  Faturas e as opções Clonar, Detalhar, Faturas e Lançamentos. Na Visão Geral, o cartão **Faturas Atuais** mostra a fatura
+  atual de cada cartão (com "Opções" para escolher os cartões).
+
 As outras telas dos menus ainda mostram "Em construção" com a fase em que chegam.
+
+### Como as faturas funcionam
+
+- A **fatura atual** de um cartão é a fatura fechada mais antiga que ainda falta pagar; se não houver, é a que está
+  recebendo as compras de hoje.
+- Uma compra feita **no dia do fechamento** já cai na fatura do mês seguinte.
+- Uma compra já paga junto com a fatura pode ter a descrição, a categoria e as tags alteradas, mas não o valor, o cartão
+  ou a fatura, nem ser excluída: para isso, desfaça antes o pagamento da fatura.
+- Se entrar uma compra nova numa fatura já paga (ex.: você pagou antes de fechar), a fatura volta a mostrar o que falta
+  pagar e pode ser paga de novo só com a diferença.
 
 ### Como os recorrentes funcionam
 
@@ -110,7 +132,7 @@ npm run dev             # abre em http://localhost:3000
 | `npm run db:gerar` | Gera uma nova migração depois de mudar `src/db/schema.ts`. |
 | `npm run criar-usuario` | Cria o usuário ou troca a senha. |
 | `npm run lint` / `npm run typecheck` | Conferências automáticas do código. |
-| `npm test` | Testes das contas de dinheiro (parcelas, fatura do cartão, saldos, datas dos recorrentes, dia útil, média e os totais da Visão Geral). |
+| `npm test` | Testes das contas de dinheiro (parcelas, fatura do cartão, situação da fatura, limite disponível, saldos, datas dos recorrentes, dia útil, média e os totais da Visão Geral). |
 
 ## Como o projeto está organizado
 
@@ -129,8 +151,10 @@ npm run dev             # abre em http://localhost:3000
 | `src/proxy.ts` | Renova a sessão a cada página aberta (o Tempo da Sessão conta a partir do último uso). |
 | `src/lib/recorrentes` | Regras dos recorrentes (`regras.ts`, com testes), cálculo das ocorrências previstas, gravação e "Realizar automaticamente" (`servidor.ts`). |
 | `src/app/(sistema)/financeiro/recorrentes` e `.../agenda` | Telas de Recorrentes (com Planos) e Agenda. |
+| `src/lib/cartoes` | Regras das faturas e do limite (`regras.ts`, com testes) e a carga das faturas, do Detalhando Cartão e das Faturas Atuais (`servidor.ts`). |
+| `src/components/cartoes` | Janelas Detalhando Cartão de Crédito e Fatura (pagar, desfazer, fechar, reabrir, mover compra). |
 | `src/db/schema.ts` | As tabelas do banco. |
-| `drizzle/` | Migrações: `0000` cria as tabelas, `0001` faz a carga inicial, `0002` cria a auditoria e o saldo inicial das contas, `0003` os lançamentos, `0004` os recorrentes e planos. |
+| `drizzle/` | Migrações: `0000` cria as tabelas, `0001` faz a carga inicial, `0002` cria a auditoria e o saldo inicial das contas, `0003` os lançamentos, `0004` os recorrentes e planos, `0005` liga o pagamento de fatura à fatura paga. |
 | `src/auth.ts` | Login (Auth.js). A sessão acaba depois do Tempo da Sessão sem uso (Meus Dados > Preferências; padrão 20 minutos). |
 | `scripts/` | Scripts de terminal: configurar, migrar, criar usuário. |
 

@@ -323,7 +323,7 @@ export function TelaLancamentos({ linhas, resumo, filtros, opcoes, hoje, mes, ca
         )}
         {!temSaldo && (
           <p className="border-t border-borda bg-subcabecalho px-4 py-2 text-xs text-gray-500">
-            Filtrando por cartão: aparecem as compras separadas, pela data de vencimento da fatura. O pagamento da fatura chega na Fase 5.
+            Filtrando por cartão: aparecem as compras separadas, pela data de vencimento da fatura. Para pagar, use o menu da linha Fatura-Cartão (sem filtro) ou Cadastros &gt; Cartões de Crédito &gt; Faturas.
           </p>
         )}
       </div>
