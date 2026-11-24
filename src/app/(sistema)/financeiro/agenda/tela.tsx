@@ -15,7 +15,7 @@ import { semAcento } from "@/lib/cadastros/filtros";
 import { cn } from "@/lib/cn";
 import { formatarData } from "@/lib/datas";
 import { formatarCentavos } from "@/lib/dinheiro";
-import { diasNoMes, montarData, somarDias } from "@/lib/lancamentos/regras";
+import { agruparPorDia, gradeDoMes, resumirDia } from "@/lib/agenda/regras";
 import type { LinhaLista, Opcoes, Resumo } from "@/lib/lancamentos/tipos";
 import { BotaoAtalho, LinhaComFilhos } from "../lancamentos/linhas";
 import { SITUACOES } from "../lancamentos/tela";
@@ -24,17 +24,6 @@ import { useAcoesLista } from "../lancamentos/use-acoes-lista";
 type Mes = { anoMes: string; rotulo: string; anterior: string; seguinte: string; inicio: string; fim: string };
 
 const SEMANA = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
-
-export type ResumoDia = { total: number; receitas: number; despesas: number; quantidade: number; percentual: number };
-
-/** Total do dia e "% Realizado" (quanto do valor do dia já foi pago ou recebido). */
-export function resumirDia(linhas: LinhaLista[]): ResumoDia {
-  const receitas = linhas.filter((l) => l.valorCentavos > 0).reduce((s, l) => s + l.valorCentavos, 0);
-  const despesas = linhas.filter((l) => l.valorCentavos < 0).reduce((s, l) => s - l.valorCentavos, 0);
-  const movimento = receitas + despesas;
-  const realizado = linhas.filter((l) => l.situacao === "realizado").reduce((s, l) => s + Math.abs(l.valorCentavos), 0);
-  return { total: receitas - despesas, receitas, despesas, quantidade: linhas.length, percentual: movimento ? Math.round((realizado / movimento) * 100) : 0 };
-}
 
 export function TelaAgenda({ linhas, resumo, destino, opcoes, hoje, mes, caminho }: {
   linhas: LinhaLista[];
@@ -52,16 +41,9 @@ export function TelaAgenda({ linhas, resumo, destino, opcoes, hoje, mes, caminho
     return `${caminho}?${sp.toString()}`;
   };
 
-  const porDia = new Map<string, LinhaLista[]>();
-  for (const l of linhas) porDia.set(l.data, [...(porDia.get(l.data) ?? []), l]);
-
+  const porDia = agruparPorDia(linhas);
   // Semanas de domingo a sábado cobrindo o mês.
-  const [ano, m] = mes.anoMes.split("-").map(Number);
-  const primeiro = montarData(ano, m, 1);
-  const semanaDoPrimeiro = new Date(Date.UTC(ano, m - 1, 1)).getUTCDay();
-  const inicioGrade = somarDias(primeiro, -semanaDoPrimeiro);
-  const totalCelulas = Math.ceil((semanaDoPrimeiro + diasNoMes(ano, m)) / 7) * 7;
-  const celulas = Array.from({ length: totalCelulas }, (_, i) => somarDias(inicioGrade, i));
+  const celulas = gradeDoMes(mes.anoMes);
   const destinoAtual = opcoes.destinos.find((d) => d.valor === destino);
 
   return (

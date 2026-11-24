@@ -82,6 +82,11 @@ Fases prontas:
   as listas de Cadastros (Impressão Padrão), sempre com os filtros que estão na tela. Em **Cadastros > Categorias**, a opção
   **Detalhar** (menu de três pontinhos) mostra o gráfico dos últimos 12 meses e os últimos 10 lançamentos da categoria.
 
+- **Fase 10 (Agenda)**: a Agenda já tinha chegado na Fase 3 (calendário do mês, anel de "% Realizado", total do dia e a janela
+  Lançamentos do Dia com Adicionar, busca, Situação e Total dos Lançamentos). Esta fase acrescenta a **Central de Ajuda** ao lado
+  (Início > Financeiro > Agenda), testes automáticos das contas do dia (total, % realizado e montagem das semanas) e um ajuste:
+  o "% Realizado" só mostra 100% quando tudo do dia foi pago ou recebido (antes 99,6% aparecia como 100%).
+
 As outras telas dos menus ainda mostram "Em construção" com a fase em que chegam.
 
 ### Como os relatórios funcionam
