@@ -57,6 +57,13 @@
       "when": 1795521960015,
       "tag": "0007_pagamento_parcial",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795525532747,
+      "tag": "0008_orcamentos",
+      "breakpoints": true
     }
   ]
 }
