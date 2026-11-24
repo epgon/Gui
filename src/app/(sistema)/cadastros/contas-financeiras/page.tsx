@@ -6,6 +6,7 @@ import { listarBancos } from "@/lib/cadastros/bancos";
 import { condicaoSituacao, contemTexto, lerFiltrosComuns, parametro, POR_PAGINA, type ParametrosBusca } from "@/lib/cadastros/filtros";
 import { TIPOS_CONTA, type TipoConta } from "@/lib/cadastros/opcoes";
 import { hojeIso } from "@/lib/datas";
+import { saldosDasContas } from "@/lib/lancamentos/consultas";
 import { TelaContas } from "./tela";
 
 export const metadata = { title: "Contas Financeiras" };
@@ -23,7 +24,7 @@ export default async function PaginaContas({ searchParams }: { searchParams: Pro
     condicaoSituacao(conta.ativo, f.situacao),
   );
   const db = getDb();
-  const [linhas, [{ total }], bancos] = await Promise.all([
+  const [linhas, [{ total }], bancos, saldos] = await Promise.all([
     db
       .select({
         id: conta.id,
@@ -46,6 +47,7 @@ export default async function PaginaContas({ searchParams }: { searchParams: Pro
       .offset((f.pagina - 1) * POR_PAGINA),
     db.select({ total: count() }).from(conta).where(onde),
     listarBancos(),
+    saldosDasContas(),
   ]);
 
   return (
@@ -59,7 +61,7 @@ export default async function PaginaContas({ searchParams }: { searchParams: Pro
         </PainelFiltros>
       }
     >
-      <TelaContas linhas={linhas} total={total} filtros={{ ...f, tipo }} caminho={CAMINHO} bancos={bancos} hoje={hojeIso()} />
+      <TelaContas linhas={linhas.map((l) => ({ ...l, saldoAtualCentavos: saldos.get(l.id) ?? 0 }))} total={total} filtros={{ ...f, tipo }} caminho={CAMINHO} bancos={bancos} hoje={hojeIso()} />
     </MolduraLista>
   );
 }

@@ -9,6 +9,7 @@ import { TIPOS_CONTA } from "@/lib/cadastros/opcoes";
 import { falha, idValido, obrigatorio, primeiroErro, type Resultado } from "@/lib/cadastros/resultado";
 import { dataValida } from "@/lib/datas";
 import { lerValorEmCentavos } from "@/lib/dinheiro";
+import { sincronizarSaldoInicial } from "@/lib/lancamentos/saldo-inicial";
 import { exigirLogin } from "@/lib/sessao";
 
 const { contaFinanceira: conta, banco } = schema;
@@ -69,6 +70,7 @@ export async function salvarConta(id: number | null, entrada: DadosConta): Promi
     if (id === null) {
       const [{ proxima }] = await tx.select({ proxima: sql<number>`coalesce(max(${conta.ordem}), 0) + 1` }).from(conta);
       const [nova] = await tx.insert(conta).values({ ...dados, ordem: proxima }).returning();
+      await sincronizarSaldoInicial(tx, nova.id, dados.saldoInicialCentavos, dados.saldoInicialData);
       await registrarAuditoria(tx, { tela: TELA, entidade: ENTIDADE, entidadeId: nova.id, acao: "cadastrou", descricao: `a Conta Financeira ${nova.descricao}`, dados });
       refresh();
       return { ok: true, id: nova.id } as const;
@@ -76,6 +78,7 @@ export async function salvarConta(id: number | null, entrada: DadosConta): Promi
     const [antes] = await tx.select().from(conta).where(eq(conta.id, id)).for("update");
     if (!antes) return falha("Esta conta financeira não existe mais.");
     await tx.update(conta).set(dados).where(eq(conta.id, id));
+    await sincronizarSaldoInicial(tx, id, dados.saldoInicialCentavos, dados.saldoInicialData);
     await registrarAuditoria(tx, { tela: TELA, entidade: ENTIDADE, entidadeId: id, acao: "alterou", descricao: `a Conta Financeira ${dados.descricao}`, dados: diferencas(antes, dados) });
     refresh();
     return { ok: true, id } as const;

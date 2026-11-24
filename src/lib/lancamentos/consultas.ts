@@ -1,0 +1,331 @@
+import "server-only";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql, type SQL } from "drizzle-orm";
+import { getDb, schema } from "@/db";
+import { contemTexto, parametro, type ParametrosBusca } from "@/lib/cadastros/filtros";
+import { descendentes, montarArvore, rotuloCategoria } from "@/lib/categorias";
+import { hojeIso } from "@/lib/datas";
+import { lerValorEmCentavos } from "@/lib/dinheiro";
+import { mesDe, situacaoDe, valorComSinal, type Situacao } from "./regras";
+import type { Aba, Filtros, FiltroSituacao, LinhaLista, Opcoes, Resumo } from "./tipos";
+
+const { lancamento: l, contaFinanceira: conta, cartaoCredito: cartao, banco, categoria, contato, formaPagamento: forma, tag, lancamentoTag, lancamentoItem, anexo, fatura } = schema;
+
+/** Valor com sinal, em SQL (mesma regra de valorComSinal). */
+export const valorComSinalSql = sql<number>`(case
+  when ${l.tipo} in ('receita', 'transferencia_entrada') then abs(${l.valorCentavos})
+  when ${l.tipo} in ('saldo_inicial', 'acerto_saldo') then ${l.valorCentavos}
+  else -abs(${l.valorCentavos}) end)`;
+
+/** Valor realizado com sinal (usa o valor pago quando existe). */
+const valorRealizadoSql = sql<number>`(case
+  when ${l.tipo} in ('receita', 'transferencia_entrada') then abs(coalesce(${l.valorPagoCentavos}, ${l.valorCentavos}))
+  when ${l.tipo} in ('saldo_inicial', 'acerto_saldo') then coalesce(${l.valorPagoCentavos}, ${l.valorCentavos})
+  else -abs(coalesce(${l.valorPagoCentavos}, ${l.valorCentavos})) end)`;
+
+export function lerFiltros(sp: ParametrosBusca, hoje = hojeIso()): Filtros {
+  const mes = parametro(sp, "mes");
+  const aba = parametro(sp, "aba");
+  const situacao = parametro(sp, "situacao");
+  const destino = parametro(sp, "destino");
+  const id = (nome: string) => (/^\d+$/.test(parametro(sp, nome)) ? parametro(sp, nome) : "");
+  return {
+    mes: /^\d{4}-(0[1-9]|1[0-2])$/.test(mes) ? mes : hoje.slice(0, 7),
+    aba: (["receitas", "despesas", "transferencias"].includes(aba) ? aba : "todos") as Aba,
+    destino: /^(conta|cartao):\d+$/.test(destino) ? destino : "",
+    situacao: (["nao_realizado", "realizado", "a_vencer", "vencido"].includes(situacao) ? situacao : "") as FiltroSituacao,
+    busca: parametro(sp, "busca").slice(0, 100),
+    detalhar: parametro(sp, "detalhar") === "1",
+    categoria: id("categoria"),
+    forma: id("forma"),
+    contato: id("contato"),
+    tag: id("tag"),
+  };
+}
+
+const passaSituacao = (s: Situacao, filtro: FiltroSituacao) =>
+  !filtro || (filtro === "nao_realizado" ? s !== "realizado" : s === filtro);
+
+const passaAba = (aba: Aba, tipo: string, valor: number) => {
+  const transferencia = tipo === "transferencia_saida" || tipo === "transferencia_entrada";
+  if (aba === "transferencias") return transferencia;
+  if (aba === "receitas") return !transferencia && valor > 0;
+  if (aba === "despesas") return !transferencia && valor < 0;
+  return true;
+};
+
+/** Ids das contas que entram no saldo (filtro por conta, ou todas as marcadas "Considerar nos saldos"). */
+async function contasDoSaldo(destino: string): Promise<number[] | null> {
+  if (destino.startsWith("cartao:")) return null;
+  if (destino.startsWith("conta:")) return [Number(destino.slice(6))];
+  const linhas = await getDb().select({ id: conta.id }).from(conta).where(eq(conta.considerarNosSaldos, true));
+  return linhas.map((c) => c.id);
+}
+
+/** Lista do mês, já com as faturas agrupadas e os totais. */
+export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{ linhas: LinhaLista[]; resumo: Resumo }> {
+  const db = getDb();
+  const mes = mesDe(f.mes);
+  const cartaoFiltro = f.destino.startsWith("cartao:") ? Number(f.destino.slice(7)) : null;
+  const contaFiltro = f.destino.startsWith("conta:") ? Number(f.destino.slice(6)) : null;
+
+  // Filtros de conteúdo: com algum deles ligado, as compras do cartão aparecem separadas.
+  const filtrosConteudo: SQL[] = [];
+  if (f.busca) {
+    const centavos = lerValorEmCentavos(f.busca);
+    filtrosConteudo.push(
+      or(contemTexto(l.descricao, f.busca), contemTexto(l.documento, f.busca), centavos !== null ? eq(sql`abs(${l.valorCentavos})`, Math.abs(centavos)) : undefined)!,
+    );
+  }
+  if (f.categoria) {
+    const todas = await db.select({ id: categoria.id, categoriaPaiId: categoria.categoriaPaiId }).from(categoria);
+    const ids = [Number(f.categoria), ...descendentes(todas, Number(f.categoria))];
+    filtrosConteudo.push(
+      or(inArray(l.categoriaId, ids), sql`exists (select 1 from ${lancamentoItem} where ${lancamentoItem.lancamentoId} = ${l.id} and ${inArray(lancamentoItem.categoriaId, ids)})`)!,
+    );
+  }
+  if (f.forma) filtrosConteudo.push(eq(l.formaPagamentoId, Number(f.forma)));
+  if (f.contato) filtrosConteudo.push(eq(l.contatoId, Number(f.contato)));
+  if (f.tag) filtrosConteudo.push(sql`exists (select 1 from ${lancamentoTag} where ${lancamentoTag.lancamentoId} = ${l.id} and ${lancamentoTag.tagId} = ${Number(f.tag)})`);
+  const agruparFaturas = cartaoFiltro === null && filtrosConteudo.length === 0;
+
+  const escopo =
+    cartaoFiltro !== null
+      ? eq(l.cartaoId, cartaoFiltro)
+      : contaFiltro !== null
+        ? or(eq(l.contaId, contaFiltro), sql`${l.cartaoId} in (select ${cartao.id} from ${cartao} where ${cartao.contaPagamentoId} = ${contaFiltro})`)
+        : undefined;
+
+  const linhasDb = await db
+    .select({
+      id: l.id,
+      tipo: l.tipo,
+      formato: l.formato,
+      descricao: l.descricao,
+      valor: valorComSinalSql,
+      dataVencimento: l.dataVencimento,
+      dataPagamento: l.dataPagamento,
+      dataCompra: l.dataCompra,
+      contaId: l.contaId,
+      cartaoId: l.cartaoId,
+      faturaId: l.faturaId,
+      contaNome: conta.descricao,
+      cartaoNome: cartao.descricao,
+      bancoCodigo: banco.codigo,
+      bancoNome: banco.nome,
+      categoriaId: l.categoriaId,
+      contato: contato.nome,
+      forma: forma.descricao,
+      parcelaNumero: l.parcelaNumero,
+      parcelaTotal: l.parcelaTotal,
+      parcelamentoId: l.parcelamentoId,
+      transferenciaId: l.transferenciaId,
+      realizarAutomaticamente: l.realizarAutomaticamente,
+      observacao: sql<boolean>`coalesce(length(${l.observacao}), 0) > 0`,
+      anexos: sql<number>`(select count(*)::int from ${anexo} where ${anexo.lancamentoId} = ${l.id})`,
+      tags: sql<string[]>`coalesce((select array_agg(${tag.descricao} order by ${tag.descricao}) from ${lancamentoTag} join ${tag} on ${tag.id} = ${lancamentoTag.tagId} where ${lancamentoTag.lancamentoId} = ${l.id}), '{}')`,
+    })
+    .from(l)
+    .leftJoin(conta, eq(conta.id, l.contaId))
+    .leftJoin(cartao, eq(cartao.id, l.cartaoId))
+    .leftJoin(banco, sql`${banco.id} = coalesce(${conta.bancoId}, ${cartao.bancoId})`)
+    .leftJoin(contato, eq(contato.id, l.contatoId))
+    .leftJoin(forma, eq(forma.id, l.formaPagamentoId))
+    .where(and(gte(l.dataVencimento, mes.inicio), lte(l.dataVencimento, mes.fim), escopo, ...filtrosConteudo))
+    .orderBy(asc(l.dataVencimento), asc(l.id));
+
+  // Categorias (com numeração) e itens dos detalhados.
+  const todasCategorias = await db
+    .select({ id: categoria.id, nome: categoria.nome, categoriaPaiId: categoria.categoriaPaiId, ordem: categoria.ordem, cor: categoria.cor, natureza: categoria.natureza, especial: categoria.especial, ativo: categoria.ativo, padraoSistema: categoria.padraoSistema })
+    .from(categoria);
+  const arvore = new Map(montarArvore(todasCategorias).map((c) => [c.id, c]));
+  const idsDetalhados = linhasDb.filter((x) => x.formato === "detalhado").map((x) => x.id);
+  const itens = idsDetalhados.length
+    ? await db.select().from(lancamentoItem).where(inArray(lancamentoItem.lancamentoId, idsDetalhados)).orderBy(asc(lancamentoItem.ordem), asc(lancamentoItem.id))
+    : [];
+
+  const paraLinha = (x: (typeof linhasDb)[number]): LinhaLista => {
+    const cat = x.categoriaId ? arvore.get(x.categoriaId) : undefined;
+    return {
+      chave: `l${x.id}`,
+      id: x.id,
+      faturaId: x.faturaId,
+      tipo: x.tipo,
+      formato: x.formato,
+      descricao: x.descricao,
+      valorCentavos: Number(x.valor),
+      data: x.dataVencimento,
+      dataPagamento: x.dataPagamento,
+      dataCompra: x.dataCompra,
+      situacao: situacaoDe(x.dataVencimento, x.dataPagamento, hoje),
+      contaOuCartao: x.contaNome ?? x.cartaoNome ?? "",
+      bancoCodigo: x.bancoCodigo,
+      bancoNome: x.bancoNome,
+      eCartao: x.cartaoId !== null,
+      cartaoId: x.cartaoId,
+      categoria: cat ? rotuloCategoria(cat) : null,
+      categoriaCor: cat?.corEfetiva ?? null,
+      contato: x.contato,
+      forma: x.forma,
+      tags: x.tags ?? [],
+      parcela: x.parcelaNumero && x.parcelaTotal ? `${x.parcelaNumero}/${x.parcelaTotal}` : null,
+      parcelamentoId: x.parcelamentoId,
+      transferenciaId: x.transferenciaId,
+      realizarAutomaticamente: x.realizarAutomaticamente,
+      observacao: x.observacao,
+      anexos: Number(x.anexos),
+      itens: itens
+        .filter((i) => i.lancamentoId === x.id)
+        .map((i) => {
+          const c = arvore.get(i.categoriaId);
+          return { id: i.id, tipo: i.tipo, descricao: i.descricao, valorCentavos: i.tipo === "receita" ? i.valorCentavos : -i.valorCentavos, categoria: c ? rotuloCategoria(c) : "", categoriaCor: c?.corEfetiva ?? "#9CA3AF" };
+        }),
+      compras: [],
+    };
+  };
+
+  let linhas: LinhaLista[] = [];
+  const porFatura = new Map<number, LinhaLista[]>();
+  for (const x of linhasDb) {
+    const linha = paraLinha(x);
+    if (agruparFaturas && x.faturaId !== null) {
+      porFatura.set(x.faturaId, [...(porFatura.get(x.faturaId) ?? []), linha]);
+    } else {
+      linhas.push(linha);
+    }
+  }
+  if (porFatura.size) {
+    const faturas = await db
+      .select({ id: fatura.id, cartaoId: fatura.cartaoId, dataVencimento: fatura.dataVencimento, competencia: fatura.competencia, cartao: cartao.descricao, bancoCodigo: banco.codigo, bancoNome: banco.nome })
+      .from(fatura)
+      .innerJoin(cartao, eq(cartao.id, fatura.cartaoId))
+      .leftJoin(banco, eq(banco.id, cartao.bancoId))
+      .where(inArray(fatura.id, [...porFatura.keys()]));
+    for (const fa of faturas) {
+      const compras = porFatura.get(fa.id) ?? [];
+      const paga = compras.every((c) => c.dataPagamento);
+      linhas.push({
+        ...compras[0],
+        chave: `f${fa.id}`,
+        id: null,
+        faturaId: fa.id,
+        tipo: "pagamento_fatura",
+        formato: "simples",
+        descricao: `Fatura-${fa.cartao}`,
+        valorCentavos: compras.reduce((s, c) => s + c.valorCentavos, 0),
+        data: fa.dataVencimento,
+        dataPagamento: paga ? (compras[0].dataPagamento ?? null) : null,
+        dataCompra: null,
+        situacao: situacaoDe(fa.dataVencimento, paga ? fa.dataVencimento : null, hoje),
+        contaOuCartao: fa.cartao,
+        cartaoId: fa.cartaoId,
+        bancoCodigo: fa.bancoCodigo,
+        bancoNome: fa.bancoNome,
+        categoria: null,
+        categoriaCor: null,
+        contato: null,
+        forma: null,
+        tags: [],
+        parcela: null,
+        parcelamentoId: null,
+        transferenciaId: null,
+        realizarAutomaticamente: false,
+        observacao: false,
+        anexos: 0,
+        itens: [],
+        compras,
+      });
+    }
+    linhas.sort((a, b) => a.data.localeCompare(b.data) || (a.id ?? 0) - (b.id ?? 0));
+  }
+
+  linhas = linhas.filter((x) => passaAba(f.aba, x.tipo, x.valorCentavos) && passaSituacao(x.situacao, f.situacao));
+
+  const receitas = linhas.filter((x) => x.valorCentavos > 0).reduce((s, x) => s + x.valorCentavos, 0);
+  const despesas = linhas.filter((x) => x.valorCentavos < 0).reduce((s, x) => s - x.valorCentavos, 0);
+
+  // Saldos: só das contas (cartão não tem saldo).
+  let saldoAnterior: number | null = null;
+  let saldoAtual: number | null = null;
+  let saldoPrevisto: number | null = null;
+  const contas = await contasDoSaldo(f.destino);
+  if (contas !== null) {
+    const naConta = contas.length ? inArray(l.contaId, contas) : sql`false`;
+    // Compras de cartão ainda não pagas entram no previsto (pelas faturas), uma vez só.
+    const cartoesDaConta =
+      contaFiltro !== null
+        ? sql`${l.cartaoId} in (select ${cartao.id} from ${cartao} where ${cartao.contaPagamentoId} = ${contaFiltro})`
+        : isNotNull(l.cartaoId);
+    const [anterior] = await db
+      .select({
+        contas: sql<number>`coalesce(sum(${valorComSinalSql}) filter (where ${naConta}), 0)`,
+        cartoes: sql<number>`coalesce(sum(${valorComSinalSql}) filter (where ${and(cartoesDaConta, isNull(l.dataPagamento))}), 0)`,
+      })
+      .from(l)
+      .where(lt(l.dataVencimento, mes.inicio));
+    const [atual] = await db
+      .select({ total: sql<number>`coalesce(sum(${valorRealizadoSql}), 0)` })
+      .from(l)
+      .where(and(naConta, isNotNull(l.dataPagamento), lte(l.dataPagamento, mes.fim)));
+    // Previsto do mês: tudo do mês no escopo, sem os filtros de aba e situação.
+    const [doMes] = await db
+      .select({
+        contas: sql<number>`coalesce(sum(${valorComSinalSql}) filter (where ${naConta}), 0)`,
+        cartoes: sql<number>`coalesce(sum(${valorComSinalSql}) filter (where ${and(cartoesDaConta, isNull(l.dataPagamento))}), 0)`,
+      })
+      .from(l)
+      .where(and(gte(l.dataVencimento, mes.inicio), lte(l.dataVencimento, mes.fim)));
+    saldoAnterior = Number(anterior.contas) + Number(anterior.cartoes);
+    saldoPrevisto = saldoAnterior + Number(doMes.contas) + Number(doMes.cartoes);
+    saldoAtual = Number(atual.total);
+  }
+
+  return { linhas, resumo: { receitas, despesas, total: receitas - despesas, saldoAnterior, saldoPrevisto, saldoAtual } };
+}
+
+/** Saldo atual de cada conta (só o que já foi pago ou recebido até hoje). */
+export async function saldosDasContas(hoje = hojeIso()): Promise<Map<number, number>> {
+  const linhas = await getDb()
+    .select({ contaId: l.contaId, total: sql<number>`coalesce(sum(${valorRealizadoSql}), 0)` })
+    .from(l)
+    .where(and(isNotNull(l.contaId), isNotNull(l.dataPagamento), lte(l.dataPagamento, hoje)))
+    .groupBy(l.contaId);
+  return new Map(linhas.map((x) => [x.contaId!, Number(x.total)]));
+}
+
+/** Opções dos campos do formulário e dos filtros. */
+export async function carregarOpcoes(): Promise<Opcoes> {
+  const db = getDb();
+  const [contas, cartoes, categorias, formas, contatos, tags] = await Promise.all([
+    db
+      .select({ id: conta.id, descricao: conta.descricao, ativo: conta.ativo, bancoCodigo: banco.codigo, bancoNome: banco.nome })
+      .from(conta)
+      .leftJoin(banco, eq(banco.id, conta.bancoId))
+      .orderBy(asc(conta.ordem), asc(conta.descricao)),
+    db
+      .select({ id: cartao.id, descricao: cartao.descricao, ativo: cartao.ativo, diaFechamento: cartao.diaFechamento, diaVencimento: cartao.diaVencimento, bancoCodigo: banco.codigo, bancoNome: banco.nome })
+      .from(cartao)
+      .leftJoin(banco, eq(banco.id, cartao.bancoId))
+      .orderBy(asc(cartao.ordem), asc(cartao.descricao)),
+    db
+      .select({ id: categoria.id, nome: categoria.nome, categoriaPaiId: categoria.categoriaPaiId, ordem: categoria.ordem, cor: categoria.cor, natureza: categoria.natureza, especial: categoria.especial, ativo: categoria.ativo, padraoSistema: categoria.padraoSistema })
+      .from(categoria),
+    db.select({ id: forma.id, rotulo: forma.descricao, ativo: forma.ativo }).from(forma).orderBy(asc(forma.descricao)),
+    db.select({ id: contato.id, rotulo: contato.nome, ativo: contato.ativo }).from(contato).orderBy(asc(sql`lower(${contato.nome})`)),
+    db.select({ id: tag.id, rotulo: tag.descricao, ativo: tag.ativo }).from(tag).orderBy(asc(sql`lower(${tag.descricao})`)),
+  ]);
+  return {
+    destinos: [
+      ...contas.map((c) => ({ valor: `conta:${c.id}`, rotulo: c.descricao, grupo: "Contas" as const, bancoCodigo: c.bancoCodigo, bancoNome: c.bancoNome, ativo: c.ativo })),
+      ...cartoes.map((c) => ({ valor: `cartao:${c.id}`, rotulo: c.descricao, grupo: "Cartões" as const, bancoCodigo: c.bancoCodigo, bancoNome: c.bancoNome, ativo: c.ativo })),
+    ],
+    cartoes: cartoes.map((c) => ({ id: c.id, diaFechamento: c.diaFechamento, diaVencimento: c.diaVencimento })),
+    categorias: montarArvore(categorias)
+      .filter((c) => !c.especial)
+      .map((c) => ({ id: c.id, rotulo: rotuloCategoria(c), cor: c.corEfetiva, natureza: c.natureza, nivel: c.nivel, ativo: c.ativo })),
+    formas,
+    contatos,
+    tags,
+  };
+}
+
+export { valorComSinal };
