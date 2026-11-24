@@ -1,4 +1,4 @@
-import { count, eq } from "drizzle-orm";
+import { count, eq, ne } from "drizzle-orm";
 import { CheckCircle2, Circle } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -16,19 +16,20 @@ type Passo = { texto: string; href: string; feito: boolean; emBreve?: string };
 /** Confere no banco quais primeiros passos já foram dados. */
 async function primeirosPassos(): Promise<Passo[]> {
   const db = getDb();
-  const { contaFinanceira, cartaoCredito, auditoria } = schema;
-  const [[contas], [cartoes], [categorias]] = await Promise.all([
+  const { contaFinanceira, cartaoCredito, auditoria, lancamento } = schema;
+  const [[contas], [cartoes], [categorias], [lancamentos]] = await Promise.all([
     db.select({ total: count() }).from(contaFinanceira),
     db.select({ total: count() }).from(cartaoCredito),
     // "Definir as categorias" = ter criado, editado ou inativado alguma.
     db.select({ total: count() }).from(auditoria).where(eq(auditoria.entidade, "Categoria")),
+    db.select({ total: count() }).from(lancamento).where(ne(lancamento.tipo, "saldo_inicial")),
   ]);
   return [
     { texto: "Entrar no sistema", href: "/", feito: true },
     { texto: "Adicione uma Conta Financeira", href: "/cadastros/contas-financeiras", feito: contas.total > 0 },
     { texto: "Defina suas Categorias", href: "/cadastros/categorias", feito: categorias.total > 0 },
     { texto: "Cadastre seu Cartão de Crédito", href: "/cadastros/cartoes-de-credito", feito: cartoes.total > 0 },
-    { texto: "Registre um Lançamento", href: "/financeiro/lancamentos", feito: false, emBreve: "chega na Fase 2" },
+    { texto: "Registre um Lançamento", href: "/financeiro/lancamentos", feito: lancamentos.total > 0 },
     { texto: "Crie um Lançamento Recorrente", href: "/financeiro/recorrentes", feito: false, emBreve: "chega na Fase 4" },
   ];
 }
@@ -68,7 +69,7 @@ export default async function VisaoGeral() {
                 <h3 className="text-lg font-semibold text-verde">Olá! Eu sou o Gui.</h3>
                 <p className="mt-1 text-sm text-gray-600">
                   Vou ajudar você a organizar suas finanças. Comece pelos cadastros: suas contas com o saldo de hoje,
-                  seus cartões e as categorias do seu jeito. Os lançamentos chegam na próxima fase.
+                  seus cartões e as categorias do seu jeito. Depois, registre o dia a dia em Financeiro &gt; Lançamentos.
                 </p>
               </div>
               <div>

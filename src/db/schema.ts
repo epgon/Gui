@@ -12,6 +12,7 @@ import {
   type AnyPgColumn,
   bigint,
   boolean,
+  customType,
   check,
   date,
   index,
@@ -226,6 +227,176 @@ export const tag = pgTable("tag", {
   ...camposPadrao,
   descricao: text("descricao").notNull(),
 });
+
+// ---------------------------------------------------------------------------
+// 4.3. Lançamentos (Fase 2)
+// ---------------------------------------------------------------------------
+
+export const tipoLancamentoEnum = pgEnum("tipo_lancamento", [
+  "despesa",
+  "receita",
+  "transferencia_saida",
+  "transferencia_entrada",
+  "saldo_inicial",
+  "acerto_saldo",
+  "pagamento_fatura",
+]);
+
+export const formatoLancamentoEnum = pgEnum("formato_lancamento", ["simples", "detalhado"]);
+
+export const origemLancamentoEnum = pgEnum("origem_lancamento", ["manual", "parcelamento", "recorrente", "importacao", "sistema"]);
+
+export const periodicidadeEnum = pgEnum("periodicidade", [
+  "semanal",
+  "quinzenal",
+  "mensal",
+  "bimestral",
+  "trimestral",
+  "semestral",
+  "anual",
+]);
+
+export const situacaoFaturaEnum = pgEnum("situacao_fatura", ["aberta", "fechada", "paga"]);
+
+/** Conteúdo binário (anexos). Guardado no próprio banco, sem serviço extra. */
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
+
+/** Fatura do cartão: uma por cartão e mês de fechamento, criada na primeira compra. */
+export const fatura = pgTable(
+  "fatura",
+  {
+    id: serial("id").primaryKey(),
+    cartaoId: integer("cartao_id").notNull().references(() => cartaoCredito.id),
+    /** Primeiro dia do mês em que a fatura fecha (ex.: 2026-12-01). */
+    competencia: date("competencia").notNull(),
+    dataFechamento: date("data_fechamento").notNull(),
+    dataVencimento: date("data_vencimento").notNull(),
+    situacao: situacaoFaturaEnum("situacao").notNull().default("aberta"),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("fatura_cartao_competencia_unica").on(t.cartaoId, t.competencia)],
+);
+
+/** Compra parcelada: as parcelas são gravadas todas de uma vez como lançamentos. */
+export const parcelamento = pgTable("parcelamento", {
+  id: serial("id").primaryKey(),
+  descricaoBase: text("descricao_base").notNull(),
+  valorTotalCentavos: bigint("valor_total_centavos", { mode: "number" }).notNull(),
+  quantidade: smallint("quantidade").notNull(),
+  periodicidade: periodicidadeEnum("periodicidade").notNull().default("mensal"),
+  iniciarNaParcela: smallint("iniciar_na_parcela").notNull().default(1),
+  dividirValor: boolean("dividir_valor").notNull().default(true),
+  incluirParcelaNaDescricao: boolean("incluir_parcela_na_descricao").notNull().default(true),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Transferência entre contas: gera dois lançamentos ligados (saída e entrada). */
+export const transferencia = pgTable("transferencia", {
+  id: serial("id").primaryKey(),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const lancamento = pgTable(
+  "lancamento",
+  {
+    id: serial("id").primaryKey(),
+    tipo: tipoLancamentoEnum("tipo").notNull(),
+    formato: formatoLancamentoEnum("formato").notNull().default("simples"),
+    descricao: text("descricao").notNull(),
+    documento: varchar("documento", { length: 60 }),
+    observacao: varchar("observacao", { length: 1000 }),
+    /** Sempre positivo; o sinal vem do tipo. Só "Saldo Inicial" e "Acerto de Saldo" podem ser negativos. */
+    valorCentavos: bigint("valor_centavos", { mode: "number" }).notNull(),
+    valorPagoCentavos: bigint("valor_pago_centavos", { mode: "number" }),
+    dataVencimento: date("data_vencimento").notNull(),
+    /** Vazia = ainda não pago/recebido. */
+    dataPagamento: date("data_pagamento"),
+    dataReferencia: date("data_referencia"),
+    /** Compras no cartão: dia da compra (o vencimento é o da fatura). */
+    dataCompra: date("data_compra"),
+    realizarAutomaticamente: boolean("realizar_automaticamente").notNull().default(false),
+    contaId: integer("conta_id").references(() => contaFinanceira.id),
+    cartaoId: integer("cartao_id").references(() => cartaoCredito.id),
+    faturaId: integer("fatura_id").references(() => fatura.id),
+    categoriaId: integer("categoria_id").references(() => categoria.id),
+    formaPagamentoId: integer("forma_pagamento_id").references(() => formaPagamento.id),
+    contatoId: integer("contato_id").references(() => contato.id),
+    parcelamentoId: integer("parcelamento_id").references(() => parcelamento.id, { onDelete: "set null" }),
+    parcelaNumero: smallint("parcela_numero"),
+    parcelaTotal: smallint("parcela_total"),
+    transferenciaId: integer("transferencia_id").references(() => transferencia.id, { onDelete: "cascade" }),
+    origem: origemLancamentoEnum("origem").notNull().default("manual"),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    check("lancamento_conta_ou_cartao", sql`num_nonnulls(${t.contaId}, ${t.cartaoId}) = 1`),
+    check(
+      "lancamento_valor_positivo",
+      sql`${t.valorCentavos} >= 0 or ${t.tipo} in ('saldo_inicial', 'acerto_saldo')`,
+    ),
+    index("lancamento_vencimento_idx").on(t.dataVencimento),
+    index("lancamento_pagamento_idx").on(t.dataPagamento),
+    index("lancamento_conta_idx").on(t.contaId),
+    index("lancamento_cartao_idx").on(t.cartaoId),
+    index("lancamento_fatura_idx").on(t.faturaId),
+    index("lancamento_parcelamento_idx").on(t.parcelamentoId),
+    index("lancamento_transferencia_idx").on(t.transferenciaId),
+    uniqueIndex("lancamento_saldo_inicial_unico").on(t.contaId).where(sql`${t.tipo} = 'saldo_inicial'`),
+  ],
+);
+
+/** Itens do lançamento detalhado (cada um com a sua categoria). */
+export const lancamentoItem = pgTable(
+  "lancamento_item",
+  {
+    id: serial("id").primaryKey(),
+    lancamentoId: integer("lancamento_id")
+      .notNull()
+      .references(() => lancamento.id, { onDelete: "cascade" }),
+    tipo: naturezaCategoriaEnum("tipo").notNull(),
+    descricao: text("descricao").notNull(),
+    valorCentavos: bigint("valor_centavos", { mode: "number" }).notNull(),
+    categoriaId: integer("categoria_id")
+      .notNull()
+      .references(() => categoria.id),
+    ordem: smallint("ordem").notNull().default(0),
+  },
+  (t) => [index("lancamento_item_lancamento_idx").on(t.lancamentoId), check("lancamento_item_valor_positivo", sql`${t.valorCentavos} > 0`)],
+);
+
+export const lancamentoTag = pgTable(
+  "lancamento_tag",
+  {
+    lancamentoId: integer("lancamento_id")
+      .notNull()
+      .references(() => lancamento.id, { onDelete: "cascade" }),
+    tagId: integer("tag_id")
+      .notNull()
+      .references(() => tag.id),
+  },
+  (t) => [uniqueIndex("lancamento_tag_unico").on(t.lancamentoId, t.tagId)],
+);
+
+/** Anexos (imagem ou PDF) guardados no próprio banco. */
+export const anexo = pgTable(
+  "anexo",
+  {
+    id: serial("id").primaryKey(),
+    lancamentoId: integer("lancamento_id")
+      .notNull()
+      .references(() => lancamento.id, { onDelete: "cascade" }),
+    nomeArquivo: text("nome_arquivo").notNull(),
+    tipoMime: varchar("tipo_mime", { length: 100 }).notNull(),
+    tamanhoBytes: integer("tamanho_bytes").notNull(),
+    conteudo: bytea("conteudo").notNull(),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("anexo_lancamento_idx").on(t.lancamentoId)],
+);
 
 // ---------------------------------------------------------------------------
 // 4.8. Auditoria

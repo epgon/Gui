@@ -12,6 +12,16 @@ Fases prontas:
   Todas com lista, busca, filtros, criar, editar e ativar/inativar (nada é apagado). Toda operação fica
   registrada na tabela `auditoria`. O checklist "primeiros passos" da Visão Geral marca o que já foi feito.
 
+- **Fase 2 (Lançamentos)**: Financeiro > Lançamentos com abas (Todos, Receitas, Despesas, Transferências),
+  filtro de conta ou cartão, situação, navegador de mês, busca (descrição, documento ou valor), chave Detalhar,
+  filtros do painel (categoria, forma de pagamento, contato e tag), Saldo Anterior, Total dos Lançamentos,
+  Saldo Previsto e Saldo Atual, e ações em lote (pagar/receber, voltar para não pago, excluir).
+  Modal Novo Lançamento com as abas Simples, Detalhado (itens com categoria própria) e Transferência;
+  parcelamento (todas as parcelas gravadas de uma vez, com "Ver Parcelas" editável), observação, anexos
+  (imagem ou PDF até 4 MB, guardados no próprio banco), cadastro rápido de tag e de cliente/fornecedor.
+  Compras no cartão caem na fatura certa pelo dia de fechamento e aparecem como "Fatura-Cartão" na lista.
+  O saldo inicial de cada conta virou o lançamento "Saldo Inicial", e Contas Financeiras mostra o Saldo Atual.
+
 As outras telas dos menus ainda mostram "Em construção" com a fase em que chegam.
 
 ## Publicar na Vercel (passo a passo)
@@ -70,6 +80,7 @@ npm run dev             # abre em http://localhost:3000
 | `npm run db:gerar` | Gera uma nova migração depois de mudar `src/db/schema.ts`. |
 | `npm run criar-usuario` | Cria o usuário ou troca a senha. |
 | `npm run lint` / `npm run typecheck` | Conferências automáticas do código. |
+| `npm test` | Testes das contas de dinheiro (parcelas, fatura do cartão, saldos). |
 
 ## Como o projeto está organizado
 

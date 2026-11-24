@@ -31,6 +31,7 @@ type Linha = {
   considerarNosSaldos: boolean;
   saldoInicialCentavos: number;
   saldoInicialData: string | null;
+  saldoAtualCentavos: number;
   ativo: boolean;
   padraoSistema: boolean;
 };
@@ -99,6 +100,16 @@ export function TelaContas({ linhas, total, filtros, caminho, bancos, hoje }: {
               <span title={l.saldoInicialData ? `Saldo em ${formatarData(l.saldoInicialData)}` : undefined}>
                 <Valor centavos={l.saldoInicialCentavos} />
                 {l.saldoInicialData && <span className="block text-xs text-gray-400">em {formatarData(l.saldoInicialData)}</span>}
+              </span>
+            ),
+          },
+          {
+            chave: "saldoAtual",
+            titulo: "Saldo Atual",
+            alinhar: "direita",
+            render: (l) => (
+              <span title="Saldo inicial mais tudo o que já foi pago ou recebido até hoje">
+                <Valor centavos={l.saldoAtualCentavos} />
               </span>
             ),
           },
@@ -188,7 +199,7 @@ export function TelaContas({ linhas, total, filtros, caminho, bancos, hoje }: {
             />
           </div>
           <p className="mt-2 text-xs text-gray-600">
-            Quando os lançamentos chegarem, este valor vira o lançamento &quot;Saldo Inicial&quot; da conta, para os saldos baterem com o banco.
+            Este valor aparece em Lançamentos como &quot;Saldo Inicial&quot; (já recebido), e o Saldo Atual da conta parte dele.
           </p>
         </div>
         <Chave

@@ -11,7 +11,8 @@
     "configurar": "tsx scripts/configurar.ts",
     "criar-usuario": "tsx scripts/criar-usuario.ts",
     "db:migrar": "tsx scripts/migrar.ts",
-    "db:gerar": "drizzle-kit generate"
+    "db:gerar": "drizzle-kit generate",
+    "test": "vitest run"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -37,7 +38,8 @@
     "eslint-config-next": "16.4.6",
     "tailwindcss": "4.3.3",
     "tsx": "^4.23.15",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   },
   "engines": {
     "node": ">=20"
