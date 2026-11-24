@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowLeftRight, ArrowUp, CheckCircle2, ChevronLeft, ChevronRight, Eye, EyeOff, Plus, RotateCcw, Search, Trash2, Wallet } from "lucide-react";
+import { ArrowDown, ArrowLeftRight, ArrowUp, CheckCircle2, ChevronLeft, ChevronRight, Eye, EyeOff, Plus, RotateCcw, Search, Trash2, Upload, Wallet } from "lucide-react";
 import Form from "next/form";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -116,7 +116,15 @@ export function TelaLancamentos({ linhas, resumo, filtros, opcoes, hoje, mes, ca
           <ArrowLeftRight className="h-4 w-4" />
         </BotaoAtalho>
         {abrindo && <span className="text-sm text-gray-500">Abrindo...</span>}
-        <Form action={caminho} className="ml-auto flex w-full items-center sm:w-72" role="search">
+        <Link
+          href="/financeiro/importacoes/nova"
+          title="Importar extrato (OFX ou CSV)"
+          aria-label="Importar extrato"
+          className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-md border border-borda bg-white px-2.5 text-sm text-gray-700 hover:bg-gray-50"
+        >
+          <Upload className="h-4 w-4 text-verde" /> <span className="hidden sm:inline">Importar</span>
+        </Link>
+        <Form action={caminho} className="flex w-full items-center sm:w-72" role="search">
           {Object.entries(parametros)
             .filter(([k, v]) => k !== "busca" && v)
             .map(([k, v]) => (

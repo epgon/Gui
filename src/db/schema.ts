@@ -521,6 +521,109 @@ export const recorrenciaExcecao = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// 4.7. Importação OFX e CSV, regras e conciliação (Fase 6)
+// ---------------------------------------------------------------------------
+
+export const formatoImportacaoEnum = pgEnum("formato_importacao", ["ofx", "csv"]);
+export const situacaoImportacaoEnum = pgEnum("situacao_importacao", ["rascunho", "concluida", "cancelada"]);
+/** Em que passo do assistente a importação parou (para retomar o rascunho). */
+export const etapaImportacaoEnum = pgEnum("etapa_importacao", ["destino", "vinculo", "revisao"]);
+export const statusLinhaImportacaoEnum = pgEnum("status_linha_importacao", ["novo", "encontrado", "pendente", "ignorado", "adicionado", "conciliado"]);
+export const acaoRegraImportacaoEnum = pgEnum("acao_regra_importacao", ["ignorar", "preencher"]);
+
+/** Vínculos das colunas do CSV, memorizados por conta ou cartão. */
+export const mapeamentoCsv = pgTable("mapeamento_csv", {
+  ...camposPadrao,
+  nome: text("nome").notNull(),
+  contaId: integer("conta_id").references(() => contaFinanceira.id),
+  cartaoId: integer("cartao_id").references(() => cartaoCredito.id),
+  /** Separador, decimal, formato de data, cabeçalho e coluna de cada campo (ver lib/importacao/csv.ts). */
+  configuracao: jsonb("configuracao").notNull(),
+});
+
+/** Regras automáticas: ignorar registros ou preencher campos (categoria, contato...). */
+export const regraImportacao = pgTable("regra_importacao", {
+  ...camposPadrao,
+  nome: text("nome").notNull(),
+  /** Vazio = vale para todas as contas e cartões. */
+  contaId: integer("conta_id").references(() => contaFinanceira.id),
+  cartaoId: integer("cartao_id").references(() => cartaoCredito.id),
+  ordem: integer("ordem").notNull().default(0),
+  /** Lista de { campo, operador, valor }; todas precisam valer. */
+  condicoes: jsonb("condicoes").notNull(),
+  acao: acaoRegraImportacaoEnum("acao").notNull(),
+  /** { descricao, categoriaId, contatoId, formaPagamentoId, tagIds } */
+  preencher: jsonb("preencher").notNull().default(sql`'{}'::jsonb`),
+});
+
+export const importacao = pgTable("importacao", {
+  id: serial("id").primaryKey(),
+  arquivoNome: text("arquivo_nome").notNull(),
+  formato: formatoImportacaoEnum("formato").notNull(),
+  /** Conteúdo do arquivo (já como texto), para voltar às etapas anteriores. */
+  conteudo: text("conteudo").notNull(),
+  contaId: integer("conta_id").references(() => contaFinanceira.id),
+  cartaoId: integer("cartao_id").references(() => cartaoCredito.id),
+  mapeamentoId: integer("mapeamento_id").references(() => mapeamentoCsv.id, { onDelete: "set null" }),
+  situacao: situacaoImportacaoEnum("situacao").notNull().default("rascunho"),
+  etapa: etapaImportacaoEnum("etapa").notNull().default("destino"),
+  /** Checagem da conciliação: tolerância de datas (0 = exata) e se procura em qualquer conta. */
+  toleranciaDias: smallint("tolerancia_dias").notNull().default(0),
+  qualquerConta: boolean("qualquer_conta").notNull().default(false),
+  /** Padrão para clientes e fornecedores novos que vierem no arquivo. */
+  contatoPessoa: tipoPessoaEnum("contato_pessoa").notNull().default("juridica"),
+  contatoCliente: boolean("contato_cliente").notNull().default(false),
+  contatoFornecedor: boolean("contato_fornecedor").notNull().default(true),
+  /** Informações que o arquivo traz (banco, conta, período, saldo). */
+  infoArquivo: jsonb("info_arquivo").notNull().default(sql`'{}'::jsonb`),
+  linhasPuladas: integer("linhas_puladas").notNull().default(0),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+  concluidoEm: timestamp("concluido_em", { withTimezone: true }),
+});
+
+export const importacaoLinha = pgTable(
+  "importacao_linha",
+  {
+    id: serial("id").primaryKey(),
+    importacaoId: integer("importacao_id")
+      .notNull()
+      .references(() => importacao.id, { onDelete: "cascade" }),
+    numeroLinha: integer("numero_linha").notNull(),
+    dadosBrutos: jsonb("dados_brutos").notNull(),
+    /** Código único da transação no OFX (evita importar duas vezes). */
+    fitid: text("fitid"),
+    data: date("data").notNull(),
+    /** Sempre positivo; o sentido vem do tipo. */
+    valorCentavos: bigint("valor_centavos", { mode: "number" }).notNull(),
+    tipo: naturezaCategoriaEnum("tipo").notNull(),
+    /** Descrição como veio do banco. */
+    descricao: text("descricao").notNull(),
+    documento: text("documento"),
+    /** O que vai para o lançamento: { descricao, categoriaId, contatoId, contatoNome, formaPagamentoId, tagIds, origem }. */
+    campos: jsonb("campos").notNull().default(sql`'{}'::jsonb`),
+    status: statusLinhaImportacaoEnum("status").notNull().default("novo"),
+    /** Ignorada porque já tinha sido importada antes. */
+    duplicada: boolean("duplicada").notNull().default(false),
+    /** Lançamentos do sistema que batem com a linha (conciliação). */
+    candidatos: jsonb("candidatos").notNull().default(sql`'[]'::jsonb`),
+    /** O lançamento criado (Adicionar) ou conciliado. */
+    lancamentoId: integer("lancamento_id").references(() => lancamento.id, { onDelete: "set null" }),
+    /** Como o lançamento conciliado era antes (para desfazer). */
+    conciliacaoAntes: jsonb("conciliacao_antes"),
+    regraId: integer("regra_id").references(() => regraImportacao.id, { onDelete: "set null" }),
+  },
+  (t) => [
+    index("importacao_linha_importacao_idx").on(t.importacaoId),
+    index("importacao_linha_fitid_idx").on(t.fitid),
+    index("importacao_linha_lancamento_idx").on(t.lancamentoId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // 4.8. Auditoria
 // ---------------------------------------------------------------------------
 
@@ -531,6 +634,7 @@ export const acaoAuditoriaEnum = pgEnum("acao_auditoria", [
   "inativou",
   "excluiu",
   "pagou",
+  "importou",
 ]);
 
 /**
