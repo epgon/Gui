@@ -87,7 +87,28 @@ Fases prontas:
   (Início > Financeiro > Agenda), testes automáticos das contas do dia (total, % realizado e montagem das semanas) e um ajuste:
   o "% Realizado" só mostra 100% quando tudo do dia foi pago ou recebido (antes 99,6% aparecia como 100%).
 
-As outras telas dos menus ainda mostram "Em construção" com a fase em que chegam.
+- **Fase 11 (Refinamentos)**: o que faltava para o sistema ficar completo. Os **Planos** dos recorrentes já tinham chegado na Fase 3.
+  - **Configurações > Parâmetros**: Título do sistema, "Novo ou Atualizado", cores e numeração das categorias, Previsão
+    Recorrente, Pagamento Parcial, campos do lançamento (Documento, Data de Referência, Observação, Anexos), ordem das contas
+    e cartões (arrastando), Campo Auxiliar de cada cadastro (ligar e dar nome) e **Feriados** (com botão para trazer os
+    feriados nacionais do ano, inclusive Carnaval, Sexta-feira Santa e Corpus Christi).
+  - **Configurações > Recursos**: liga e desliga Cartões, Recorrentes, Agenda, Clientes e Fornecedores, Formas de Pagamento,
+    Tags, Orçamentos, Importação, Exportação e Impressão. O que está desligado some dos menus.
+  - **Notificações** (sino da barra de cima e tela própria): contas vencidas e que vencem hoje, faturas perto do vencimento,
+    orçamentos estourados, importações em rascunho e Meus Dados incompleto. Os avisos são calculados na hora; só o "lida" é gravado.
+  - **Favoritos**: a estrela ao lado do título de cada tela coloca a tela na barra da esquerda (até 12).
+  - **Filtro Avançado** (aba "Avançado" no painel de filtros) nos cadastros e em Lançamentos (com Origem: Lançamento, Conta ou
+    Cartão, Categoria, Cliente ou Fornecedor, Forma de Pagamento, Tag). Até 5 condições, todas precisam valer.
+  - **Configurações da Listagem** (engrenagem acima das listas de cadastros e da Auditoria): colunas visíveis, ordenação,
+    itens por página, linhas zebradas e lista compacta.
+  - **Campo Auxiliar** nos cadastros e a bolinha laranja de "novo ou atualizado".
+  - **Organizar Categorias**: arrastar (ou usar as setas) para mudar a ordem e o nível das categorias.
+  - **Impressão Personalizada** nas listas de cadastros: escolher campos, ordem, largura (Configurar Layout), orientação e
+    ordenação, e guardar a impressão com um nome.
+  - **Administração > Auditoria**: tudo o que foi cadastrado, alterado ou excluído, com filtros e os dados de cada registro.
+    Guarda os últimos 6 meses.
+
+Todas as telas dos menus estão prontas.
 
 ### Como os relatórios funcionam
 

@@ -15,15 +15,19 @@ import { CampoSelecao, CampoTexto, CampoValor, TextoComDestaque } from "@/compon
 import { Chave } from "@/components/ui/chave";
 import { FaixaErro } from "@/components/ui/faixa-erro";
 import { Tabela } from "@/components/ui/tabela";
+import { CampoAuxiliarFormulario } from "@/components/listagem/campo-auxiliar";
+import { comComuns, MarcaNovo } from "@/components/listagem/colunas-comuns";
+import { useRotuloAuxiliar } from "@/components/listagem/configurar-listagem";
+import { colunasVisiveis, type PreferenciaListagem } from "@/lib/listagem/telas";
 import { Valor } from "@/components/ui/valor";
 import { DetalhandoCartao, type AbaCartao } from "@/components/cartoes/detalhando-cartao";
 import type { limiteDoCartao } from "@/lib/cartoes/regras";
-import { POR_PAGINA, type Situacao } from "@/lib/cadastros/filtros";
+import type { Situacao } from "@/lib/cadastros/filtros";
 import { type BancoOpcao, DIAS_MES } from "@/lib/cadastros/opcoes";
 import { formatarCentavos, lerValorEmCentavos } from "@/lib/dinheiro";
 import { alterarSituacaoCartao, salvarCartao, type DadosCartao } from "./acoes";
 
-type Linha = {
+type LinhaBase = {
   id: number;
   descricao: string;
   bancoId: number | null;
@@ -39,10 +43,12 @@ type Linha = {
   padraoSistema: boolean;
   limite: ReturnType<typeof limiteDoCartao>;
 };
+type Linha = LinhaBase & { campoAuxiliar: string | null; criadoEm: Date; atualizadoEm: Date };
 type ContaOpcao = { id: number; descricao: string; ativo: boolean };
 
-export function TelaCartoes({ linhas, total, filtros, caminho, bancos, contas, abrir }: {
+export function TelaCartoes({ preferencia, linhas, total, filtros, caminho, bancos, contas, abrir }: {
   linhas: Linha[];
+  preferencia: PreferenciaListagem;
   total: number;
   filtros: { busca: string; situacao: Situacao; pagina: number; fechamento: string; vencimento: string };
   caminho: string;
@@ -50,11 +56,12 @@ export function TelaCartoes({ linhas, total, filtros, caminho, bancos, contas, a
   contas: ContaOpcao[];
   abrir: { id: number; aba: AbaCartao } | null;
 }) {
+  const rotuloAux = useRotuloAuxiliar("cartoes-de-credito");
   const router = useRouter();
   const [detalhe, setDetalhe] = useState<{ id: number; aba: AbaCartao } | null>(abrir);
   const bancoOutro = String(bancos.find((b) => b.codigo === null)?.id ?? bancos[0]?.id ?? "");
   const vazio = useMemo<DadosCartao>(
-    () => ({ descricao: "", bancoId: bancoOutro, ilimitado: false, limite: "", diaFechamento: "", diaVencimento: "", contaPagamentoId: "" }),
+    () => ({ descricao: "", bancoId: bancoOutro, ilimitado: false, limite: "", diaFechamento: "", diaVencimento: "", contaPagamentoId: "", campoAuxiliar: "" }),
     [bancoOutro],
   );
   const form = useFormularioCadastro(vazio);
@@ -76,6 +83,7 @@ export function TelaCartoes({ linhas, total, filtros, caminho, bancos, contas, a
     diaFechamento: String(l.diaFechamento),
     diaVencimento: String(l.diaVencimento),
     contaPagamentoId: l.contaPagamentoId ? String(l.contaPagamentoId) : "",
+    campoAuxiliar: l.campoAuxiliar ?? "",
   });
   /** Clonar: abre um cadastro novo com os dados do cartão (só muda o nome). */
   const clonar = (l: Linha) => form.abrirNovo({ ...valoresDe(l), descricao: `${l.descricao} (cópia)`.slice(0, 60) });
@@ -91,7 +99,7 @@ export function TelaCartoes({ linhas, total, filtros, caminho, bancos, contas, a
 
   return (
     <>
-      <BarraLista tela="cartoes-de-credito" aoAdicionar={() => form.abrirNovo()} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar cartão" />
+      <BarraLista tela="cartoes-de-credito" preferencia={preferencia} aoAdicionar={() => form.abrirNovo()} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar cartão" />
       <FaixaErro>{situacao.aviso && <TextoComDestaque texto={situacao.aviso} />}</FaixaErro>
       <Tabela
         linhas={linhas}
@@ -101,7 +109,9 @@ export function TelaCartoes({ linhas, total, filtros, caminho, bancos, contas, a
             ? "Nenhum cartão encontrado com esses filtros."
             : "Nenhum cartão cadastrado. Clique em Adicionar para cadastrar o seu."
         }
-        colunas={[
+        compacta={preferencia.compactar}
+        destacarPares={preferencia.destacarPares}
+        colunas={colunasVisiveis("cartoes-de-credito", comComuns<Linha>([
           {
             chave: "cartao",
             titulo: "Cartão de Crédito",
@@ -111,6 +121,7 @@ export function TelaCartoes({ linhas, total, filtros, caminho, bancos, contas, a
                 <span>
                   <span className="font-medium text-gray-900">{l.descricao}</span>
                   <AsteriscoPadrao mostrar={l.padraoSistema} />
+                <MarcaNovo registro={l} />
                   <span className="block text-xs text-gray-500">{l.bancoNome ?? "Outro"}</span>
                 </span>
               </span>
@@ -195,9 +206,9 @@ export function TelaCartoes({ linhas, total, filtros, caminho, bancos, contas, a
               />
             ),
           },
-        ]}
+        ], rotuloAux), preferencia)}
       />
-      <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={POR_PAGINA} total={total} />
+      <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={preferencia.porPagina} total={total} />
       {detalhe && <DetalhandoCartao key={`${detalhe.id}-${detalhe.aba}`} cartaoId={detalhe.id} abaInicial={detalhe.aba} aoFechar={() => setDetalhe(null)} />}
 
       <ModalCadastro
@@ -272,6 +283,7 @@ export function TelaCartoes({ linhas, total, filtros, caminho, bancos, contas, a
           aoMudar={(v) => form.mudar("contaPagamentoId", v)}
           opcoes={opcoesConta}
         />
+        <CampoAuxiliarFormulario cadastro="cartoes" className="mt-4" valor={form.dados.campoAuxiliar ?? ""} aoMudar={(v) => form.mudar("campoAuxiliar", v)} />
       </ModalCadastro>
     </>
   );

@@ -11,31 +11,40 @@ import { useSituacao } from "@/components/cadastros/use-situacao";
 import { CampoTexto, TextoComDestaque } from "@/components/ui/campo";
 import { FaixaErro } from "@/components/ui/faixa-erro";
 import { Tabela } from "@/components/ui/tabela";
-import { POR_PAGINA, type Situacao } from "@/lib/cadastros/filtros";
+import { CampoAuxiliarFormulario } from "@/components/listagem/campo-auxiliar";
+import { comComuns, MarcaNovo } from "@/components/listagem/colunas-comuns";
+import { useRotuloAuxiliar } from "@/components/listagem/configurar-listagem";
+import { colunasVisiveis, type PreferenciaListagem } from "@/lib/listagem/telas";
+import type { Situacao } from "@/lib/cadastros/filtros";
 import { alterarSituacaoTag, salvarTag, type DadosTag } from "./acoes";
 
-type Linha = { id: number; descricao: string; ativo: boolean; padraoSistema: boolean };
-const VAZIO: DadosTag = { descricao: "" };
+type LinhaBase = { id: number; descricao: string; ativo: boolean; padraoSistema: boolean };
+type Linha = LinhaBase & { campoAuxiliar: string | null; criadoEm: Date; atualizadoEm: Date };
+const VAZIO: DadosTag = { descricao: "", campoAuxiliar: "" };
 
-export function TelaTags({ linhas, total, filtros, caminho }: {
+export function TelaTags({ preferencia, linhas, total, filtros, caminho }: {
   linhas: Linha[];
+  preferencia: PreferenciaListagem;
   total: number;
   filtros: { busca: string; situacao: Situacao; pagina: number };
   caminho: string;
 }) {
+  const rotuloAux = useRotuloAuxiliar("tags");
   const form = useFormularioCadastro(VAZIO);
   const situacao = useSituacao(alterarSituacaoTag);
   const parametros = { busca: filtros.busca, situacao: filtros.situacao === "todos" ? "" : filtros.situacao };
 
   return (
     <>
-      <BarraLista tela="tags" aoAdicionar={() => form.abrirNovo()} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar tag" />
+      <BarraLista tela="tags" preferencia={preferencia} aoAdicionar={() => form.abrirNovo()} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar tag" />
       <FaixaErro>{situacao.aviso && <TextoComDestaque texto={situacao.aviso} />}</FaixaErro>
       <Tabela
         linhas={linhas}
         chaveLinha={(l) => l.id}
         vazio={filtros.busca ? "Nenhuma tag encontrada com essa busca." : "Nenhuma tag cadastrada. Clique em Adicionar para criar a primeira."}
-        colunas={[
+        compacta={preferencia.compactar}
+        destacarPares={preferencia.destacarPares}
+        colunas={colunasVisiveis("tags", comComuns<Linha>([
           {
             chave: "tag",
             titulo: "Tag",
@@ -44,6 +53,7 @@ export function TelaTags({ linhas, total, filtros, caminho }: {
                 <IconeTag className="mr-2 inline h-4 w-4 text-verde" />
                 {l.descricao}
                 <AsteriscoPadrao mostrar={l.padraoSistema} />
+                <MarcaNovo registro={l} />
               </span>
             ),
           },
@@ -63,15 +73,15 @@ export function TelaTags({ linhas, total, filtros, caminho }: {
               <MenuLinha
                 rotulo={l.descricao}
                 itens={[
-                  { rotulo: "Editar", icone: <Pencil className="h-4 w-4" />, aoClicar: () => form.abrirEdicao(l.id, { descricao: l.descricao }) },
+                  { rotulo: "Editar", icone: <Pencil className="h-4 w-4" />, aoClicar: () => form.abrirEdicao(l.id, { descricao: l.descricao, campoAuxiliar: l.campoAuxiliar ?? "" }) },
                   { rotulo: l.ativo ? "Inativar" : "Ativar", icone: <Power className="h-4 w-4" />, aoClicar: () => situacao.alternar(l.id, l.ativo) },
                 ]}
               />
             ),
           },
-        ]}
+        ], rotuloAux), preferencia)}
       />
-      <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={POR_PAGINA} total={total} />
+      <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={preferencia.porPagina} total={total} />
 
       <ModalCadastro
         formulario={form}
@@ -80,6 +90,7 @@ export function TelaTags({ linhas, total, filtros, caminho }: {
         aoSalvar={() => form.salvar(salvarTag)}
       >
         <CampoTexto rotulo="Descrição" obrigatorio autoFocus maxLength={60} valor={form.dados.descricao} aoMudar={(v) => form.mudar("descricao", v)} />
+        <CampoAuxiliarFormulario cadastro="tags" className="mt-4" valor={form.dados.campoAuxiliar ?? ""} aoMudar={(v) => form.mudar("campoAuxiliar", v)} />
       </ModalCadastro>
     </>
   );

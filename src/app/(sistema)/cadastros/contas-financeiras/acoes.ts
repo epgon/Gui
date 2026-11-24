@@ -6,7 +6,7 @@ import { z } from "zod";
 import { getDb, schema } from "@/db";
 import { diferencas, registrarAuditoria } from "@/lib/auditoria";
 import { TIPOS_CONTA } from "@/lib/cadastros/opcoes";
-import { falha, idValido, obrigatorio, primeiroErro, type Resultado } from "@/lib/cadastros/resultado";
+import { falha, idValido, obrigatorio, primeiroErro, type Resultado, ERRO_AUXILIAR, lerCampoAuxiliar } from "@/lib/cadastros/resultado";
 import { dataValida } from "@/lib/datas";
 import { lerValorEmCentavos } from "@/lib/dinheiro";
 import { sincronizarSaldoInicial } from "@/lib/lancamentos/saldo-inicial";
@@ -45,15 +45,19 @@ export type DadosConta = {
   considerarNosSaldos: boolean;
   saldoInicial: string;
   saldoInicialData: string;
+  /** Parâmetros > Campos Auxiliares. */
+  campoAuxiliar?: string;
 };
 
 export async function salvarConta(id: number | null, entrada: DadosConta): Promise<Resultado> {
   await exigirLogin();
   const v = formulario.safeParse(entrada);
   if (!v.success) return primeiroErro(v.error);
+  const aux = lerCampoAuxiliar(entrada);
+  if (!aux) return falha(ERRO_AUXILIAR);
   if (id !== null && !idValido.safeParse(id).success) return falha("Cadastro não encontrado.");
   const { saldoInicial, ...resto } = v.data;
-  const dados = { ...resto, tipo: resto.tipo as (typeof TIPOS_CONTA)[number]["valor"], saldoInicialCentavos: saldoInicial };
+  const dados = { ...resto, tipo: resto.tipo as (typeof TIPOS_CONTA)[number]["valor"], saldoInicialCentavos: saldoInicial, ...aux };
   const db = getDb();
 
   const [bancoOk] = await db.select({ id: banco.id }).from(banco).where(eq(banco.id, dados.bancoId)).limit(1);

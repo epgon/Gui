@@ -5,11 +5,14 @@ import { hojeIso } from "@/lib/datas";
 import { lerFiltrosRecorrentes, listarRecorrentes } from "@/lib/recorrentes/lista";
 import { realizarAutomaticos } from "@/lib/recorrentes/servidor";
 import { TelaRecorrentes } from "./tela";
+import { RecursoDesativado } from "@/components/layout/recurso-desativado";
+import { recursoAtivo } from "@/lib/parametros/servidor";
 
 export const metadata = { title: "Recorrentes" };
 const CAMINHO = "/financeiro/recorrentes";
 
 export default async function PaginaRecorrentes({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
+  if (!(await recursoAtivo("recorrentes"))) return <RecursoDesativado titulo="Recorrentes" trilha="Financeiro" />;
   const hoje = hojeIso();
   await realizarAutomaticos(hoje);
   const sp = await searchParams;

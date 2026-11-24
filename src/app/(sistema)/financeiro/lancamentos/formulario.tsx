@@ -3,6 +3,7 @@
 import { ArrowLeftRight, CalendarClock, ChevronDown, EllipsisVertical, FileText, Layers, MessageSquareText, Paperclip, Plus, Save, Trash2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useSistema } from "@/components/layout/provedor-sistema";
 import { Botao } from "@/components/ui/botao";
 import { CampoSelecao, CampoTexto, CampoValor, Rotulo, TextoComDestaque } from "@/components/ui/campo";
 import { Chave } from "@/components/ui/chave";
@@ -67,6 +68,8 @@ export function ModalLancamento({ pedido, opcoes, hoje, aoFechar }: { pedido: Pe
   const [continuar, setContinuar] = useState(false);
   const [salvos, setSalvos] = useState(0);
   const [maisInfo, setMaisInfo] = useState(!!(dados.documento || dados.dataReferencia));
+  // Parâmetros > Lançamentos > Campos e Recursos: o que estiver desligado some do formulário.
+  const campos = useSistema().parametros.campos;
   const [menu, setMenu] = useState(false);
   const [sub, setSub] = useState<null | "detalhe" | "parcelas" | "observacao" | "anexos" | "tag" | "contato">(null);
   const [itemEditando, setItemEditando] = useState<ItemFormulario | null>(null);
@@ -247,8 +250,10 @@ export function ModalLancamento({ pedido, opcoes, hoje, aoFechar }: { pedido: Pe
                     dica: !novo ? "Só ao criar um lançamento" : dados.parcelar ? "Feche Parcelar" : undefined,
                     aoClicar: () => setDados((d) => ({ ...d, recorrente: d.recorrente ?? recorrenciaPadrao(/^\d{4}-\d{2}-\d{2}$/.test(d.data) ? d.data : hoje) })),
                   },
-                  { rotulo: `Anexar Arquivo${qtdAnexos ? ` (${qtdAnexos})` : ""}`, icone: <Paperclip className="h-4 w-4" />, aoClicar: () => setSub("anexos") },
-                  { rotulo: dados.observacao ? "Editar Observação" : "Adicionar Observação", icone: <MessageSquareText className="h-4 w-4" />, aoClicar: () => setSub("observacao") },
+                  ...(campos.anexos ? [{ rotulo: `Anexar Arquivo${qtdAnexos ? ` (${qtdAnexos})` : ""}`, icone: <Paperclip className="h-4 w-4" />, aoClicar: () => setSub("anexos") }] : []),
+                  ...(campos.observacao
+                    ? [{ rotulo: dados.observacao ? "Editar Observação" : "Adicionar Observação", icone: <MessageSquareText className="h-4 w-4" />, aoClicar: () => setSub("observacao") }]
+                    : []),
                 ]}
               />
             )}
@@ -467,13 +472,17 @@ export function ModalLancamento({ pedido, opcoes, hoje, aoFechar }: { pedido: Pe
             />
           )}
 
+          {(campos.documento || campos.dataReferencia) && (
           <div>
             <button type="button" onClick={() => setMaisInfo((m) => !m)} className="flex items-center gap-1 text-sm font-semibold text-verde">
               <ChevronDown className={cn("h-4 w-4 transition", maisInfo && "rotate-180")} /> Mais Informações
             </button>
             {maisInfo && (
               <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                <CampoTexto rotulo="Documento" maxLength={60} valor={dados.documento} aoMudar={(v) => mudar("documento", v)} ajuda="Número da nota, boleto ou recibo." />
+                {campos.documento && (
+                  <CampoTexto rotulo="Documento" maxLength={60} valor={dados.documento} aoMudar={(v) => mudar("documento", v)} ajuda="Número da nota, boleto ou recibo." />
+                )}
+                {campos.dataReferencia && (
                 <CampoTexto
                   rotulo="Data de Referência"
                   type="date"
@@ -481,18 +490,20 @@ export function ModalLancamento({ pedido, opcoes, hoje, aoFechar }: { pedido: Pe
                   aoMudar={(v) => mudar("dataReferencia", v)}
                   ajuda="Mês a que a conta se refere (ex.: conta de luz de outubro paga em novembro)."
                 />
+                )}
               </div>
             )}
           </div>
+          )}
 
-          {(dados.observacao || qtdAnexos > 0) && (
+          {((campos.observacao && dados.observacao) || (campos.anexos && qtdAnexos > 0)) && (
             <div className="flex flex-wrap gap-2 text-xs">
-              {dados.observacao && (
+              {campos.observacao && dados.observacao && (
                 <button type="button" onClick={() => setSub("observacao")} className="inline-flex items-center gap-1 rounded-full bg-amarelo px-2.5 py-1 text-amarelo-texto">
                   <MessageSquareText className="h-3.5 w-3.5" /> Observação
                 </button>
               )}
-              {qtdAnexos > 0 && (
+              {campos.anexos && qtdAnexos > 0 && (
                 <button type="button" onClick={() => setSub("anexos")} className="inline-flex items-center gap-1 rounded-full bg-verde-claro px-2.5 py-1 text-verde">
                   <Paperclip className="h-3.5 w-3.5" /> {qtdAnexos === 1 ? "1 anexo" : `${qtdAnexos} anexos`}
                 </button>

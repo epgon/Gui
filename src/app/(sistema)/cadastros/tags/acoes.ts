@@ -5,21 +5,23 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
 import { diferencas, registrarAuditoria } from "@/lib/auditoria";
-import { falha, idValido, obrigatorio, primeiroErro, type Resultado } from "@/lib/cadastros/resultado";
+import { falha, idValido, obrigatorio, primeiroErro, type Resultado, ERRO_AUXILIAR, lerCampoAuxiliar } from "@/lib/cadastros/resultado";
 import { exigirLogin } from "@/lib/sessao";
 
 const { tag } = schema;
 const TELA = "Tags";
 
 const formulario = z.object({ descricao: obrigatorio("Descrição", 60) });
-export type DadosTag = { descricao: string };
+export type DadosTag = { descricao: string; campoAuxiliar?: string };
 
 export async function salvarTag(id: number | null, entrada: DadosTag): Promise<Resultado> {
   await exigirLogin();
   const v = formulario.safeParse(entrada);
   if (!v.success) return primeiroErro(v.error);
+  const aux = lerCampoAuxiliar(entrada);
+  if (!aux) return falha(ERRO_AUXILIAR);
   if (id !== null && !idValido.safeParse(id).success) return falha("Cadastro não encontrado.");
-  const dados = v.data;
+  const dados = { ...v.data, ...aux };
   const db = getDb();
 
   const repetida = await db

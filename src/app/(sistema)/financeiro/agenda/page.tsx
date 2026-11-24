@@ -6,12 +6,15 @@ import { carregarOpcoes, lerFiltros, listarLancamentos } from "@/lib/lancamentos
 import { mesDe } from "@/lib/lancamentos/regras";
 import { realizarAutomaticos } from "@/lib/recorrentes/servidor";
 import { TelaAgenda } from "./tela";
+import { RecursoDesativado } from "@/components/layout/recurso-desativado";
+import { recursoAtivo } from "@/lib/parametros/servidor";
 
 export const metadata = { title: "Agenda" };
 const CAMINHO = "/financeiro/agenda";
 const ARTIGOS = ["Como usar a Agenda", "O que significa o % Realizado", "Como pagar ou receber pelo dia da Agenda"];
 
 export default async function PaginaAgenda({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
+  if (!(await recursoAtivo("agenda"))) return <RecursoDesativado titulo="Agenda" trilha="Financeiro" />;
   const hoje = hojeIso();
   await realizarAutomaticos(hoje);
   const sp = await searchParams;

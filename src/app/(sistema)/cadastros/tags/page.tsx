@@ -1,40 +1,34 @@
-import { asc, count, desc, sql } from "drizzle-orm";
 import { FiltroSelecao, FiltroTexto, OPCOES_SITUACAO, PainelFiltros } from "@/components/cadastros/painel-filtros";
 import { MolduraLista } from "@/components/cadastros/moldura-lista";
-import { getDb, schema } from "@/db";
-import { filtrosTags } from "@/lib/cadastros/condicoes";
-import { POR_PAGINA, type ParametrosBusca } from "@/lib/cadastros/filtros";
+import { RecursoDesativado } from "@/components/layout/recurso-desativado";
+import { parametro, type ParametrosBusca } from "@/lib/cadastros/filtros";
+import { carregarTags } from "@/lib/listagem/cadastros";
+import { camposAvancados, lerPreferencia, paginar } from "@/lib/listagem/servidor";
+import { recursoAtivo } from "@/lib/parametros/servidor";
 import { TelaTags } from "./tela";
 
 export const metadata = { title: "Tags" };
 const CAMINHO = "/cadastros/tags";
+const TELA = "tags";
 
 export default async function PaginaTags({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
-  const { f, onde } = filtrosTags(await searchParams);
-  const { tag } = schema;
-  const db = getDb();
-  const [linhas, [{ total }]] = await Promise.all([
-    db
-      .select({ id: tag.id, descricao: tag.descricao, ativo: tag.ativo, padraoSistema: tag.padraoSistema })
-      .from(tag)
-      .where(onde)
-      .orderBy(desc(tag.ativo), asc(sql`lower(${tag.descricao})`))
-      .limit(POR_PAGINA)
-      .offset((f.pagina - 1) * POR_PAGINA),
-    db.select({ total: count() }).from(tag).where(onde),
-  ]);
+  if (!(await recursoAtivo("tags"))) return <RecursoDesativado titulo="Tags" trilha="Cadastros" />;
+  const sp = await searchParams;
+  const [preferencia, campos] = await Promise.all([lerPreferencia(TELA), camposAvancados(TELA)]);
+  const r = await carregarTags(sp, preferencia);
+  const pagina = paginar(r.linhas, r.f.pagina, preferencia.porPagina);
 
   return (
     <MolduraLista
       titulo="Tags"
       filtros={
-        <PainelFiltros caminho={CAMINHO}>
-          <FiltroTexto nome="busca" rotulo="Tag" valor={f.busca} />
-          <FiltroSelecao nome="situacao" rotulo="Situação" valor={f.situacao} opcoes={OPCOES_SITUACAO} />
+        <PainelFiltros caminho={CAMINHO} avancado={{ campos, valor: parametro(sp, "av") }}>
+          <FiltroTexto nome="busca" rotulo="Tag" valor={r.f.busca} />
+          <FiltroSelecao nome="situacao" rotulo="Situação" valor={r.f.situacao} opcoes={OPCOES_SITUACAO} />
         </PainelFiltros>
       }
     >
-      <TelaTags linhas={linhas} total={total} filtros={f} caminho={CAMINHO} />
+      <TelaTags linhas={pagina.linhas} total={pagina.total} filtros={{ ...r.f, pagina: pagina.pagina }} caminho={CAMINHO} preferencia={preferencia} />
     </MolduraLista>
   );
 }

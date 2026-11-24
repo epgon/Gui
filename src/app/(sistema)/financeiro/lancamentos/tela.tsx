@@ -73,6 +73,7 @@ export function TelaLancamentos({ linhas, resumo, filtros, opcoes, hoje, mes, ca
     forma: filtros.forma,
     contato: filtros.contato,
     tag: filtros.tag,
+    av: filtros.avancado,
   };
   const link = (mudancas: Record<string, string>) => {
     const sp = new URLSearchParams(Object.entries({ ...parametros, ...mudancas }).filter(([, v]) => v));

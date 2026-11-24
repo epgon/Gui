@@ -3,6 +3,7 @@ import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { parametro, type ParametrosBusca } from "@/lib/cadastros/filtros";
 import { hojeIso } from "@/lib/datas";
 import { carregarOpcoes, lerFiltros, listarLancamentos } from "@/lib/lancamentos/consultas";
+import { camposLancamentos } from "@/lib/lancamentos/avancado";
 import { mesDe } from "@/lib/lancamentos/regras";
 import { realizarAutomaticos } from "@/lib/recorrentes/servidor";
 import { TelaLancamentos } from "./tela";
@@ -28,7 +29,7 @@ export default async function PaginaLancamentos({ searchParams }: { searchParams
           <TelaLancamentos linhas={linhas} resumo={resumo} filtros={f} opcoes={opcoes} hoje={hoje} mes={mesDe(f.mes)} caminho={CAMINHO} abrirNovo={parametro(sp, "novo")} />
         </div>
       </main>
-      <PainelFiltros caminho={CAMINHO}>
+      <PainelFiltros caminho={CAMINHO} avancado={{ campos: camposLancamentos(opcoes), valor: f.avancado }}>
         {Object.entries(mantidos)
           .filter(([, v]) => v)
           .map(([k, v]) => (

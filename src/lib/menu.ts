@@ -52,6 +52,11 @@ export const MENU_CONFIGURACOES: ItemMenu[] = [
   { titulo: "Notificações", href: "/notificacoes", fase: 11, descricao: "Avisos do sistema." },
 ];
 
+/** O menu sem as telas dos recursos desligados (Configurações > Recursos). */
+export function menuVisivel(ocultas: string[]): GrupoMenu[] {
+  return MENU_PRINCIPAL.map((g) => ({ ...g, itens: g.itens.filter((i) => !ocultas.includes(i.href)) })).filter((g) => g.itens.length > 0);
+}
+
 export function encontrarItem(caminho: string): (ItemMenu & { grupo: string }) | null {
   for (const grupo of MENU_PRINCIPAL) {
     const item = grupo.itens.find((i) => i.href === caminho);

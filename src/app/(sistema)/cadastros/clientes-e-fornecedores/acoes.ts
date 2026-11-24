@@ -7,7 +7,7 @@ import { getDb, schema } from "@/db";
 import { diferencas, registrarAuditoria } from "@/lib/auditoria";
 import { cnpjValido, cpfValido, formatarCep, formatarDocumento, formatarTelefone, somenteDigitos } from "@/lib/cadastros/documentos";
 import { SEXOS, UFS } from "@/lib/cadastros/opcoes";
-import { falha, idValido, obrigatorio, opcional, primeiroErro, type Resultado } from "@/lib/cadastros/resultado";
+import { falha, idValido, obrigatorio, opcional, primeiroErro, type Resultado, ERRO_AUXILIAR, lerCampoAuxiliar } from "@/lib/cadastros/resultado";
 import { dataValida, hojeIso } from "@/lib/datas";
 import { exigirLogin } from "@/lib/sessao";
 
@@ -90,14 +90,18 @@ export type DadosContato = {
   cidade: string;
   uf: string;
   observacoes: string;
+  /** Parâmetros > Campos Auxiliares. */
+  campoAuxiliar?: string;
 };
 
 export async function salvarContato(id: number | null, entrada: DadosContato): Promise<Resultado> {
   await exigirLogin();
   const v = formulario.safeParse(entrada);
   if (!v.success) return primeiroErro(v.error);
+  const aux = lerCampoAuxiliar(entrada);
+  if (!aux) return falha(ERRO_AUXILIAR);
   if (id !== null && !idValido.safeParse(id).success) return falha("Cadastro não encontrado.");
-  const dados = v.data;
+  const dados = { ...v.data, ...aux };
   const rotulo = (d: { eCliente: boolean; eFornecedor: boolean }) =>
     d.eCliente && !d.eFornecedor ? "o Cliente" : d.eFornecedor && !d.eCliente ? "o Fornecedor" : "o Cliente e Fornecedor";
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, CornerDownRight, Lock, Pencil, Plus, Power } from "lucide-react";
+import { BarChart3, CornerDownRight, FolderTree, Lock, Pencil, Plus, Power } from "lucide-react";
 import { useState } from "react";
 import Link from "next/link";
 import { AsteriscoPadrao } from "@/components/cadastros/asterisco";
@@ -13,30 +13,42 @@ import { useSituacao } from "@/components/cadastros/use-situacao";
 import { CampoSelecao, CampoTexto, Rotulo, TextoComDestaque } from "@/components/ui/campo";
 import { FaixaErro } from "@/components/ui/faixa-erro";
 import { Tabela } from "@/components/ui/tabela";
+import { useSistema } from "@/components/layout/provedor-sistema";
+import { Botao } from "@/components/ui/botao";
+import { OrganizarCategorias } from "./organizar";
+import { CampoAuxiliarFormulario } from "@/components/listagem/campo-auxiliar";
+import { comComuns, MarcaNovo } from "@/components/listagem/colunas-comuns";
+import { useRotuloAuxiliar } from "@/components/listagem/configurar-listagem";
+import { colunasVisiveis, type PreferenciaListagem } from "@/lib/listagem/telas";
 import { type CategoriaNaArvore, NIVEL_MAXIMO, rotuloCategoria } from "@/lib/categorias";
 import { cn } from "@/lib/cn";
 import type { Situacao } from "@/lib/cadastros/filtros";
 import { alterarSituacaoCategoria, salvarCategoria, type DadosCategoria } from "./acoes";
 
-type Linha = CategoriaNaArvore & { altura: number };
+type Linha = CategoriaNaArvore & { altura: number } & { campoAuxiliar: string | null; criadoEm: Date; atualizadoEm: Date };
 type Aba = { id: number | null; nome: string; cor: string | null; total: number };
 
 /** Cores sugeridas para as categorias principais. */
 const PALETA = ["#16A34A", "#DC2626", "#7C3AED", "#0891B2", "#DB2777", "#F59E0B", "#4F46E5", "#0D9488", "#92400E", "#65A30D", "#1D6CE0", "#64748B", "#EA580C", "#9333EA", "#0F766E", "#BE123C"];
-const VAZIO: DadosCategoria = { nome: "", categoriaPaiId: "", cor: "#64748B", natureza: "despesa" };
+const VAZIO: DadosCategoria = { nome: "", categoriaPaiId: "", cor: "#64748B", natureza: "despesa", campoAuxiliar: "" };
 
 function Bolinha({ cor }: { cor: string }) {
   return <span className="inline-block h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: cor }} aria-hidden />;
 }
 
-export function TelaCategorias({ linhas, arvore, abas, aba, filtros, caminho }: {
+export function TelaCategorias({ preferencia, linhas, arvore, abas, aba, filtros, caminho }: {
   linhas: Linha[];
+  preferencia: PreferenciaListagem;
   arvore: Linha[];
   abas: Aba[];
   aba: number | null;
   filtros: { busca: string; situacao: Situacao };
   caminho: string;
 }) {
+  const rotuloAux = useRotuloAuxiliar("categorias");
+  // Parâmetros Gerais > Categorias: Exibir Cores e Exibir Numeração.
+  const { exibirCores, exibirNumeracao } = useSistema().parametros;
+  const [organizando, setOrganizando] = useState(false);
   const form = useFormularioCadastro(VAZIO);
   const situacao = useSituacao(alterarSituacaoCategoria);
   const [detalhar, setDetalhar] = useState<number | null>(null);
@@ -76,7 +88,7 @@ export function TelaCategorias({ linhas, arvore, abas, aba, filtros, caminho }: 
     form.abrirNovo(pai ? { categoriaPaiId: String(pai), cor } : { cor });
   };
   const editar = (l: Linha) =>
-    form.abrirEdicao(l.id, { nome: l.nome, categoriaPaiId: l.categoriaPaiId ? String(l.categoriaPaiId) : "", cor: l.cor ?? l.corEfetiva, natureza: l.natureza });
+    form.abrirEdicao(l.id, { nome: l.nome, categoriaPaiId: l.categoriaPaiId ? String(l.categoriaPaiId) : "", cor: l.cor ?? l.corEfetiva, natureza: l.natureza, campoAuxiliar: l.campoAuxiliar ?? "" });
 
   const corResumo = pai ? pai.corEfetiva : form.dados.cor;
   const naturezaEfetiva = pai ? (arvore.find((c) => c.id === pai.raizId)?.natureza ?? form.dados.natureza) : form.dados.natureza;
@@ -93,19 +105,35 @@ export function TelaCategorias({ linhas, arvore, abas, aba, filtros, caminho }: 
               aba === a.id ? "border-verde text-verde" : "border-transparent text-gray-500 hover:text-gray-800",
             )}
           >
-            {a.cor && <Bolinha cor={a.cor} />}
+            {a.cor && exibirCores && <Bolinha cor={a.cor} />}
             {a.nome}
             <span className="rounded-full bg-gray-100 px-1.5 text-xs text-gray-600">{a.total}</span>
           </Link>
         ))}
       </nav>
-      <BarraLista tela="categorias" aoAdicionar={() => abrirNovo()} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar categoria" />
+      <BarraLista
+        tela="categorias"
+        preferencia={preferencia}
+        aoAdicionar={() => abrirNovo()}
+        caminho={caminho}
+        busca={filtros.busca}
+        parametros={parametros}
+        rotuloBusca="Buscar categoria"
+        extra={
+          <Botao variante="secundario" icone={<FolderTree className="h-4 w-4" />} onClick={() => setOrganizando(true)}>
+            Organizar
+          </Botao>
+        }
+      />
+      {organizando && <OrganizarCategorias arvore={arvore} aoFechar={() => setOrganizando(false)} />}
       <FaixaErro>{situacao.aviso && <TextoComDestaque texto={situacao.aviso} />}</FaixaErro>
       <Tabela
         linhas={linhas}
         chaveLinha={(l) => l.id}
         vazio="Nenhuma categoria encontrada com esses filtros."
-        colunas={[
+        compacta={preferencia.compactar}
+        destacarPares={preferencia.destacarPares}
+        colunas={colunasVisiveis("categorias", comComuns<Linha>([
           { chave: "cor", titulo: <span className="sr-only">Cor</span>, render: (l) => <Bolinha cor={l.corEfetiva} /> },
           {
             chave: "numero",
@@ -123,6 +151,7 @@ export function TelaCategorias({ linhas, arvore, abas, aba, filtros, caminho }: 
                 {l.nivel > 1 && <CornerDownRight className="h-3.5 w-3.5 text-gray-400" />}
                 {l.nome}
                 <AsteriscoPadrao mostrar={l.padraoSistema} />
+                <MarcaNovo registro={l} />
                 {l.especial && (
                   <span title="Categoria especial, usada pelo sistema" className="text-gray-400">
                     <Lock className="h-3.5 w-3.5" />
@@ -178,7 +207,7 @@ export function TelaCategorias({ linhas, arvore, abas, aba, filtros, caminho }: 
                 />
               ),
           },
-        ]}
+        ], rotuloAux), preferencia).filter((c) => (c.chave !== "cor" || exibirCores) && (c.chave !== "numero" || exibirNumeracao))}
       />
       <p className="text-xs text-gray-500">
         {linhas.length} {linhas.length === 1 ? "categoria" : "categorias"}. A numeração é automática: segue a ordem em que as categorias foram criadas dentro de cada nível.
@@ -230,7 +259,7 @@ export function TelaCategorias({ linhas, arvore, abas, aba, filtros, caminho }: 
                 ))}
               </div>
             </div>
-            <div>
+            <div className={exibirCores ? "" : "hidden"}>
               <Rotulo texto="Cor" ajuda="A cor da categoria principal. As subcategorias usam a mesma cor." />
               <div className="flex flex-wrap items-center gap-2">
                 {PALETA.map((cor) => (
@@ -255,6 +284,7 @@ export function TelaCategorias({ linhas, arvore, abas, aba, filtros, caminho }: 
             </div>
           </>
         )}
+        <CampoAuxiliarFormulario cadastro="categorias" className="mt-4" valor={form.dados.campoAuxiliar ?? ""} aoMudar={(v) => form.mudar("campoAuxiliar", v)} />
       </ModalCadastro>
       <DetalhandoCategoria id={detalhar} aoFechar={() => setDetalhar(null)} />
     </>

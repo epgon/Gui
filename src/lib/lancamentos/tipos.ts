@@ -16,6 +16,8 @@ export type Filtros = {
   forma: string;
   contato: string;
   tag: string;
+  /** Filtro Avançado ("av" da URL). */
+  avancado: string;
 };
 
 export type ItemDetalhe = { id: number; tipo: "receita" | "despesa"; descricao: string; valorCentavos: number; categoria: string; categoriaCor: string };

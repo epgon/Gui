@@ -8,12 +8,16 @@ export type Coluna<T> = {
 };
 
 /** Tabela padrão das listas, com linhas pares destacadas. */
-export function Tabela<T>({ colunas, linhas, chaveLinha, vazio }: {
+export function Tabela<T>({ colunas, linhas, chaveLinha, vazio, compacta, destacarPares = true }: {
   colunas: Coluna<T>[];
   linhas: T[];
   chaveLinha: (linha: T) => string | number;
   vazio?: React.ReactNode;
+  /** Configurações da Listagem > Outros. */
+  compacta?: boolean;
+  destacarPares?: boolean;
 }) {
+  const celula = compacta ? "px-3 py-1" : "px-4 py-2.5";
   const alinhamento = { esquerda: "text-left", direita: "text-right", centro: "text-center" } as const;
   return (
     <div className="relative overflow-x-auto rounded-xl border border-borda bg-white shadow-cartao">
@@ -21,7 +25,7 @@ export function Tabela<T>({ colunas, linhas, chaveLinha, vazio }: {
         <thead className="border-b border-borda bg-subcabecalho text-xs uppercase tracking-wide text-gray-500">
           <tr>
             {colunas.map((c) => (
-              <th key={c.chave} className={cn("px-4 py-2.5 font-semibold", alinhamento[c.alinhar ?? "esquerda"])}>
+              <th key={c.chave} className={cn(celula, "font-semibold", alinhamento[c.alinhar ?? "esquerda"])}>
                 {c.titulo}
               </th>
             ))}
@@ -36,9 +40,9 @@ export function Tabela<T>({ colunas, linhas, chaveLinha, vazio }: {
             </tr>
           ) : (
             linhas.map((linha) => (
-              <tr key={chaveLinha(linha)} className="border-b border-borda last:border-0 even:bg-gray-50/70 hover:bg-verde-claro/50">
+              <tr key={chaveLinha(linha)} className={cn("border-b border-borda last:border-0 hover:bg-verde-claro/50", destacarPares && "even:bg-gray-50/70")}>
                 {colunas.map((c) => (
-                  <td key={c.chave} className={cn("px-4 py-2.5", alinhamento[c.alinhar ?? "esquerda"])}>
+                  <td key={c.chave} className={cn(celula, alinhamento[c.alinhar ?? "esquerda"])}>
                     {c.render(linha)}
                   </td>
                 ))}
