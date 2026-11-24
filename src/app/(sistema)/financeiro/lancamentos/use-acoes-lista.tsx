@@ -8,10 +8,10 @@ import { JanelaFatura } from "@/components/cartoes/janela-fatura";
 import type { LinhaLista, Ocorrencia, Opcoes } from "@/lib/lancamentos/tipos";
 import { carregarLancamento, carregarOcorrencia, estornarLancamentos, excluirLancamentos, pularOcorrencias, realizarLancamentos } from "./acoes";
 import { dadosVazios, ModalLancamento, type Aba, type Pedido } from "./formulario";
-import { ModalExcluir, ModalPagar } from "./linhas";
+import { ModalExcluir, ModalPagar, type PagamentoUnico } from "./linhas";
 
 /** Lançamentos gravados (ids) e ocorrências previstas de recorrentes escolhidos numa lista. */
-export type Alvo = { ids: number[]; ocorrencias: Ocorrencia[]; titulo: string };
+export type Alvo = { ids: number[]; ocorrencias: Ocorrencia[]; titulo: string; unico?: PagamentoUnico | null };
 
 export function alvoDe(linhas: LinhaLista[], titulo: string): Alvo {
   const ids = linhas.filter((l) => l.id !== null).map((l) => l.id!);
@@ -104,8 +104,12 @@ export function useAcoesLista({ opcoes, hoje, destino, abrirNovo }: {
   /** Pagar / receber. Previstos no cartão só precisam ser confirmados (a compra vai para a fatura). */
   const pedirPagamento = (linhas: LinhaLista[], titulo: string) => {
     const alvo = alvoDe(linhas, titulo);
-    if (!alvo.ids.length && linhas.every((l) => l.eCartao)) executar(() => realizarLancamentos([], hoje, alvo.ocorrencias));
-    else setPagar(alvo);
+    if (!alvo.ids.length && linhas.every((l) => l.eCartao)) return executar(() => realizarLancamentos([], hoje, alvo.ocorrencias));
+    // Um lançamento simples sozinho (receita ou despesa na conta): dá para pagar outro valor.
+    const [l] = linhas;
+    const simples = linhas.length === 1 && !l.eCartao && l.formato === "simples" && (l.tipo === "receita" || l.tipo === "despesa") && !l.transferenciaId;
+    setAviso("");
+    setPagar({ ...alvo, unico: simples ? { valorCentavos: Math.abs(l.valorCentavos), vencimento: l.data, receita: l.tipo === "receita" } : null });
   };
 
   /** O que acontece ao clicar na descrição. null = não abre nada (linha de fatura). */
@@ -168,8 +172,13 @@ export function useAcoesLista({ opcoes, hoje, destino, abrirNovo }: {
           titulo={pagar.titulo}
           hoje={hoje}
           ocupado={ocupado}
-          aoFechar={() => setPagar(null)}
-          aoConfirmar={(data) => executar(() => realizarLancamentos(pagar.ids, data, pagar.ocorrencias), () => setPagar(null))}
+          unico={pagar.unico}
+          erro={aviso}
+          aoFechar={() => {
+            setPagar(null);
+            setAviso("");
+          }}
+          aoConfirmar={(e) => executar(() => realizarLancamentos(pagar.ids, e.data, pagar.ocorrencias, e.valor), () => setPagar(null))}
         />
       )}
       {excluir && (

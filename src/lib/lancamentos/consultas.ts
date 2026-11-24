@@ -115,6 +115,8 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
       transferenciaId: l.transferenciaId,
       recorrenciaId: l.recorrenciaId,
       realizarAutomaticamente: l.realizarAutomaticamente,
+      valorOriginal: l.valorOriginalCentavos,
+      origemId: l.lancamentoOrigemId,
       observacao: sql<boolean>`coalesce(length(${l.observacao}), 0) > 0`,
       anexos: sql<number>`(select count(*)::int from ${anexo} where ${anexo.lancamentoId} = ${l.id})`,
       tags: sql<string[]>`coalesce((select array_agg(${tag.descricao} order by ${tag.descricao}) from ${lancamentoTag} join ${tag} on ${tag.id} = ${lancamentoTag.tagId} where ${lancamentoTag.lancamentoId} = ${l.id}), '{}')`,
@@ -170,6 +172,8 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
       recorrenciaId: x.recorrenciaId,
       previsto: null,
       realizarAutomaticamente: x.realizarAutomaticamente,
+      valorOriginalCentavos: x.valorOriginal === null ? null : Math.abs(Number(x.valorOriginal)),
+      restante: x.origemId !== null,
       observacao: x.observacao,
       anexos: Number(x.anexos),
       itens: itens

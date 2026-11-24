@@ -54,6 +54,10 @@ export type LinhaLista = {
   /** Ocorrência prevista de um recorrente (ainda não gravada): id é null. */
   previsto: Ocorrencia | null;
   realizarAutomaticamente: boolean;
+  /** Pago com valor diferente: o valor que o lançamento tinha antes (positivo). */
+  valorOriginalCentavos?: number | null;
+  /** Restante de um pagamento parcial. */
+  restante?: boolean;
   observacao: boolean;
   anexos: number;
   itens: ItemDetalhe[];

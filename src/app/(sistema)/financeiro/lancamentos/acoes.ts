@@ -8,7 +8,7 @@ import { falha, idValido, type Resultado } from "@/lib/cadastros/resultado";
 import { dataValida, formatarData } from "@/lib/datas";
 import { formatarCentavos, lerValorEmCentavos } from "@/lib/dinheiro";
 import { garantirFatura, inserirLancamento } from "@/lib/lancamentos/gravacao";
-import { gerarParcelas, PERIODICIDADES, totalDetalhado, type Periodicidade, type TipoLancamento } from "@/lib/lancamentos/regras";
+import { calcularPagamento, gerarParcelas, PERIODICIDADES, totalDetalhado, type Periodicidade, type TipoLancamento } from "@/lib/lancamentos/regras";
 import type { DadosLancamento, LancamentoEdicao, Ocorrencia } from "@/lib/lancamentos/tipos";
 import { aplicarVariaveis, primeiraOcorrencia } from "@/lib/recorrentes/regras";
 import { conferirOcorrencia, dadosDaOcorrencia, gravarOcorrencia } from "@/lib/recorrentes/servidor";
@@ -281,6 +281,12 @@ async function salvarSimplesOuDetalhado(tx: Transacao, id: number | null, d: Dad
     (base.cartaoId !== antes.cartaoId || base.faturaId !== antes.faturaId || base.valorCentavos !== antes.valorCentavos || base.tipo !== antes.tipo)
   ) {
     erro(COMPRA_PAGA);
+  }
+  if (antes.valorOriginalCentavos !== null) {
+    // Pago com valor diferente (parcial, desconto ou juros).
+    if (!base.dataPagamento) erro("Este lançamento foi pago com outro valor. Para voltar para não pago, use **Voltar para não pago** no menu da linha (o restante volta junto).");
+    // Mudou o valor à mão: o novo valor passa a ser o de referência.
+    base.valorOriginalCentavos = base.valorCentavos === antes.valorCentavos ? antes.valorOriginalCentavos : null;
   }
   await tx.update(l).set(base).where(eq(l.id, id));
   await tx.delete(lancamentoTag).where(eq(lancamentoTag.lancamentoId, id));
@@ -559,18 +565,24 @@ async function comPares(tx: Transacao, ids: number[]) {
   return [...new Set([...ids, ...pares.map((p) => p.id)])];
 }
 
-export async function realizarLancamentos(ids: number[], dataPagamento: string, ocorrencias: Ocorrencia[] = []): Promise<Resultado> {
+/** Valor pago diferente do lançamento (só quando um lançamento é pago sozinho). */
+export type PagamentoValor = { valorPago: string; gerarRestante: boolean; vencimentoRestante: string };
+
+export async function realizarLancamentos(ids: number[], dataPagamento: string, ocorrencias: Ocorrencia[] = [], valor?: PagamentoValor | null): Promise<Resultado> {
   await exigirLogin();
   const validos = Array.isArray(ids) && ids.length === 0 ? [] : lerIds(ids);
   const previstas = lerOcorrencias(ocorrencias);
   if (!validos || !previstas || validos.length + previstas.length === 0) return falha("Selecione pelo menos um lançamento.");
   if (!dataValida(dataPagamento)) return falha("Informe uma data válida no campo **Data do Pagamento**.");
+  if (valor && validos.length + previstas.length !== 1) return falha("O **Valor Pago** só pode ser alterado quando um lançamento é pago sozinho.");
   try {
     return await getDb().transaction(async (tx) => {
+      let unico: number | null = validos.length === 1 && !previstas.length ? validos[0] : null;
       // Recorrentes previstos: gravados já pagos (no cartão, a compra vai para a fatura).
       for (const o of previstas) {
         const regra = await conferirOcorrencia(tx, o.recorrenciaId, o.data);
         const novos = await gravarOcorrencia(tx, regra, o.data, dataPagamento);
+        if (previstas.length === 1 && !validos.length) unico = novos[0];
         await registrarAuditoria(tx, { tela: TELA, entidade: ENTIDADE, entidadeId: novos[0], acao: "cadastrou", descricao: `o Lançamento ${regra.descricao} (recorrente${regra.cartaoId ? "" : ", já pago"})`, dados: { ...o, dataPagamento } });
       }
       if (validos.length) {
@@ -585,11 +597,12 @@ export async function realizarLancamentos(ids: number[], dataPagamento: string, 
           await registrarAuditoria(tx, { tela: TELA, entidade: ENTIDADE, entidadeId: x.id, acao: "alterou", descricao: `a baixa do Lançamento ${x.descricao}`, dados: { dataPagamento: { antes: null, depois: dataPagamento } } });
         }
       }
+      if (valor && unico !== null) await aplicarValorPago(tx, unico, valor);
       refresh();
       return { ok: true as const };
     });
   } catch (e) {
-    if (e instanceof ErroValidacao) return falha(e.message);
+    if (e instanceof ErroFormulario || e instanceof ErroValidacao) return falha(e.message);
     throw e;
   }
 }
@@ -605,12 +618,102 @@ export async function estornarLancamentos(ids: number[]): Promise<Resultado> {
       .from(l)
       .where(and(inArray(l.id, todos), isNull(l.cartaoId), ne(l.tipo, "saldo_inicial"), ne(l.tipo, "pagamento_fatura"), sql`${l.dataPagamento} is not null`));
     if (!alvo.length) return falha("Nenhum dos lançamentos escolhidos pode voltar para não pago.");
+    // Pagamento parcial: o restante (e o restante do restante) volta para dentro do lançamento.
+    const idsAlvo = new Set(alvo.map((x) => x.id));
+    const restantes = new Map<number, (typeof alvo)[number][]>();
     for (const x of alvo) {
-      await tx.update(l).set({ dataPagamento: null, valorPagoCentavos: null }).where(eq(l.id, x.id));
-      await registrarAuditoria(tx, { tela: TELA, entidade: ENTIDADE, entidadeId: x.id, acao: "alterou", descricao: `o estorno do Lançamento ${x.descricao}`, dados: { dataPagamento: { antes: x.dataPagamento, depois: null } } });
+      if (x.valorOriginalCentavos === null) continue;
+      const lista: (typeof alvo)[number][] = [];
+      let fronteira = [x.id];
+      while (fronteira.length) {
+        const filhos = await tx.select().from(l).where(inArray(l.lancamentoOrigemId, fronteira));
+        lista.push(...filhos);
+        fronteira = filhos.map((f) => f.id);
+      }
+      const pagoFora = lista.find((f) => f.dataPagamento && !idsAlvo.has(f.id));
+      if (pagoFora) {
+        return falha(`O restante **${pagoFora.descricao}** (${formatarData(pagoFora.dataVencimento)}) já foi pago. Volte ele para não pago antes, ou escolha os dois juntos.`);
+      }
+      restantes.set(x.id, lista);
+    }
+    const apagados = new Set<number>();
+    for (const x of alvo) {
+      if (apagados.has(x.id)) continue;
+      const lista = (restantes.get(x.id) ?? []).filter((f) => !apagados.has(f.id));
+      if (lista.length) {
+        for (const f of lista) apagados.add(f.id);
+        await tx.delete(l).where(inArray(l.id, lista.map((f) => f.id)));
+        for (const f of lista) {
+          await registrarAuditoria(tx, { tela: TELA, entidade: ENTIDADE, entidadeId: f.id, acao: "excluiu", descricao: `o restante ${f.descricao} (o pagamento parcial foi desfeito)`, dados: f });
+        }
+      }
+      const valorCentavos = x.valorOriginalCentavos ?? x.valorCentavos;
+      await tx.update(l).set({ dataPagamento: null, valorPagoCentavos: null, valorCentavos, valorOriginalCentavos: null }).where(eq(l.id, x.id));
+      await registrarAuditoria(tx, {
+        tela: TELA,
+        entidade: ENTIDADE,
+        entidadeId: x.id,
+        acao: "alterou",
+        descricao: `o estorno do Lançamento ${x.descricao}`,
+        dados: { dataPagamento: { antes: x.dataPagamento, depois: null }, ...(valorCentavos !== x.valorCentavos ? { valor: { antes: x.valorCentavos, depois: valorCentavos } } : {}) },
+      });
     }
     refresh();
     return { ok: true as const };
+  });
+}
+
+/**
+ * Pagou ou recebeu um valor diferente do lançamento (já com a baixa dada).
+ * O lançamento passa a valer o que foi pago; no pagamento parcial, o que falta vira um novo lançamento
+ * ("restante"), ainda não pago, ligado ao original.
+ */
+async function aplicarValorPago(tx: Transacao, id: number, v: PagamentoValor) {
+  const [x] = await tx.select().from(l).where(eq(l.id, id)).for("update");
+  if (!x || !x.dataPagamento) return;
+  if (x.cartaoId) erro("Compras no cartão são pagas junto com a fatura, pelo valor da compra.");
+  if (x.transferenciaId) erro("Transferências são feitas pelo valor total. Para mudar o valor, edite a transferência.");
+  if (x.tipo !== "receita" && x.tipo !== "despesa") erro("Este lançamento só pode ser pago pelo valor total.");
+  if (x.formato === "detalhado") erro("Lançamentos detalhados são pagos pelo valor total (a soma dos itens). Para pagar outro valor, ajuste os itens.");
+  const pago = lerValor(v.valorPago, "Valor Pago");
+  const r = calcularPagamento(x.valorCentavos, pago, !!v.gerarRestante);
+  if (r.tipo === "integral") return;
+  const vencimento = r.tipo === "parcial" ? lerData(v.vencimentoRestante, "Vencimento do Restante")! : null;
+  await tx.update(l).set({ valorCentavos: r.valorCentavos, valorPagoCentavos: r.valorCentavos, valorOriginalCentavos: x.valorCentavos }).where(eq(l.id, x.id));
+  const recebido = x.tipo === "receita" ? "recebido" : "pago";
+  const explicacao =
+    r.tipo === "parcial"
+      ? `${recebido} em parte: ${formatarCentavos(pago)} de ${formatarCentavos(x.valorCentavos)}`
+      : r.tipo === "desconto"
+        ? `${recebido} com desconto de ${formatarCentavos(r.diferencaCentavos)}`
+        : `${recebido} com acréscimo (juros ou multa) de ${formatarCentavos(r.diferencaCentavos)}`;
+  await registrarAuditoria(tx, { tela: TELA, entidade: ENTIDADE, entidadeId: x.id, acao: "alterou", descricao: `o valor do Lançamento ${x.descricao} (${explicacao})`, dados: { valor: { antes: x.valorCentavos, depois: r.valorCentavos } } });
+  if (r.tipo !== "parcial") return;
+  const tags = await tx.select({ tagId: lancamentoTag.tagId }).from(lancamentoTag).where(eq(lancamentoTag.lancamentoId, x.id));
+  const restante: Linha = {
+    tipo: x.tipo,
+    formato: "simples",
+    descricao: x.descricao,
+    documento: x.documento,
+    observacao: x.observacao,
+    valorCentavos: r.restanteCentavos,
+    dataVencimento: vencimento!,
+    dataReferencia: x.dataReferencia,
+    contaId: x.contaId,
+    categoriaId: x.categoriaId,
+    formaPagamentoId: x.formaPagamentoId,
+    contatoId: x.contatoId,
+    lancamentoOrigemId: x.id,
+    origem: "manual",
+  };
+  const novo = await inserirLancamento(tx, restante, tags.map((t) => t.tagId), []);
+  await registrarAuditoria(tx, {
+    tela: TELA,
+    entidade: ENTIDADE,
+    entidadeId: novo.id,
+    acao: "cadastrou",
+    descricao: `o restante ${novo.descricao} (${formatarCentavos(r.restanteCentavos)}, vence em ${formatarData(vencimento!)})`,
+    dados: restante,
   });
 }
 
