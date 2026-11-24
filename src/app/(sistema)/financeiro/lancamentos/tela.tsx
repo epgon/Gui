@@ -5,6 +5,7 @@ import Form from "next/form";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { BotaoImprimir } from "@/components/exportacao/botao-imprimir";
 import { IconeBanco } from "@/components/cadastros/icone-banco";
 import { MenuLinha } from "@/components/cadastros/menu-linha";
 import { Botao } from "@/components/ui/botao";
@@ -116,11 +117,12 @@ export function TelaLancamentos({ linhas, resumo, filtros, opcoes, hoje, mes, ca
           <ArrowLeftRight className="h-4 w-4" />
         </BotaoAtalho>
         {abrindo && <span className="text-sm text-gray-500">Abrindo...</span>}
+        <BotaoImprimir tela="lancamentos" parametros={parametros} className="ml-auto" />
         <Link
           href="/financeiro/importacoes/nova"
           title="Importar extrato (OFX ou CSV)"
           aria-label="Importar extrato"
-          className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-md border border-borda bg-white px-2.5 text-sm text-gray-700 hover:bg-gray-50"
+          className="inline-flex h-9 items-center gap-1.5 rounded-md border border-borda bg-white px-2.5 text-sm text-gray-700 hover:bg-gray-50"
         >
           <Upload className="h-4 w-4 text-verde" /> <span className="hidden sm:inline">Importar</span>
         </Link>

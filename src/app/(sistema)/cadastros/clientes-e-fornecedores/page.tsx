@@ -1,8 +1,9 @@
-import { and, asc, count, desc, eq, sql } from "drizzle-orm";
+import { asc, count, desc, sql } from "drizzle-orm";
 import { FiltroSelecao, FiltroTexto, PainelFiltros } from "@/components/cadastros/painel-filtros";
 import { MolduraLista } from "@/components/cadastros/moldura-lista";
 import { getDb, schema } from "@/db";
-import { condicaoSituacao, contemTexto, lerFiltrosComuns, parametro, POR_PAGINA, type ParametrosBusca } from "@/lib/cadastros/filtros";
+import { filtrosContatos } from "@/lib/cadastros/condicoes";
+import { POR_PAGINA, type ParametrosBusca } from "@/lib/cadastros/filtros";
 import { UFS } from "@/lib/cadastros/opcoes";
 import { TelaContatos } from "./tela";
 
@@ -11,22 +12,8 @@ const CAMINHO = "/cadastros/clientes-e-fornecedores";
 
 export default async function PaginaContatos({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
   const sp = await searchParams;
-  const f = lerFiltrosComuns(sp);
-  const papel = ["clientes", "fornecedores"].includes(parametro(sp, "papel")) ? parametro(sp, "papel") : "";
-  const pessoa = ["fisica", "juridica"].includes(parametro(sp, "pessoa")) ? (parametro(sp, "pessoa") as "fisica" | "juridica") : "";
-  const cidade = parametro(sp, "cidade").slice(0, 100);
-  const uf = (UFS as readonly string[]).includes(parametro(sp, "uf")) ? parametro(sp, "uf") : "";
+  const { f, papel, pessoa, cidade, uf, onde } = filtrosContatos(sp);
   const { contato: c } = schema;
-  const onde = and(
-    f.busca
-      ? sql`(${contemTexto(c.nome, f.busca)} or ${contemTexto(c.razaoSocial, f.busca)} or ${contemTexto(c.documento, f.busca)} or ${contemTexto(c.email, f.busca)})`
-      : undefined,
-    papel === "clientes" ? eq(c.eCliente, true) : papel === "fornecedores" ? eq(c.eFornecedor, true) : undefined,
-    pessoa ? eq(c.pessoa, pessoa) : undefined,
-    cidade ? contemTexto(c.cidade, cidade) : undefined,
-    uf ? eq(c.uf, uf) : undefined,
-    condicaoSituacao(c.ativo, f.situacao),
-  );
   const db = getDb();
   const [linhas, [{ total }]] = await Promise.all([
     db

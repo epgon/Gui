@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { ChaveSituacao } from "@/components/cadastros/chave-situacao";
+import { BotaoImprimir } from "@/components/exportacao/botao-imprimir";
 import { IconeBanco } from "@/components/cadastros/icone-banco";
 import { MenuLinha } from "@/components/cadastros/menu-linha";
 import { useSituacao } from "@/components/cadastros/use-situacao";
@@ -134,7 +135,8 @@ export function TelaRecorrentes({ linhas, filtros, opcoes, planos, hoje, caminho
           Planos
         </Botao>
         {abrindo && <span className="text-sm text-gray-500">Abrindo...</span>}
-        <Form action={caminho} className="ml-auto flex w-full items-center sm:w-72" role="search">
+        <BotaoImprimir tela="recorrentes" parametros={parametros} className="ml-auto" />
+        <Form action={caminho} className="flex w-full items-center sm:w-72" role="search">
           {Object.entries(parametros)
             .filter(([k, v]) => k !== "busca" && v)
             .map(([k, v]) => (

@@ -29,7 +29,7 @@ export function TelaTags({ linhas, total, filtros, caminho }: {
 
   return (
     <>
-      <BarraLista aoAdicionar={() => form.abrirNovo()} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar tag" />
+      <BarraLista tela="tags" aoAdicionar={() => form.abrirNovo()} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar tag" />
       <FaixaErro>{situacao.aviso && <TextoComDestaque texto={situacao.aviso} />}</FaixaErro>
       <Tabela
         linhas={linhas}

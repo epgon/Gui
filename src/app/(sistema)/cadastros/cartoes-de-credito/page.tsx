@@ -1,10 +1,11 @@
 import { alias } from "drizzle-orm/pg-core";
-import { and, asc, count, desc, eq, sql } from "drizzle-orm";
+import { asc, count, desc, eq, sql } from "drizzle-orm";
 import { FiltroSelecao, FiltroTexto, OPCOES_SITUACAO, PainelFiltros } from "@/components/cadastros/painel-filtros";
 import { MolduraLista } from "@/components/cadastros/moldura-lista";
 import { getDb, schema } from "@/db";
 import { listarBancos } from "@/lib/cadastros/bancos";
-import { condicaoSituacao, contemTexto, lerFiltrosComuns, parametro, POR_PAGINA, type ParametrosBusca } from "@/lib/cadastros/filtros";
+import { filtrosCartoes } from "@/lib/cadastros/condicoes";
+import { parametro, POR_PAGINA, type ParametrosBusca } from "@/lib/cadastros/filtros";
 import { DIAS_MES } from "@/lib/cadastros/opcoes";
 import { limiteDoCartao } from "@/lib/cartoes/regras";
 import { usoDosLimites } from "@/lib/cartoes/servidor";
@@ -17,17 +18,9 @@ export default async function PaginaCartoes({ searchParams }: { searchParams: Pr
   const sp = await searchParams;
   // Abrir direto o Detalhando de um cartão (ex.: vindo da Visão Geral): ?detalhar=3 ou ?faturas=3
   const abrir = /^\d+$/.test(parametro(sp, "faturas")) ? { id: Number(parametro(sp, "faturas")), aba: "faturas" as const } : /^\d+$/.test(parametro(sp, "detalhar")) ? { id: Number(parametro(sp, "detalhar")), aba: "resumo" as const } : null;
-  const f = lerFiltrosComuns(sp);
-  const fechamento = DIAS_MES.includes(parametro(sp, "fechamento")) ? parametro(sp, "fechamento") : "";
-  const vencimento = DIAS_MES.includes(parametro(sp, "vencimento")) ? parametro(sp, "vencimento") : "";
+  const { f, fechamento, vencimento, onde } = filtrosCartoes(sp);
   const { cartaoCredito: cartao, banco, contaFinanceira } = schema;
   const contaPg = alias(contaFinanceira, "conta_pagamento");
-  const onde = and(
-    f.busca ? contemTexto(cartao.descricao, f.busca) : undefined,
-    fechamento ? eq(cartao.diaFechamento, Number(fechamento)) : undefined,
-    vencimento ? eq(cartao.diaVencimento, Number(vencimento)) : undefined,
-    condicaoSituacao(cartao.ativo, f.situacao),
-  );
   const db = getDb();
   const [linhasDb, [{ total }], bancos, contas, usos] = await Promise.all([
     db

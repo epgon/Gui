@@ -2,16 +2,19 @@
 
 import { Plus, Search } from "lucide-react";
 import Form from "next/form";
+import { BotaoImprimir } from "@/components/exportacao/botao-imprimir";
 import { Botao } from "@/components/ui/botao";
 
 /** Barra acima da tabela: Adicionar e busca rápida (mantém os outros filtros). */
-export function BarraLista({ aoAdicionar, caminho, busca, parametros, extra, rotuloBusca = "Buscar" }: {
+export function BarraLista({ aoAdicionar, caminho, busca, parametros, extra, rotuloBusca = "Buscar", tela }: {
   aoAdicionar: () => void;
   caminho: string;
   busca: string;
   parametros: Record<string, string>;
   extra?: React.ReactNode;
   rotuloBusca?: string;
+  /** Nome da lista na Impressão Padrão e exportação (mostra o botão Imprimir). */
+  tela?: string;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -19,7 +22,8 @@ export function BarraLista({ aoAdicionar, caminho, busca, parametros, extra, rot
         Adicionar
       </Botao>
       {extra}
-      <Form action={caminho} className="ml-auto flex w-full items-center sm:w-72" role="search">
+      {tela && <BotaoImprimir tela={tela} parametros={parametros} className="ml-auto" />}
+      <Form action={caminho} className={`${tela ? "" : "ml-auto "}flex w-full items-center sm:w-72`} role="search">
         {Object.entries(parametros)
           .filter(([chave, valor]) => chave !== "busca" && chave !== "pagina" && valor)
           .map(([chave, valor]) => (

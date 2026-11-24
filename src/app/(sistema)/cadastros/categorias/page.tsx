@@ -2,7 +2,8 @@ import { FiltroSelecao, FiltroTexto, OPCOES_SITUACAO, PainelFiltros } from "@/co
 import { MolduraLista } from "@/components/cadastros/moldura-lista";
 import { getDb, schema } from "@/db";
 import { alturaAbaixo, montarArvore } from "@/lib/categorias";
-import { lerFiltrosComuns, parametro, semAcento, type ParametrosBusca } from "@/lib/cadastros/filtros";
+import { filtrarCategorias } from "@/lib/cadastros/condicoes";
+import type { ParametrosBusca } from "@/lib/cadastros/filtros";
 import { TelaCategorias } from "./tela";
 
 export const metadata = { title: "Categorias" };
@@ -10,7 +11,6 @@ const CAMINHO = "/cadastros/categorias";
 
 export default async function PaginaCategorias({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
   const sp = await searchParams;
-  const f = lerFiltrosComuns(sp);
   const { categoria } = schema;
   const todas = await getDb()
     .select({
@@ -27,21 +27,11 @@ export default async function PaginaCategorias({ searchParams }: { searchParams:
     .from(categoria);
   const arvore = montarArvore(todas).map((c) => ({ ...c, altura: alturaAbaixo(todas, c.id) }));
 
-  const raizes = arvore.filter((c) => c.nivel === 1 && !c.especial);
-  const abaId = Number(parametro(sp, "aba"));
-  const aba = raizes.some((r) => r.id === abaId) ? abaId : null;
+  const { f, aba, raizes, linhas } = filtrarCategorias(arvore, sp);
   const abas = [
     { id: null, nome: "Todas", cor: null, total: arvore.length },
     ...raizes.map((r) => ({ id: r.id, nome: r.nome, cor: r.corEfetiva, total: arvore.filter((c) => c.raizId === r.id && c.id !== r.id).length })),
   ];
-
-  const termo = semAcento(f.busca).toLowerCase();
-  const linhas = arvore.filter(
-    (c) =>
-      (aba === null || (c.raizId === aba && !c.especial)) &&
-      (!termo || semAcento(c.nome).toLowerCase().includes(termo) || c.numero.startsWith(termo)) &&
-      (f.situacao === "todos" || c.ativo === (f.situacao === "ativos")),
-  );
 
   return (
     <MolduraLista

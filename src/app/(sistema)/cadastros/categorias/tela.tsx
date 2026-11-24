@@ -1,10 +1,12 @@
 "use client";
 
-import { CornerDownRight, Lock, Pencil, Plus, Power } from "lucide-react";
+import { BarChart3, CornerDownRight, Lock, Pencil, Plus, Power } from "lucide-react";
+import { useState } from "react";
 import Link from "next/link";
 import { AsteriscoPadrao } from "@/components/cadastros/asterisco";
 import { BarraLista } from "@/components/cadastros/barra-lista";
 import { ChaveSituacao } from "@/components/cadastros/chave-situacao";
+import { DetalhandoCategoria } from "@/components/categorias/detalhando-categoria";
 import { MenuLinha } from "@/components/cadastros/menu-linha";
 import { ModalCadastro, useFormularioCadastro } from "@/components/cadastros/modal-cadastro";
 import { useSituacao } from "@/components/cadastros/use-situacao";
@@ -37,6 +39,7 @@ export function TelaCategorias({ linhas, arvore, abas, aba, filtros, caminho }: 
 }) {
   const form = useFormularioCadastro(VAZIO);
   const situacao = useSituacao(alterarSituacaoCategoria);
+  const [detalhar, setDetalhar] = useState<number | null>(null);
   const parametros = { aba: aba ? String(aba) : "", busca: filtros.busca, situacao: filtros.situacao === "todos" ? "" : filtros.situacao };
   const linkAba = (id: number | null) => {
     const sp = new URLSearchParams(Object.entries({ ...parametros, aba: id ? String(id) : "" }).filter(([, v]) => v));
@@ -96,7 +99,7 @@ export function TelaCategorias({ linhas, arvore, abas, aba, filtros, caminho }: 
           </Link>
         ))}
       </nav>
-      <BarraLista aoAdicionar={() => abrirNovo()} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar categoria" />
+      <BarraLista tela="categorias" aoAdicionar={() => abrirNovo()} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar categoria" />
       <FaixaErro>{situacao.aviso && <TextoComDestaque texto={situacao.aviso} />}</FaixaErro>
       <Tabela
         linhas={linhas}
@@ -162,6 +165,7 @@ export function TelaCategorias({ linhas, arvore, abas, aba, filtros, caminho }: 
                   rotulo={l.nome}
                   itens={[
                     { rotulo: "Editar", icone: <Pencil className="h-4 w-4" />, aoClicar: () => editar(l) },
+                    { rotulo: "Detalhar", icone: <BarChart3 className="h-4 w-4" />, aoClicar: () => setDetalhar(l.id) },
                     ...(l.nivel < NIVEL_MAXIMO && l.ativo
                       ? [{ rotulo: "Adicionar Filha", icone: <Plus className="h-4 w-4" />, aoClicar: () => abrirNovo(l.id) }]
                       : []),
@@ -252,6 +256,7 @@ export function TelaCategorias({ linhas, arvore, abas, aba, filtros, caminho }: 
           </>
         )}
       </ModalCadastro>
+      <DetalhandoCategoria id={detalhar} aoFechar={() => setDetalhar(null)} />
     </>
   );
 }
