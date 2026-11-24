@@ -15,14 +15,18 @@ import { CampoSelecao, CampoTexto, CampoValor, TextoComDestaque } from "@/compon
 import { Chave } from "@/components/ui/chave";
 import { FaixaErro } from "@/components/ui/faixa-erro";
 import { Tabela } from "@/components/ui/tabela";
+import { CampoAuxiliarFormulario } from "@/components/listagem/campo-auxiliar";
+import { comComuns, MarcaNovo } from "@/components/listagem/colunas-comuns";
+import { useRotuloAuxiliar } from "@/components/listagem/configurar-listagem";
+import { colunasVisiveis, type PreferenciaListagem } from "@/lib/listagem/telas";
 import { Valor } from "@/components/ui/valor";
-import { POR_PAGINA, type Situacao } from "@/lib/cadastros/filtros";
+import type { Situacao } from "@/lib/cadastros/filtros";
 import { type BancoOpcao, rotuloTipoConta, TIPOS_CONTA } from "@/lib/cadastros/opcoes";
 import { formatarData } from "@/lib/datas";
 import { formatarCentavos } from "@/lib/dinheiro";
 import { alterarSituacaoConta, salvarConta, type DadosConta } from "./acoes";
 
-type Linha = {
+type LinhaBase = {
   id: number;
   descricao: string;
   tipo: string;
@@ -36,18 +40,21 @@ type Linha = {
   ativo: boolean;
   padraoSistema: boolean;
 };
+type Linha = LinhaBase & { campoAuxiliar: string | null; criadoEm: Date; atualizadoEm: Date };
 
-export function TelaContas({ linhas, total, filtros, caminho, bancos, hoje }: {
+export function TelaContas({ preferencia, linhas, total, filtros, caminho, bancos, hoje }: {
   linhas: Linha[];
+  preferencia: PreferenciaListagem;
   total: number;
   filtros: { busca: string; situacao: Situacao; pagina: number; tipo: string };
   caminho: string;
   bancos: BancoOpcao[];
   hoje: string;
 }) {
+  const rotuloAux = useRotuloAuxiliar("contas-financeiras");
   const bancoOutro = String(bancos.find((b) => b.codigo === null)?.id ?? bancos[0]?.id ?? "");
   const vazio = useMemo<DadosConta>(
-    () => ({ descricao: "", bancoId: bancoOutro, tipo: "outro", considerarNosSaldos: true, saldoInicial: "", saldoInicialData: hoje }),
+    () => ({ descricao: "", bancoId: bancoOutro, tipo: "outro", considerarNosSaldos: true, saldoInicial: "", saldoInicialData: hoje, campoAuxiliar: "" }),
     [bancoOutro, hoje],
   );
   const form = useFormularioCadastro(vazio);
@@ -64,11 +71,12 @@ export function TelaContas({ linhas, total, filtros, caminho, bancos, hoje }: {
       considerarNosSaldos: l.considerarNosSaldos,
       saldoInicial: l.saldoInicialCentavos ? formatarCentavos(l.saldoInicialCentavos) : "",
       saldoInicialData: l.saldoInicialData ?? hoje,
+      campoAuxiliar: l.campoAuxiliar ?? "",
     });
 
   return (
     <>
-      <BarraLista tela="contas-financeiras" aoAdicionar={() => form.abrirNovo()} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar conta" />
+      <BarraLista tela="contas-financeiras" preferencia={preferencia} aoAdicionar={() => form.abrirNovo()} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar conta" />
       <FaixaErro>{situacao.aviso && <TextoComDestaque texto={situacao.aviso} />}</FaixaErro>
       <Tabela
         linhas={linhas}
@@ -78,7 +86,9 @@ export function TelaContas({ linhas, total, filtros, caminho, bancos, hoje }: {
             ? "Nenhuma conta encontrada com esses filtros."
             : "Nenhuma conta cadastrada. Clique em Adicionar e informe o saldo que a conta tem hoje."
         }
-        colunas={[
+        compacta={preferencia.compactar}
+        destacarPares={preferencia.destacarPares}
+        colunas={colunasVisiveis("contas-financeiras", comComuns<Linha>([
           {
             chave: "conta",
             titulo: "Conta Financeira",
@@ -90,6 +100,7 @@ export function TelaContas({ linhas, total, filtros, caminho, bancos, hoje }: {
                     {l.descricao}
                   </button>
                   <AsteriscoPadrao mostrar={l.padraoSistema} />
+                <MarcaNovo registro={l} />
                   <span className="block text-xs text-gray-500">{l.bancoNome ?? "Outro"}</span>
                 </span>
               </span>
@@ -148,9 +159,9 @@ export function TelaContas({ linhas, total, filtros, caminho, bancos, hoje }: {
               />
             ),
           },
-        ]}
+        ], rotuloAux), preferencia)}
       />
-      <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={POR_PAGINA} total={total} />
+      <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={preferencia.porPagina} total={total} />
 
       {detalhando !== null && <DetalhandoConta key={detalhando} contaId={detalhando} aoFechar={() => setDetalhando(null)} />}
 
@@ -214,6 +225,7 @@ export function TelaContas({ linhas, total, filtros, caminho, bancos, hoje }: {
           aoMudar={(v) => form.mudar("considerarNosSaldos", v)}
           rotulo="Considerar esta conta no Saldo Atual da Visão Geral"
         />
+        <CampoAuxiliarFormulario cadastro="contas" className="mt-4" valor={form.dados.campoAuxiliar ?? ""} aoMudar={(v) => form.mudar("campoAuxiliar", v)} />
       </ModalCadastro>
     </>
   );

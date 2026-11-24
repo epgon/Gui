@@ -5,7 +5,7 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
 import { diferencas, registrarAuditoria } from "@/lib/auditoria";
-import { falha, idValido, obrigatorio, primeiroErro, type Resultado } from "@/lib/cadastros/resultado";
+import { falha, idValido, obrigatorio, primeiroErro, type Resultado, ERRO_AUXILIAR, lerCampoAuxiliar } from "@/lib/cadastros/resultado";
 import { lerValorEmCentavos } from "@/lib/dinheiro";
 import { exigirLogin } from "@/lib/sessao";
 
@@ -52,6 +52,8 @@ export type DadosCartao = {
   diaFechamento: string;
   diaVencimento: string;
   contaPagamentoId: string;
+  /** Parâmetros > Campos Auxiliares. */
+  campoAuxiliar?: string;
 };
 
 export async function salvarCartao(id: number | null, entrada: DadosCartao): Promise<Resultado> {
@@ -62,8 +64,10 @@ export async function salvarCartao(id: number | null, entrada: DadosCartao): Pro
   if (typeof limiteCentavos === "string") return falha(limiteCentavos);
   const v = formulario.safeParse(entrada);
   if (!v.success) return primeiroErro(v.error);
+  const aux = lerCampoAuxiliar(entrada);
+  if (!aux) return falha(ERRO_AUXILIAR);
   if (id !== null && !idValido.safeParse(id).success) return falha("Cadastro não encontrado.");
-  const dados = { ...v.data, limiteCentavos };
+  const dados = { ...v.data, limiteCentavos, ...aux };
   const db = getDb();
 
   const [bancoOk] = await db.select({ id: banco.id }).from(banco).where(eq(banco.id, dados.bancoId)).limit(1);

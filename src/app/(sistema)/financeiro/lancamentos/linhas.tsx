@@ -3,6 +3,7 @@
 import { AlertTriangle, ArrowDown, ArrowLeftRight, ArrowUp, CheckCircle2, Circle, Clock, CreditCard, Landmark, MessageSquareText, Paperclip, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { IconeBanco } from "@/components/cadastros/icone-banco";
+import { useSistema } from "@/components/layout/provedor-sistema";
 import { Botao } from "@/components/ui/botao";
 import { CampoTexto, CampoValor, TextoComDestaque } from "@/components/ui/campo";
 import { FaixaErro } from "@/components/ui/faixa-erro";
@@ -234,7 +235,9 @@ export function ModalPagar({ titulo, hoje, ocupado, unico, erro, aoFechar, aoCon
 }) {
   const [data, setData] = useState(hoje);
   const [valorPago, setValorPago] = useState(unico ? formatarCentavos(unico.valorCentavos) : "");
-  const [gerarRestante, setGerarRestante] = useState(true);
+  const parcialLigado = useSistema().parametros.pagamentoParcial;
+  const [escolheuRestante, setGerarRestante] = useState(true);
+  const gerarRestante = parcialLigado && escolheuRestante;
   const [vencimentoRestante, setVencimentoRestante] = useState(unico ? (unico.vencimento < hoje ? hoje : unico.vencimento) : hoje);
   const pago = unico ? lerValorEmCentavos(valorPago) : null;
   const diferenca = unico && pago !== null && pago > 0 ? unico.valorCentavos - pago : 0;
@@ -265,7 +268,11 @@ export function ModalPagar({ titulo, hoje, ocupado, unico, erro, aoFechar, aoCon
             rotulo={unico.receita ? "Valor Recebido" : "Valor Pago"}
             valor={valorPago}
             aoMudar={setValorPago}
-            ajuda={`Se ${verbo} menos que R$ ${formatarCentavos(unico.valorCentavos)}, o que faltou pode virar um novo lançamento (pagamento parcial). Se ${verbo} mais, a diferença fica como juros ou multa.`}
+            ajuda={
+              parcialLigado
+                ? `Se ${verbo} menos que R$ ${formatarCentavos(unico.valorCentavos)}, o que faltou pode virar um novo lançamento (pagamento parcial). Se ${verbo} mais, a diferença fica como juros ou multa.`
+                : `Se ${verbo} menos que R$ ${formatarCentavos(unico.valorCentavos)}, a diferença fica como desconto. Se ${verbo} mais, fica como juros ou multa.`
+            }
           />
         )}
       </div>
@@ -274,17 +281,19 @@ export function ModalPagar({ titulo, hoje, ocupado, unico, erro, aoFechar, aoCon
           <p>
             Faltam <strong>R$ {formatarCentavos(diferenca)}</strong> de R$ {formatarCentavos(unico.valorCentavos)}.
           </p>
+          {parcialLigado && (
           <label className="flex items-start gap-2">
             <input type="radio" name="restante" checked={gerarRestante} onChange={() => setGerarRestante(true)} className="mt-0.5 accent-verde" />
             <span>
               <strong>Pagamento parcial:</strong> criar um novo lançamento com o restante, ainda não {verbo}.
             </span>
           </label>
+          )}
           {gerarRestante && (
             <CampoTexto rotulo="Vencimento do Restante" type="date" valor={vencimentoRestante} aoMudar={setVencimentoRestante} ajuda="Quando o restante deve ser pago ou recebido." className="pl-6" />
           )}
           <label className="flex items-start gap-2">
-            <input type="radio" name="restante" checked={!gerarRestante} onChange={() => setGerarRestante(false)} className="mt-0.5 accent-verde" />
+            <input type="radio" name="restante" checked={!gerarRestante} onChange={() => setGerarRestante(false)} className="mt-0.5 accent-verde" disabled={!parcialLigado} />
             <span>
               <strong>Desconto:</strong> não falta nada, o lançamento fica com o valor {verbo}.
             </span>

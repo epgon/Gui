@@ -1,36 +1,30 @@
-import { asc, count, desc, sql } from "drizzle-orm";
 import { FiltroSelecao, FiltroTexto, PainelFiltros } from "@/components/cadastros/painel-filtros";
 import { MolduraLista } from "@/components/cadastros/moldura-lista";
-import { getDb, schema } from "@/db";
-import { filtrosContatos } from "@/lib/cadastros/condicoes";
-import { POR_PAGINA, type ParametrosBusca } from "@/lib/cadastros/filtros";
 import { UFS } from "@/lib/cadastros/opcoes";
 import { TelaContatos } from "./tela";
+import { RecursoDesativado } from "@/components/layout/recurso-desativado";
+import { parametro, type ParametrosBusca } from "@/lib/cadastros/filtros";
+import { carregarContatos } from "@/lib/listagem/cadastros";
+import { camposAvancados, lerPreferencia, paginar } from "@/lib/listagem/servidor";
+import { recursoAtivo } from "@/lib/parametros/servidor";
 
 export const metadata = { title: "Clientes e Fornecedores" };
 const CAMINHO = "/cadastros/clientes-e-fornecedores";
+const TELA = "clientes-e-fornecedores";
 
 export default async function PaginaContatos({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
+  if (!(await recursoAtivo("contatos"))) return <RecursoDesativado titulo="Clientes e Fornecedores" trilha="Cadastros" />;
   const sp = await searchParams;
-  const { f, papel, pessoa, cidade, uf, onde } = filtrosContatos(sp);
-  const { contato: c } = schema;
-  const db = getDb();
-  const [linhas, [{ total }]] = await Promise.all([
-    db
-      .select()
-      .from(c)
-      .where(onde)
-      .orderBy(desc(c.ativo), asc(sql`lower(${c.nome})`))
-      .limit(POR_PAGINA)
-      .offset((f.pagina - 1) * POR_PAGINA),
-    db.select({ total: count() }).from(c).where(onde),
-  ]);
+  const [preferencia, campos] = await Promise.all([lerPreferencia(TELA), camposAvancados(TELA)]);
+  const r = await carregarContatos(sp, preferencia);
+  const { f, papel, pessoa, cidade, uf } = r;
+  const pagina = paginar(r.linhas, f.pagina, preferencia.porPagina);
 
   return (
     <MolduraLista
       titulo="Clientes e Fornecedores"
       filtros={
-        <PainelFiltros caminho={CAMINHO}>
+        <PainelFiltros caminho={CAMINHO} avancado={{ campos, valor: parametro(sp, "av") }}>
           <FiltroTexto nome="busca" rotulo="Nome, Documento ou E-mail" valor={f.busca} />
           <FiltroSelecao
             nome="papel"
@@ -68,10 +62,11 @@ export default async function PaginaContatos({ searchParams }: { searchParams: P
       }
     >
       <TelaContatos
-        linhas={linhas}
-        total={total}
-        filtros={{ ...f, papel, pessoa, cidade, uf }}
+        linhas={pagina.linhas}
+        total={pagina.total}
+        filtros={{ ...f, pagina: pagina.pagina, papel, pessoa, cidade, uf }}
         caminho={CAMINHO}
+        preferencia={preferencia}
       />
     </MolduraLista>
   );

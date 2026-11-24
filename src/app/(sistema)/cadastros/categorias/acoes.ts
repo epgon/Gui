@@ -6,7 +6,8 @@ import { z } from "zod";
 import { getDb, schema } from "@/db";
 import { diferencas, registrarAuditoria, type Transacao } from "@/lib/auditoria";
 import { alturaAbaixo, descendentes, montarArvore, NIVEL_MAXIMO } from "@/lib/categorias";
-import { falha, idValido, obrigatorio, primeiroErro, type Resultado } from "@/lib/cadastros/resultado";
+import { conferirArvore } from "@/lib/categorias-organizar";
+import { falha, idValido, obrigatorio, primeiroErro, type Resultado, ERRO_AUXILIAR, lerCampoAuxiliar } from "@/lib/cadastros/resultado";
 import { exigirLogin } from "@/lib/sessao";
 
 const { categoria } = schema;
@@ -23,7 +24,7 @@ const formulario = z.object({
   natureza: z.enum(["receita", "despesa"], { error: "Escolha se a categoria é de **Receita** ou **Despesa**." }),
 });
 
-export type DadosCategoria = { nome: string; categoriaPaiId: string; cor: string; natureza: "receita" | "despesa" };
+export type DadosCategoria = { nome: string; categoriaPaiId: string; cor: string; natureza: "receita" | "despesa"; campoAuxiliar?: string };
 
 /** Todas as categorias, travadas para alteração até o fim da transação. */
 async function carregarTodas(tx: Transacao) {
@@ -34,6 +35,8 @@ export async function salvarCategoria(id: number | null, entrada: DadosCategoria
   await exigirLogin();
   const v = formulario.safeParse(entrada);
   if (!v.success) return primeiroErro(v.error);
+  const aux = lerCampoAuxiliar(entrada);
+  if (!aux) return falha(ERRO_AUXILIAR);
   if (id !== null && !idValido.safeParse(id).success) return falha("Cadastro não encontrado.");
   const { nome, categoriaPaiId } = v.data;
 
@@ -73,7 +76,7 @@ export async function salvarCategoria(id: number | null, entrada: DadosCategoria
     const proximaOrdem = Math.max(0, ...todas.filter((c) => c.categoriaPaiId === categoriaPaiId && !c.especial).map((c) => c.ordem)) + 1;
 
     if (id === null || !atual) {
-      const dados = { nome, categoriaPaiId, cor, natureza, ordem: proximaOrdem };
+      const dados = { ...aux, nome, categoriaPaiId, cor, natureza, ordem: proximaOrdem };
       const [nova] = await tx.insert(categoria).values(dados).returning();
       await registrarAuditoria(tx, { tela: TELA, entidade: ENTIDADE, entidadeId: nova.id, acao: "cadastrou", descricao: `a Categoria ${nova.nome}`, dados });
       refresh();
@@ -81,7 +84,7 @@ export async function salvarCategoria(id: number | null, entrada: DadosCategoria
     }
 
     const mudouPai = atual.categoriaPaiId !== categoriaPaiId;
-    const dados = { nome, categoriaPaiId, cor, natureza, ordem: mudouPai ? proximaOrdem : atual.ordem };
+    const dados = { ...aux, nome, categoriaPaiId, cor, natureza, ordem: mudouPai ? proximaOrdem : atual.ordem };
     await tx.update(categoria).set(dados).where(eq(categoria.id, id));
     const filhas = descendentes(todas, id);
     if (filhas.length && natureza !== atual.natureza) {
@@ -116,6 +119,65 @@ export async function alterarSituacaoCategoria(id: number, ativo: boolean): Prom
       acao: ativo ? "ativou" : "inativou",
       descricao: `a Categoria ${alvo.nome}${filhas.length ? ` e ${filhas.length} subcategoria(s)` : ""}`,
       dados: filhas.length ? { subcategorias: filhas } : undefined,
+    });
+    refresh();
+    return { ok: true } as const;
+  });
+}
+
+/**
+ * "Organizar": grava a nova árvore (nível e ordem). As especiais ficam de fora.
+ * Quem muda de categoria principal passa a ter o tipo (receita ou despesa) e a cor dela.
+ */
+export async function organizarCategorias(entrada: { id: number; paiId: number | null; ordem: number }[]): Promise<Resultado> {
+  await exigirLogin();
+  const formato = z.array(z.object({ id: idValido, paiId: idValido.nullable(), ordem: z.number().int().min(0).max(10000) })).max(2000);
+  const v = formato.safeParse(entrada);
+  if (!v.success) return falha("Não foi possível ler a nova organização. Recarregue a página.");
+  const nos = v.data;
+  const erroArvore = conferirArvore(nos);
+  if (erroArvore) return falha(erroArvore);
+
+  return getDb().transaction(async (tx) => {
+    const todas = await carregarTodas(tx);
+    const normais = todas.filter((c) => !c.especial);
+    if (normais.length !== nos.length || normais.some((c) => !nos.some((n) => n.id === c.id))) {
+      return falha("As categorias mudaram enquanto você organizava. Feche e abra o Organizar de novo.");
+    }
+    const porId = new Map(todas.map((c) => [c.id, c]));
+    const noPorId = new Map(nos.map((n) => [n.id, n]));
+    const raizDe = (id: number) => {
+      let atual = noPorId.get(id)!;
+      while (atual.paiId !== null) atual = noPorId.get(atual.paiId)!;
+      return atual.id;
+    };
+    // Cor efetiva de hoje (para quem vira categoria principal continuar com a cor que tinha).
+    const arvoreAntes = montarArvore(todas);
+    const corAntes = new Map(arvoreAntes.map((c) => [c.id, c.corEfetiva]));
+
+    const mudancas: { id: number; nome: string; de: string; para: string }[] = [];
+    for (const n of nos) {
+      const atual = porId.get(n.id)!;
+      const raiz = porId.get(raizDe(n.id))!;
+      const ehRaiz = n.paiId === null;
+      const natureza = ehRaiz ? atual.natureza : raiz.natureza;
+      const cor = ehRaiz ? (atual.cor ?? corAntes.get(n.id) ?? "#64748B") : null;
+      if (atual.categoriaPaiId === n.paiId && atual.ordem === n.ordem && atual.natureza === natureza && atual.cor === cor) continue;
+      if (n.paiId !== null && !porId.get(n.paiId)!.ativo && atual.ativo && atual.categoriaPaiId !== n.paiId) {
+        return falha(`A categoria **${porId.get(n.paiId)!.nome}** está inativa. Ative-a antes de colocar categorias dentro dela.`);
+      }
+      await tx.update(categoria).set({ categoriaPaiId: n.paiId, ordem: n.ordem, natureza, cor }).where(eq(categoria.id, n.id));
+      if (atual.categoriaPaiId !== n.paiId) {
+        mudancas.push({ id: n.id, nome: atual.nome, de: atual.categoriaPaiId ? porId.get(atual.categoriaPaiId)!.nome : "(principal)", para: n.paiId ? porId.get(n.paiId)!.nome : "(principal)" });
+      }
+    }
+    await registrarAuditoria(tx, {
+      tela: TELA,
+      entidade: ENTIDADE,
+      entidadeId: null,
+      acao: "alterou",
+      descricao: mudancas.length ? `a organização das Categorias (${mudancas.length} mudaram de lugar)` : "a ordem das Categorias",
+      dados: mudancas.length ? { movidas: mudancas.map((m) => `${m.nome}: ${m.de} → ${m.para}`) } : undefined,
     });
     refresh();
     return { ok: true } as const;

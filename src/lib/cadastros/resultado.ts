@@ -32,3 +32,18 @@ export const opcional = (campo: string, maximo = 200) =>
     .transform((v) => (v ? v : null));
 
 export const idValido = z.number().int().positive();
+
+/**
+ * Campo Auxiliar dos cadastros (Parâmetros > Campos Auxiliares): texto livre opcional.
+ * Quem não manda o campo (ex.: cadastro rápido dentro do lançamento) não mexe nele.
+ * Devolve null quando passa do tamanho.
+ */
+export function lerCampoAuxiliar(entrada: unknown): { campoAuxiliar?: string | null } | null {
+  if (!entrada || typeof entrada !== "object" || !("campoAuxiliar" in entrada)) return {};
+  const v = (entrada as { campoAuxiliar: unknown }).campoAuxiliar;
+  if (v === undefined) return {};
+  const texto = typeof v === "string" ? v.trim() : "";
+  if (texto.length > 200) return null;
+  return { campoAuxiliar: texto || null };
+}
+export const ERRO_AUXILIAR = "O **Campo Auxiliar** aceita no máximo 200 caracteres.";

@@ -1,19 +1,18 @@
 import "server-only";
-import { alias } from "drizzle-orm/pg-core";
-import { asc, desc, eq, sql } from "drizzle-orm";
-import { getDb, schema } from "@/db";
-import { filtrarCategorias, filtrosCartoes, filtrosContas, filtrosContatos, filtrosFormas, filtrosTags } from "@/lib/cadastros/condicoes";
 import type { ParametrosBusca } from "@/lib/cadastros/filtros";
 import { rotuloTipoConta, TIPOS_CONTA } from "@/lib/cadastros/opcoes";
-import { montarArvore } from "@/lib/categorias";
-import { limiteDoCartao } from "@/lib/cartoes/regras";
-import { usoDosLimites } from "@/lib/cartoes/servidor";
-import { carregarOpcoes, lerFiltros, listarLancamentos, saldosDasContas } from "@/lib/lancamentos/consultas";
+import { carregarOpcoes, lerFiltros, listarLancamentos } from "@/lib/lancamentos/consultas";
+import { carregarCartoes, carregarCategorias, carregarContas, carregarContatos, carregarFormas, carregarTags, diaDe } from "@/lib/listagem/cadastros";
+import { lerPreferencia } from "@/lib/listagem/servidor";
+import { lerParametros } from "@/lib/parametros/servidor";
+import type { CadastroAuxiliar } from "@/lib/parametros/tipos";
 import { mesDe } from "@/lib/lancamentos/regras";
 import type { LinhaLista } from "@/lib/lancamentos/tipos";
+import { CAMPOS_LANCAMENTOS_BASE } from "@/lib/lancamentos/avancado";
+import { descreverFiltro, lerFiltrosAvancados } from "@/lib/listagem/avancado";
 import { INTERVALOS } from "@/lib/recorrentes/regras";
 import { lerFiltrosRecorrentes, listarRecorrentes } from "@/lib/recorrentes/lista";
-import { nomeArquivo, type LinhaTabela, type Tabela } from "./tabela";
+import { nomeArquivo, type ColunaTabela, type LinhaTabela, type Tabela } from "./tabela";
 
 const ROTULO_SITUACAO = { realizado: "Realizado", a_vencer: "A Vencer", vencido: "Vencido" } as const;
 const SITUACOES_LISTA: Record<string, string> = { nao_realizado: "Não Realizado", realizado: "Realizado", a_vencer: "A Vencer", vencido: "Vencido" };
@@ -35,6 +34,7 @@ async function lancamentos(sp: ParametrosBusca, hoje: string): Promise<Tabela> {
   if (f.forma) filtros.push(`Forma de Pagamento: ${nome(opcoes.formas, f.forma)}`);
   if (f.contato) filtros.push(`Cliente ou Fornecedor: ${nome(opcoes.contatos, f.contato)}`);
   if (f.tag) filtros.push(`Tag: ${nome(opcoes.tags, f.tag)}`);
+  for (const a of lerFiltrosAvancados(f.avancado, CAMPOS_LANCAMENTOS_BASE)) filtros.push(descreverFiltro(a, CAMPOS_LANCAMENTOS_BASE));
 
   const celulas = (x: LinhaLista) => [
     x.data,
@@ -125,26 +125,47 @@ async function recorrentes(sp: ParametrosBusca, hoje: string): Promise<Tabela> {
   };
 }
 
+/** Colunas a mais que toda lista de Cadastros oferece na Impressão Personalizada. */
+async function extrasComuns(auxiliar: CadastroAuxiliar) {
+  const aux = (await lerParametros()).camposAuxiliares[auxiliar];
+  const colunas: ColunaTabela[] = [
+    { titulo: "Código", tipo: "numero", largura: 0.6, extra: true },
+    ...(aux.ativo ? [{ titulo: aux.rotulo, largura: 1.5, extra: true }] : []),
+    { titulo: "Cadastrado", tipo: "data", largura: 0.9, extra: true },
+    { titulo: "Atualizado", tipo: "data", largura: 0.9, extra: true },
+  ];
+  const celulas = (l: { id: number; campoAuxiliar: string | null; criadoEm: Date; atualizadoEm: Date }) => [
+    l.id,
+    ...(aux.ativo ? [l.campoAuxiliar ?? ""] : []),
+    diaDe(l.criadoEm),
+    diaDe(l.atualizadoEm),
+  ];
+  return { colunas, celulas };
+}
+
 async function contas(sp: ParametrosBusca, hoje: string): Promise<Tabela> {
-  const { f, tipo, onde } = filtrosContas(sp);
-  const { contaFinanceira: conta, banco } = schema;
-  const [linhas, saldos] = await Promise.all([
-    getDb()
-      .select({ id: conta.id, descricao: conta.descricao, tipo: conta.tipo, banco: banco.nome, considerar: conta.considerarNosSaldos, ativo: conta.ativo })
-      .from(conta)
-      .leftJoin(banco, eq(banco.id, conta.bancoId))
-      .where(onde)
-      .orderBy(desc(conta.ativo), asc(conta.ordem), asc(sql`lower(${conta.descricao})`)),
-    saldosDasContas(hoje),
-  ]);
-  const filtros = [f.busca && `Busca: ${f.busca}`, tipo && `Tipo: ${TIPOS_CONTA.find((t) => t.valor === tipo)?.rotulo}`, situacaoCadastro(f.situacao)].filter((x): x is string => !!x);
-  const corpo: LinhaTabela[] = linhas.map((x) => ({ celulas: [x.descricao, x.banco ?? "Outro", rotuloTipoConta(x.tipo), sn(x.considerar), x.ativo ? "Ativa" : "Inativa", saldos.get(x.id) ?? 0] }));
-  const total = linhas.filter((x) => x.considerar).reduce((s, x) => s + (saldos.get(x.id) ?? 0), 0);
-  if (linhas.length) corpo.push({ celulas: ["Total (contas consideradas nos saldos)", null, null, null, null, total], estilo: "total" });
+  const [pref, extras] = await Promise.all([lerPreferencia("contas-financeiras"), extrasComuns("contas")]);
+  const { f, tipo, linhas, descricoes } = await carregarContas(sp, pref);
+  const filtros = [f.busca && `Busca: ${f.busca}`, tipo && `Tipo: ${TIPOS_CONTA.find((t) => t.valor === tipo)?.rotulo}`, situacaoCadastro(f.situacao), ...descricoes].filter((x): x is string => !!x);
+  const corpo: LinhaTabela[] = linhas.map((x) => ({
+    celulas: [x.descricao, x.bancoNome ?? "Outro", rotuloTipoConta(x.tipo), sn(x.considerarNosSaldos), x.ativo ? "Ativa" : "Inativa", x.saldoAtualCentavos, x.saldoInicialCentavos, x.saldoInicialData, ...extras.celulas(x)],
+  }));
+  const total = linhas.filter((x) => x.considerarNosSaldos).reduce((s, x) => s + x.saldoAtualCentavos, 0);
+  if (linhas.length) corpo.push({ celulas: ["Total (contas consideradas nos saldos)", null, null, null, null, total, null, null, ...extras.colunas.map(() => null)], estilo: "total" });
   return {
     titulo: "Contas Financeiras",
     filtros,
-    colunas: [{ titulo: "Conta Financeira", largura: 2.5 }, { titulo: "Banco", largura: 2 }, { titulo: "Tipo", largura: 1.5 }, { titulo: "Considerar nos saldos", largura: 1.3 }, { titulo: "Situação" }, { titulo: "Saldo Atual", tipo: "dinheiro", largura: 1.3 }],
+    colunas: [
+      { titulo: "Conta Financeira", largura: 2.5 },
+      { titulo: "Banco", largura: 2 },
+      { titulo: "Tipo", largura: 1.5 },
+      { titulo: "Considerar nos saldos", largura: 1.3 },
+      { titulo: "Situação" },
+      { titulo: "Saldo Atual", tipo: "dinheiro", largura: 1.3 },
+      { titulo: "Saldo Inicial", tipo: "dinheiro", largura: 1.3, extra: true },
+      { titulo: "Data do Saldo Inicial", tipo: "data", largura: 1, extra: true },
+      ...extras.colunas,
+    ],
     linhas: corpo,
     orientacao: "retrato",
     registros: linhas.length,
@@ -153,20 +174,11 @@ async function contas(sp: ParametrosBusca, hoje: string): Promise<Tabela> {
 }
 
 async function cartoes(sp: ParametrosBusca, hoje: string): Promise<Tabela> {
-  const { f, fechamento, vencimento, onde } = filtrosCartoes(sp);
-  const { cartaoCredito: cartao, banco, contaFinanceira } = schema;
-  const contaPg = alias(contaFinanceira, "conta_pagamento");
-  const [linhas, usos] = await Promise.all([
-    getDb()
-      .select({ id: cartao.id, descricao: cartao.descricao, banco: banco.nome, limiteCentavos: cartao.limiteCentavos, ilimitado: cartao.ilimitado, diaFechamento: cartao.diaFechamento, diaVencimento: cartao.diaVencimento, conta: contaPg.descricao, ativo: cartao.ativo })
-      .from(cartao)
-      .leftJoin(banco, eq(banco.id, cartao.bancoId))
-      .leftJoin(contaPg, eq(contaPg.id, cartao.contaPagamentoId))
-      .where(onde)
-      .orderBy(desc(cartao.ativo), asc(cartao.ordem), asc(sql`lower(${cartao.descricao})`)),
-    usoDosLimites(),
-  ]);
-  const filtros = [f.busca && `Busca: ${f.busca}`, fechamento && `Dia do Fechamento: ${fechamento}`, vencimento && `Dia do Vencimento: ${vencimento}`, situacaoCadastro(f.situacao, false)].filter((x): x is string => !!x);
+  const [pref, extras] = await Promise.all([lerPreferencia("cartoes-de-credito"), extrasComuns("cartoes")]);
+  const { f, fechamento, vencimento, linhas, descricoes } = await carregarCartoes(sp, pref);
+  const filtros = [f.busca && `Busca: ${f.busca}`, fechamento && `Dia do Fechamento: ${fechamento}`, vencimento && `Dia do Vencimento: ${vencimento}`, situacaoCadastro(f.situacao, false), ...descricoes].filter(
+    (x): x is string => !!x,
+  );
   return {
     titulo: "Cartões de Crédito",
     filtros,
@@ -179,10 +191,25 @@ async function cartoes(sp: ParametrosBusca, hoje: string): Promise<Tabela> {
       { titulo: "Situação", largura: 0.8 },
       { titulo: "Limite", tipo: "dinheiro", largura: 1.1 },
       { titulo: "Disponível", tipo: "dinheiro", largura: 1.1 },
+      { titulo: "Usado", tipo: "dinheiro", largura: 1.1, extra: true },
+      ...extras.colunas,
     ],
     linhas: linhas.map((x) => {
-      const lim = limiteDoCartao(x, usos.get(x.id) ?? 0);
-      return { celulas: [x.descricao, x.banco ?? "Outro", x.diaFechamento, x.diaVencimento, x.conta ?? "Não informado", x.ativo ? "Ativo" : "Inativo", lim.ilimitado ? "Ilimitado" : lim.limite, lim.ilimitado ? null : lim.disponivel] };
+      const lim = x.limite;
+      return {
+        celulas: [
+          x.descricao,
+          x.bancoNome ?? "Outro",
+          x.diaFechamento,
+          x.diaVencimento,
+          x.contaPagamentoNome ?? "Não informado",
+          x.ativo ? "Ativo" : "Inativo",
+          lim.ilimitado ? "Ilimitado" : lim.limite,
+          lim.ilimitado ? null : lim.disponivel,
+          lim.usado,
+          ...extras.celulas(x),
+        ],
+      };
     }),
     orientacao: "paisagem",
     arquivo: nomeArquivo("cartoes de credito", hoje),
@@ -190,27 +217,28 @@ async function cartoes(sp: ParametrosBusca, hoje: string): Promise<Tabela> {
 }
 
 async function categorias(sp: ParametrosBusca, hoje: string): Promise<Tabela> {
-  const { categoria } = schema;
-  const todas = await getDb()
-    .select({ id: categoria.id, nome: categoria.nome, categoriaPaiId: categoria.categoriaPaiId, ordem: categoria.ordem, cor: categoria.cor, natureza: categoria.natureza, especial: categoria.especial, ativo: categoria.ativo, padraoSistema: categoria.padraoSistema })
-    .from(categoria);
-  const arvore = montarArvore(todas);
-  const { f, aba, linhas } = filtrarCategorias(arvore, sp);
-  const filtros = [aba !== null && `Categoria principal: ${arvore.find((c) => c.id === aba)?.nome}`, f.busca && `Busca: ${f.busca}`, situacaoCadastro(f.situacao)].filter((x): x is string => !!x);
+  const extras = await extrasComuns("categorias");
+  const { f, aba, arvore, linhas, descricoes } = await carregarCategorias(sp);
+  const filtros = [aba !== null && `Categoria principal: ${arvore.find((c) => c.id === aba)?.nome}`, f.busca && `Busca: ${f.busca}`, situacaoCadastro(f.situacao), ...descricoes].filter((x): x is string => !!x);
   return {
     titulo: "Categorias",
     filtros,
-    colunas: [{ titulo: "Numeração", largura: 0.9 }, { titulo: "Categoria", largura: 3 }, { titulo: "Tipo", largura: 1 }, { titulo: "Situação", largura: 0.9 }],
-    linhas: linhas.map((c) => ({ celulas: [c.numero || "—", c.nome, c.especial ? "Especial" : c.natureza === "receita" ? "Receita" : "Despesa", c.ativo ? "Ativa" : "Inativa"], recuo: 0, cor: null })),
+    colunas: [{ titulo: "Numeração", largura: 0.9 }, { titulo: "Categoria", largura: 3 }, { titulo: "Tipo", largura: 1 }, { titulo: "Situação", largura: 0.9 }, { titulo: "Nível", tipo: "numero", largura: 0.6, extra: true }, ...extras.colunas],
+    linhas: linhas.map((c) => ({
+      celulas: [c.numero || "—", c.nome, c.especial ? "Especial" : c.natureza === "receita" ? "Receita" : "Despesa", c.ativo ? "Ativa" : "Inativa", c.nivel, ...extras.celulas(c)],
+      recuo: 0,
+      cor: null,
+    })),
     orientacao: "retrato",
     arquivo: nomeArquivo("categorias", hoje),
   };
 }
 
+const SEXO: Record<string, string> = { masculino: "Masculino", feminino: "Feminino", outro: "Outro", nao_informado: "Não informado" };
+
 async function contatos(sp: ParametrosBusca, hoje: string): Promise<Tabela> {
-  const { f, papel, pessoa, cidade, uf, onde } = filtrosContatos(sp);
-  const { contato: c } = schema;
-  const linhas = await getDb().select().from(c).where(onde).orderBy(desc(c.ativo), asc(sql`lower(${c.nome})`));
+  const [pref, extras] = await Promise.all([lerPreferencia("clientes-e-fornecedores"), extrasComuns("contatos")]);
+  const { f, papel, pessoa, cidade, uf, linhas, descricoes } = await carregarContatos(sp, pref);
   const filtros = [
     f.busca && `Busca: ${f.busca}`,
     papel && `Mostrar: ${papel === "clientes" ? "Só Clientes" : "Só Fornecedores"}`,
@@ -218,6 +246,7 @@ async function contatos(sp: ParametrosBusca, hoje: string): Promise<Tabela> {
     cidade && `Cidade: ${cidade}`,
     uf && `Estado: ${uf}`,
     situacaoCadastro(f.situacao, false),
+    ...descricoes,
   ].filter((x): x is string => !!x);
   return {
     titulo: "Clientes e Fornecedores",
@@ -232,9 +261,43 @@ async function contatos(sp: ParametrosBusca, hoje: string): Promise<Tabela> {
       { titulo: "Cliente", largura: 0.7 },
       { titulo: "Fornecedor", largura: 0.8 },
       { titulo: "Situação", largura: 0.8 },
+      { titulo: "Razão Social", largura: 2.2, extra: true },
+      { titulo: "Sexo", largura: 0.9, extra: true },
+      { titulo: "Nascimento", tipo: "data", largura: 0.9, extra: true },
+      { titulo: "CEP", largura: 0.9, extra: true },
+      { titulo: "Endereço", largura: 2.2, extra: true },
+      { titulo: "Número", largura: 0.7, extra: true },
+      { titulo: "Complemento", largura: 1.2, extra: true },
+      { titulo: "Bairro", largura: 1.3, extra: true },
+      { titulo: "Cidade", largura: 1.3, extra: true },
+      { titulo: "Estado", largura: 0.6, extra: true },
+      { titulo: "Observação", largura: 2.5, extra: true },
+      ...extras.colunas,
     ],
     linhas: linhas.map((x) => ({
-      celulas: [x.nome, x.pessoa === "fisica" ? "Física" : "Jurídica", x.documento ?? "", x.email ?? "", x.telefone ?? "", [x.cidade, x.uf].filter(Boolean).join("/"), sn(x.eCliente), sn(x.eFornecedor), x.ativo ? "Ativo" : "Inativo"],
+      celulas: [
+        x.nome,
+        x.pessoa === "fisica" ? "Física" : "Jurídica",
+        x.documento ?? "",
+        x.email ?? "",
+        x.telefone ?? "",
+        [x.cidade, x.uf].filter(Boolean).join("/"),
+        sn(x.eCliente),
+        sn(x.eFornecedor),
+        x.ativo ? "Ativo" : "Inativo",
+        x.razaoSocial ?? "",
+        SEXO[x.sexo] ?? "",
+        x.nascimento,
+        x.cep ?? "",
+        x.logradouro ?? "",
+        x.numero ?? "",
+        x.complemento ?? "",
+        x.bairro ?? "",
+        x.cidade ?? "",
+        x.uf ?? "",
+        x.observacoes ?? "",
+        ...extras.celulas(x),
+      ],
     })),
     orientacao: "paisagem",
     arquivo: nomeArquivo("clientes e fornecedores", hoje),
@@ -242,28 +305,26 @@ async function contatos(sp: ParametrosBusca, hoje: string): Promise<Tabela> {
 }
 
 async function formas(sp: ParametrosBusca, hoje: string): Promise<Tabela> {
-  const { f, onde } = filtrosFormas(sp);
-  const { formaPagamento: forma } = schema;
-  const linhas = await getDb().select().from(forma).where(onde).orderBy(desc(forma.ativo), asc(sql`lower(${forma.descricao})`));
+  const [pref, extras] = await Promise.all([lerPreferencia("formas-de-pagamento"), extrasComuns("formas")]);
+  const { f, linhas, descricoes } = await carregarFormas(sp, pref);
   return {
     titulo: "Formas de Pagamento",
-    filtros: [f.busca && `Busca: ${f.busca}`, situacaoCadastro(f.situacao)].filter((x): x is string => !!x),
-    colunas: [{ titulo: "Forma de Pagamento", largura: 3 }, { titulo: "Sigla" }, { titulo: "Situação" }],
-    linhas: linhas.map((x) => ({ celulas: [x.descricao, x.sigla ?? "", x.ativo ? "Ativa" : "Inativa"] })),
+    filtros: [f.busca && `Busca: ${f.busca}`, situacaoCadastro(f.situacao), ...descricoes].filter((x): x is string => !!x),
+    colunas: [{ titulo: "Forma de Pagamento", largura: 3 }, { titulo: "Sigla" }, { titulo: "Situação" }, ...extras.colunas],
+    linhas: linhas.map((x) => ({ celulas: [x.descricao, x.sigla ?? "", x.ativo ? "Ativa" : "Inativa", ...extras.celulas(x)] })),
     orientacao: "retrato",
     arquivo: nomeArquivo("formas de pagamento", hoje),
   };
 }
 
 async function tags(sp: ParametrosBusca, hoje: string): Promise<Tabela> {
-  const { f, onde } = filtrosTags(sp);
-  const { tag } = schema;
-  const linhas = await getDb().select().from(tag).where(onde).orderBy(desc(tag.ativo), asc(sql`lower(${tag.descricao})`));
+  const [pref, extras] = await Promise.all([lerPreferencia("tags"), extrasComuns("tags")]);
+  const { f, linhas, descricoes } = await carregarTags(sp, pref);
   return {
     titulo: "Tags",
-    filtros: [f.busca && `Busca: ${f.busca}`, situacaoCadastro(f.situacao)].filter((x): x is string => !!x),
-    colunas: [{ titulo: "Tag", largura: 3 }, { titulo: "Situação" }],
-    linhas: linhas.map((x) => ({ celulas: [x.descricao, x.ativo ? "Ativa" : "Inativa"] })),
+    filtros: [f.busca && `Busca: ${f.busca}`, situacaoCadastro(f.situacao), ...descricoes].filter((x): x is string => !!x),
+    colunas: [{ titulo: "Tag", largura: 3 }, { titulo: "Situação" }, ...extras.colunas],
+    linhas: linhas.map((x) => ({ celulas: [x.descricao, x.ativo ? "Ativa" : "Inativa", ...extras.celulas(x)] })),
     orientacao: "retrato",
     arquivo: nomeArquivo("tags", hoje),
   };

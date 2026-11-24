@@ -9,6 +9,8 @@ import { carregarContexto, pendentes, type Contexto, type Pendente, type Perna }
 import { listarFaturas } from "@/lib/cartoes/servidor";
 import { mesDe, situacaoDe, somarDias, valorComSinal, type Situacao } from "./regras";
 import { valorComSinalSql, valorRealizadoSql } from "./sql";
+import { filtrarAvancado, lerFiltrosAvancados } from "@/lib/listagem/avancado";
+import { CAMPOS_LANCAMENTOS_BASE, LEITORES_LANCAMENTOS } from "./avancado";
 import type { Aba, Filtros, FiltroSituacao, LinhaLista, Opcoes, Resumo } from "./tipos";
 
 const { lancamento: l, contaFinanceira: conta, cartaoCredito: cartao, banco, categoria, contato, formaPagamento: forma, tag, lancamentoTag, lancamentoItem, anexo, fatura } = schema;
@@ -32,6 +34,7 @@ export function lerFiltros(sp: ParametrosBusca, hoje = hojeIso()): Filtros {
     forma: id("forma"),
     contato: id("contato"),
     tag: id("tag"),
+    avancado: parametro(sp, "av").slice(0, 2000),
   };
 }
 
@@ -79,7 +82,8 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
   if (f.forma) filtrosConteudo.push(eq(l.formaPagamentoId, Number(f.forma)));
   if (f.contato) filtrosConteudo.push(eq(l.contatoId, Number(f.contato)));
   if (f.tag) filtrosConteudo.push(sql`exists (select 1 from ${lancamentoTag} where ${lancamentoTag.lancamentoId} = ${l.id} and ${lancamentoTag.tagId} = ${Number(f.tag)})`);
-  const agruparFaturas = cartaoFiltro === null && filtrosConteudo.length === 0;
+  const avancados = lerFiltrosAvancados(f.avancado, CAMPOS_LANCAMENTOS_BASE);
+  const agruparFaturas = cartaoFiltro === null && filtrosConteudo.length === 0 && avancados.length === 0;
 
   const escopo =
     cartaoFiltro !== null
@@ -264,6 +268,7 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
   }
 
   linhas = linhas.filter((x) => passaAba(f.aba, x.tipo, x.valorCentavos) && passaSituacao(x.situacao, f.situacao));
+  if (avancados.length) linhas = filtrarAvancado(linhas, avancados, CAMPOS_LANCAMENTOS_BASE, LEITORES_LANCAMENTOS);
 
   const receitas = linhas.filter((x) => x.valorCentavos > 0).reduce((s, x) => s + x.valorCentavos, 0);
   const despesas = linhas.filter((x) => x.valorCentavos < 0).reduce((s, x) => s - x.valorCentavos, 0);

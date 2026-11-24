@@ -13,13 +13,17 @@ import { CampoAreaTexto, CampoSelecao, CampoTexto, TextoComDestaque } from "@/co
 import { Chave } from "@/components/ui/chave";
 import { FaixaErro } from "@/components/ui/faixa-erro";
 import { Tabela } from "@/components/ui/tabela";
+import { CampoAuxiliarFormulario } from "@/components/listagem/campo-auxiliar";
+import { comComuns, MarcaNovo } from "@/components/listagem/colunas-comuns";
+import { useRotuloAuxiliar } from "@/components/listagem/configurar-listagem";
+import { colunasVisiveis, type PreferenciaListagem } from "@/lib/listagem/telas";
 import { cn } from "@/lib/cn";
 import { formatarCep, formatarDocumento, formatarTelefone } from "@/lib/cadastros/documentos";
-import { POR_PAGINA, type Situacao } from "@/lib/cadastros/filtros";
+import type { Situacao } from "@/lib/cadastros/filtros";
 import { SEXOS, UFS } from "@/lib/cadastros/opcoes";
 import { alterarSituacaoContato, salvarContato, type DadosContato } from "./acoes";
 
-type Linha = {
+type LinhaBase = {
   id: number;
   pessoa: "fisica" | "juridica";
   nome: string;
@@ -43,6 +47,7 @@ type Linha = {
   ativo: boolean;
   padraoSistema: boolean;
 };
+type Linha = LinhaBase & { campoAuxiliar: string | null; criadoEm: Date; atualizadoEm: Date };
 
 const VAZIO: DadosContato = {
   pessoa: "fisica",
@@ -64,6 +69,7 @@ const VAZIO: DadosContato = {
   cidade: "",
   uf: "",
   observacoes: "",
+  campoAuxiliar: "",
 };
 
 type Aba = "informacoes" | "endereco" | "observacoes";
@@ -83,12 +89,14 @@ function Papeis({ cliente, fornecedor }: { cliente: boolean; fornecedor: boolean
   );
 }
 
-export function TelaContatos({ linhas, total, filtros, caminho }: {
+export function TelaContatos({ preferencia, linhas, total, filtros, caminho }: {
   linhas: Linha[];
+  preferencia: PreferenciaListagem;
   total: number;
   filtros: { busca: string; situacao: Situacao; pagina: number; papel: string; pessoa: string; cidade: string; uf: string };
   caminho: string;
 }) {
+  const rotuloAux = useRotuloAuxiliar("clientes-e-fornecedores");
   const form = useFormularioCadastro(VAZIO);
   const situacao = useSituacao(alterarSituacaoContato);
   const [aba, setAba] = useState<Aba>("informacoes");
@@ -132,6 +140,7 @@ export function TelaContatos({ linhas, total, filtros, caminho }: {
       cidade: l.cidade ?? "",
       uf: l.uf ?? "",
       observacoes: l.observacoes ?? "",
+      campoAuxiliar: l.campoAuxiliar ?? "",
     });
   };
   const salvar = () => {
@@ -141,7 +150,7 @@ export function TelaContatos({ linhas, total, filtros, caminho }: {
 
   return (
     <>
-      <BarraLista tela="clientes-e-fornecedores" aoAdicionar={abrirNovo} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar por nome ou documento" />
+      <BarraLista tela="clientes-e-fornecedores" preferencia={preferencia} aoAdicionar={abrirNovo} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar por nome ou documento" />
       <FaixaErro>{situacao.aviso && <TextoComDestaque texto={situacao.aviso} />}</FaixaErro>
       <Tabela
         linhas={linhas}
@@ -151,7 +160,9 @@ export function TelaContatos({ linhas, total, filtros, caminho }: {
             ? "Ninguém encontrado com esses filtros."
             : "Nenhum cliente ou fornecedor cadastrado. Clique em Adicionar para cadastrar pessoas e empresas com quem você paga ou recebe."
         }
-        colunas={[
+        compacta={preferencia.compactar}
+        destacarPares={preferencia.destacarPares}
+        colunas={colunasVisiveis("clientes-e-fornecedores", comComuns<Linha>([
           {
             chave: "nome",
             titulo: "Nome",
@@ -163,6 +174,7 @@ export function TelaContatos({ linhas, total, filtros, caminho }: {
                 <span>
                   <span className="font-medium text-gray-900">{l.nome}</span>
                   <AsteriscoPadrao mostrar={l.padraoSistema} />
+                <MarcaNovo registro={l} />
                   {(l.razaoSocial || l.documento) && (
                     <span className="block text-xs text-gray-500">{[l.razaoSocial, l.documento].filter(Boolean).join(" · ")}</span>
                   )}
@@ -209,9 +221,9 @@ export function TelaContatos({ linhas, total, filtros, caminho }: {
               />
             ),
           },
-        ]}
+        ], rotuloAux), preferencia)}
       />
-      <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={POR_PAGINA} total={total} />
+      <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={preferencia.porPagina} total={total} />
 
       <ModalCadastro
         formulario={form}
@@ -322,6 +334,7 @@ export function TelaContatos({ linhas, total, filtros, caminho }: {
         {aba === "observacoes" && (
           <CampoAreaTexto rotulo="Observações" linhas={8} valor={d.observacoes} aoMudar={(v) => form.mudar("observacoes", v)} />
         )}
+        <CampoAuxiliarFormulario cadastro="contatos" className="mt-4" valor={form.dados.campoAuxiliar ?? ""} aoMudar={(v) => form.mudar("campoAuxiliar", v)} />
       </ModalCadastro>
     </>
   );

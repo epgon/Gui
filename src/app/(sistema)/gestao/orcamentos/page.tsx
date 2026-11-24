@@ -7,12 +7,15 @@ import { carregarEscolhidas, carregarOrcamento, lerFiltrosOrcamento } from "@/li
 import { realizarAutomaticos } from "@/lib/recorrentes/servidor";
 import { carregarArvore } from "@/lib/relatorios/servidor";
 import { PrimeiroAcesso, TelaOrcamento, type Raiz } from "./tela";
+import { RecursoDesativado } from "@/components/layout/recurso-desativado";
+import { recursoAtivo } from "@/lib/parametros/servidor";
 
 export const metadata = { title: "Orçamentos" };
 
 const ARTIGOS = ["Gerar orçamentos a partir das categorias", "Como definir o limite de cada categoria", "Como o orçamento é replicado nos meses seguintes"];
 
 export default async function PaginaOrcamentos({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
+  if (!(await recursoAtivo("orcamentos"))) return <RecursoDesativado titulo="Orçamentos" trilha="Gestão" />;
   const hoje = hojeIso();
   const sp = await searchParams;
   const [arvore, escolhidas] = await Promise.all([carregarArvore(), carregarEscolhidas()]);

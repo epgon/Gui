@@ -2,10 +2,13 @@ import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { PainelAjuda } from "@/components/layout/painel-ajuda";
 import { ARTIGOS_IMPORTACAO } from "../artigos";
 import { EnvioArquivo } from "./envio";
+import { RecursoDesativado } from "@/components/layout/recurso-desativado";
+import { recursoAtivo } from "@/lib/parametros/servidor";
 
 export const metadata = { title: "Nova Importação" };
 
-export default function PaginaNovaImportacao() {
+export default async function PaginaNovaImportacao() {
+  if (!(await recursoAtivo("importacao"))) return <RecursoDesativado titulo="Importações" trilha="Financeiro" />;
   return (
     <>
       <main className="min-w-0 flex-1">

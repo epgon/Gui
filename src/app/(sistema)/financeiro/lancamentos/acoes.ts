@@ -13,6 +13,7 @@ import type { DadosLancamento, LancamentoEdicao, Ocorrencia } from "@/lib/lancam
 import { aplicarVariaveis, primeiraOcorrencia } from "@/lib/recorrentes/regras";
 import { conferirOcorrencia, dadosDaOcorrencia, gravarOcorrencia } from "@/lib/recorrentes/servidor";
 import { ErroValidacao, lerDatasRecorrencia } from "@/lib/recorrentes/validacao";
+import { lerParametros } from "@/lib/parametros/servidor";
 import { exigirLogin } from "@/lib/sessao";
 
 const { lancamento: l, lancamentoItem: item, lancamentoTag, contaFinanceira: conta, cartaoCredito: cartao, fatura, categoria, parcelamento, transferencia, anexo, formaPagamento, contato, tag, recorrencia, recorrenciaItem, recorrenciaTag, recorrenciaExcecao } = schema;
@@ -676,7 +677,9 @@ async function aplicarValorPago(tx: Transacao, id: number, v: PagamentoValor) {
   if (x.tipo !== "receita" && x.tipo !== "despesa") erro("Este lançamento só pode ser pago pelo valor total.");
   if (x.formato === "detalhado") erro("Lançamentos detalhados são pagos pelo valor total (a soma dos itens). Para pagar outro valor, ajuste os itens.");
   const pago = lerValor(v.valorPago, "Valor Pago");
-  const r = calcularPagamento(x.valorCentavos, pago, !!v.gerarRestante);
+  // Parâmetros > Lançamentos > Pagamento Parcial desligado: o que faltar vira desconto.
+  const parcialLigado = (await lerParametros()).pagamentoParcial;
+  const r = calcularPagamento(x.valorCentavos, pago, parcialLigado && !!v.gerarRestante);
   if (r.tipo === "integral") return;
   const vencimento = r.tipo === "parcial" ? lerData(v.vencimentoRestante, "Vencimento do Restante")! : null;
   await tx.update(l).set({ valorCentavos: r.valorCentavos, valorPagoCentavos: r.valorCentavos, valorOriginalCentavos: x.valorCentavos }).where(eq(l.id, x.id));

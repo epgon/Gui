@@ -1,11 +1,15 @@
 "use client";
 
-import { CheckCircle2, Download, Eye, FileSpreadsheet, FileText, Printer } from "lucide-react";
+import { CheckCircle2, Download, Eye, FileSpreadsheet, FileText, LayoutTemplate, Printer } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useSistema } from "@/components/layout/provedor-sistema";
+import { useComAvancado } from "@/components/listagem/use-avancado";
 import { Botao } from "@/components/ui/botao";
 import { FaixaErro } from "@/components/ui/faixa-erro";
 import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/cn";
+import { parametrosPersonalizacao, type Personalizacao } from "@/lib/exportacao/tabela";
+import { ImpressaoPersonalizada } from "./impressao-personalizada";
 
 /** Endereço da impressão/exportação de uma tela, com os filtros que estão na tela. */
 export function enderecoExportacao(tela: string, parametros: Record<string, string>, formato: "pdf" | "xlsx" | "csv", download = false) {
@@ -19,11 +23,24 @@ export function enderecoExportacao(tela: string, parametros: Record<string, stri
  * Botão "Imprimir" das listas e relatórios: Impressão Padrão (PDF, com Visualizar ou Download)
  * e exportação para Excel e CSV. Tudo respeita os filtros que estão na tela.
  */
-export function BotaoImprimir({ tela, parametros, exportar = true, className }: { tela: string; parametros: Record<string, string>; exportar?: boolean; className?: string }) {
+export function BotaoImprimir({ tela, parametros: proprios, exportar: exportarPedido = true, personalizada = false, className }: {
+  tela: string;
+  parametros: Record<string, string>;
+  exportar?: boolean;
+  /** Mostra a "Impressão Personalizada" (listas de Cadastros). */
+  personalizada?: boolean;
+  className?: string;
+}) {
+  const { recursos } = useSistema();
+  // O Filtro Avançado (na URL) também vale na impressão e na exportação.
+  const parametros = useComAvancado(proprios);
+  const imprimirLigado = recursos.impressao;
+  const exportar = exportarPedido && recursos.exportacao;
   const [aberto, setAberto] = useState(false);
   const [gerando, setGerando] = useState(false);
   const [pdf, setPdf] = useState<{ url: string; nome: string } | null>(null);
   const [erro, setErro] = useState("");
+  const [personalizando, setPersonalizando] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -46,12 +63,13 @@ export function BotaoImprimir({ tela, parametros, exportar = true, className }: 
     if (pdf) setTimeout(() => URL.revokeObjectURL(pdf.url), 60_000);
   }, [pdf]);
 
-  async function imprimir() {
+  async function imprimir(p?: Personalizacao) {
     setAberto(false);
+    setPersonalizando(false);
     setErro("");
     setGerando(true);
     try {
-      const resposta = await fetch(enderecoExportacao(tela, parametros, "pdf"), { cache: "no-store" });
+      const resposta = await fetch(enderecoExportacao(tela, p ? { ...parametros, ...parametrosPersonalizacao(p) } : parametros, "pdf"), { cache: "no-store" });
       if (!resposta.ok) {
         const corpo = await resposta.json().catch(() => null);
         setErro(corpo?.erro ?? "Não foi possível gerar a impressão. Tente de novo.");
@@ -67,6 +85,8 @@ export function BotaoImprimir({ tela, parametros, exportar = true, className }: 
   }
 
   const item = "flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-verde-claro";
+  // Configurações > Recursos: sem Impressão e sem Exportação, o botão some.
+  if (!imprimirLigado && !exportar) return null;
   return (
     <div ref={ref} className={cn("relative", className)}>
       <button
@@ -83,11 +103,29 @@ export function BotaoImprimir({ tela, parametros, exportar = true, className }: 
       </button>
       {aberto && (
         <ul role="menu" className="absolute right-0 z-40 mt-1 min-w-52 overflow-hidden rounded-lg border border-borda bg-white py-1 text-sm shadow-lg">
-          <li>
-            <button type="button" role="menuitem" className={item} onClick={imprimir}>
-              <FileText className="h-4 w-4 text-verde" /> Impressão Padrão (PDF)
-            </button>
-          </li>
+          {imprimirLigado && (
+            <li>
+              <button type="button" role="menuitem" className={item} onClick={() => imprimir()}>
+                <FileText className="h-4 w-4 text-verde" /> Impressão Padrão (PDF)
+              </button>
+            </li>
+          )}
+          {imprimirLigado && personalizada && (
+            <li>
+              <button
+                type="button"
+                role="menuitem"
+                className={item}
+                onClick={() => {
+                  setAberto(false);
+                  setErro("");
+                  setPersonalizando(true);
+                }}
+              >
+                <LayoutTemplate className="h-4 w-4 text-verde" /> Impressão Personalizada
+              </button>
+            </li>
+          )}
           {exportar && (
             <>
               <li>
@@ -110,6 +148,14 @@ export function BotaoImprimir({ tela, parametros, exportar = true, className }: 
         </div>
       )}
 
+      {personalizando && (
+        <ImpressaoPersonalizada
+          tela={tela}
+          endereco={enderecoExportacao(tela, parametros, "pdf").replace("formato=pdf", "formato=colunas")}
+          aoGerar={(p) => imprimir(p)}
+          aoFechar={() => setPersonalizando(false)}
+        />
+      )}
       <Modal
         aberto={!!pdf}
         aoFechar={() => setPdf(null)}

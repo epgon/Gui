@@ -1,27 +1,19 @@
-import { Filter } from "lucide-react";
-import Form from "next/form";
-import Link from "next/link";
+import type { CampoAvancado } from "@/lib/listagem/avancado";
+import { PainelFiltrosCliente } from "./painel-filtros-cliente";
 
-/** Painel da direita nas listas: "Filtros", com o botão Filtrar e o link Limpar. */
-export function PainelFiltros({ caminho, children, limpar }: { caminho: string; children: React.ReactNode; /** Para onde "Limpar" leva (padrão: a tela sem filtros). */ limpar?: string }) {
-  return (
-    <aside className="hidden w-72 shrink-0 border-l border-borda-painel bg-painel xl:block" aria-label="Filtros">
-      <Form action={caminho} className="sticky top-14 space-y-4 p-4">
-        <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-800">
-          <Filter className="h-4 w-4 text-verde" /> Filtros
-        </h2>
-        <div className="space-y-3">{children}</div>
-        <div className="flex items-center gap-2">
-          <button type="submit" className="h-9 flex-1 rounded-md bg-verde px-4 text-sm font-semibold text-white hover:bg-verde-escuro">
-            Filtrar
-          </button>
-          <Link href={limpar ?? caminho} className="h-9 rounded-md px-3 text-sm leading-9 text-gray-600 hover:bg-gray-100">
-            Limpar
-          </Link>
-        </div>
-      </Form>
-    </aside>
-  );
+/**
+ * Painel da direita nas listas: "Filtros", com as abas Simples e Avançado (quando a lista tem),
+ * o botão Filtrar e o link Limpar.
+ */
+export function PainelFiltros(props: {
+  caminho: string;
+  children: React.ReactNode;
+  /** Para onde "Limpar" leva (padrão: a tela sem filtros). */
+  limpar?: string;
+  /** Campos do Filtro Avançado e o valor atual ("av" da URL). */
+  avancado?: { campos: CampoAvancado[]; valor: string };
+}) {
+  return <PainelFiltrosCliente {...props} />;
 }
 
 const estilo = "h-9 w-full rounded-md border border-borda bg-white px-3 text-sm outline-none focus:border-verde";
