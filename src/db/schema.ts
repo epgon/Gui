@@ -325,6 +325,9 @@ export const lancamento = pgTable(
     parcelaNumero: smallint("parcela_numero"),
     parcelaTotal: smallint("parcela_total"),
     transferenciaId: integer("transferencia_id").references(() => transferencia.id, { onDelete: "cascade" }),
+    /** Lançamento gravado a partir de um recorrente: a regra e a data original da ocorrência. */
+    recorrenciaId: integer("recorrencia_id").references((): AnyPgColumn => recorrencia.id, { onDelete: "set null" }),
+    dataOcorrencia: date("data_ocorrencia"),
     origem: origemLancamentoEnum("origem").notNull().default("manual"),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
     atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
@@ -346,6 +349,8 @@ export const lancamento = pgTable(
     index("lancamento_parcelamento_idx").on(t.parcelamentoId),
     index("lancamento_transferencia_idx").on(t.transferenciaId),
     uniqueIndex("lancamento_saldo_inicial_unico").on(t.contaId).where(sql`${t.tipo} = 'saldo_inicial'`),
+    // Uma ocorrência de recorrente vira no máximo um lançamento (dois na transferência: saída e entrada).
+    uniqueIndex("lancamento_ocorrencia_unica").on(t.recorrenciaId, t.dataOcorrencia, t.tipo).where(sql`${t.recorrenciaId} is not null`),
   ],
 );
 
@@ -396,6 +401,120 @@ export const anexo = pgTable(
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("anexo_lancamento_idx").on(t.lancamentoId)],
+);
+
+// ---------------------------------------------------------------------------
+// 4.4. Recorrentes (Fase 3)
+// ---------------------------------------------------------------------------
+
+export const formatoRecorrenciaEnum = pgEnum("formato_recorrencia", ["simples", "detalhado", "transferencia"]);
+
+export const intervaloRecorrenciaEnum = pgEnum("intervalo_recorrencia", [
+  "semanal",
+  "mensal",
+  "bimestral",
+  "trimestral",
+  "semestral",
+  "anual",
+  "livre",
+]);
+
+/** Planos: agrupam recorrentes com a mesma descrição e valor. */
+export const plano = pgTable("plano", {
+  ...camposPadrao,
+  nome: text("nome").notNull(),
+  descricao: text("descricao").notNull(),
+  tipo: naturezaCategoriaEnum("tipo").notNull().default("despesa"),
+  valorCentavos: bigint("valor_centavos", { mode: "number" }).notNull(),
+});
+
+/**
+ * A regra do recorrente. Os lançamentos futuros não são gravados antes da hora:
+ * são calculados na hora de mostrar. Uma ocorrência só é gravada quando é paga,
+ * editada ou realizada automaticamente.
+ */
+export const recorrencia = pgTable(
+  "recorrencia",
+  {
+    ...camposPadrao,
+    formato: formatoRecorrenciaEnum("formato").notNull().default("simples"),
+    /** Despesa ou receita (no detalhado, o sinal da soma dos itens; na transferência, não se aplica). */
+    tipo: naturezaCategoriaEnum("tipo").notNull().default("despesa"),
+    /** Aceita as variáveis #ano# e #mes#, trocadas pelo ano e mês do vencimento. */
+    descricao: text("descricao").notNull(),
+    valorCentavos: bigint("valor_centavos", { mode: "number" }).notNull(),
+    /** Média: 0 = valor fixo; 1 = valor do último lançamento; 2 a 12 = média dos últimos N. */
+    mediaUltimos: smallint("media_ultimos").notNull().default(0),
+    intervalo: intervaloRecorrenciaEnum("intervalo").notNull().default("mensal"),
+    /** Só no intervalo "Livre": a cada quantos dias. */
+    intervaloDias: smallint("intervalo_dias"),
+    diaFixo: smallint("dia_fixo").notNull(),
+    dataInicio: date("data_inicio").notNull(),
+    repeticoes: smallint("repeticoes"),
+    dataFim: date("data_fim"),
+    realizarAutomaticamente: boolean("realizar_automaticamente").notNull().default(false),
+    apenasDiaUtil: boolean("apenas_dia_util").notNull().default(false),
+    contaId: integer("conta_id").references(() => contaFinanceira.id),
+    cartaoId: integer("cartao_id").references(() => cartaoCredito.id),
+    contaDestinoId: integer("conta_destino_id").references(() => contaFinanceira.id),
+    categoriaId: integer("categoria_id").references(() => categoria.id),
+    formaPagamentoId: integer("forma_pagamento_id").references(() => formaPagamento.id),
+    contatoId: integer("contato_id").references(() => contato.id),
+    planoId: integer("plano_id").references(() => plano.id),
+    observacao: varchar("observacao", { length: 1000 }),
+  },
+  (t) => [
+    check("recorrencia_conta_ou_cartao", sql`num_nonnulls(${t.contaId}, ${t.cartaoId}) = 1`),
+    check("recorrencia_dia_fixo_valido", sql`${t.diaFixo} between 1 and 31`),
+    check("recorrencia_valor_positivo", sql`${t.valorCentavos} >= 0`),
+    check("recorrencia_media_valida", sql`${t.mediaUltimos} between 0 and 12`),
+  ],
+);
+
+export const recorrenciaItem = pgTable(
+  "recorrencia_item",
+  {
+    id: serial("id").primaryKey(),
+    recorrenciaId: integer("recorrencia_id")
+      .notNull()
+      .references(() => recorrencia.id, { onDelete: "cascade" }),
+    tipo: naturezaCategoriaEnum("tipo").notNull(),
+    descricao: text("descricao").notNull(),
+    valorCentavos: bigint("valor_centavos", { mode: "number" }).notNull(),
+    categoriaId: integer("categoria_id")
+      .notNull()
+      .references(() => categoria.id),
+    ordem: smallint("ordem").notNull().default(0),
+  },
+  (t) => [index("recorrencia_item_recorrencia_idx").on(t.recorrenciaId)],
+);
+
+export const recorrenciaTag = pgTable(
+  "recorrencia_tag",
+  {
+    recorrenciaId: integer("recorrencia_id")
+      .notNull()
+      .references(() => recorrencia.id, { onDelete: "cascade" }),
+    tagId: integer("tag_id")
+      .notNull()
+      .references(() => tag.id),
+  },
+  (t) => [uniqueIndex("recorrencia_tag_unico").on(t.recorrenciaId, t.tagId)],
+);
+
+/** Ocorrências puladas (excluídas) de um recorrente: não aparecem mais. */
+export const recorrenciaExcecao = pgTable(
+  "recorrencia_excecao",
+  {
+    id: serial("id").primaryKey(),
+    recorrenciaId: integer("recorrencia_id")
+      .notNull()
+      .references(() => recorrencia.id, { onDelete: "cascade" }),
+    dataOcorrencia: date("data_ocorrencia").notNull(),
+    motivo: text("motivo"),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("recorrencia_excecao_unica").on(t.recorrenciaId, t.dataOcorrencia)],
 );
 
 // ---------------------------------------------------------------------------

@@ -10,8 +10,8 @@ export const MENU_PRINCIPAL: GrupoMenu[] = [
     titulo: "Financeiro",
     itens: [
       { titulo: "Lançamentos", href: "/financeiro/lancamentos", fase: 2, descricao: "Receitas, despesas e transferências do mês." },
-      { titulo: "Agenda", href: "/financeiro/agenda", fase: 10, descricao: "Calendário com o que vence em cada dia." },
-      { titulo: "Recorrentes", href: "/financeiro/recorrentes", fase: 4, descricao: "Contas que se repetem: aluguel, salário, assinaturas." },
+      { titulo: "Agenda", href: "/financeiro/agenda", fase: 3, descricao: "Calendário com o que vence em cada dia." },
+      { titulo: "Recorrentes", href: "/financeiro/recorrentes", fase: 3, descricao: "Contas que se repetem: aluguel, salário, assinaturas." },
       { titulo: "Importações", href: "/financeiro/importacoes", fase: 6, descricao: "Importar extratos OFX e CSV do banco." },
     ],
   },
@@ -40,7 +40,7 @@ export const MENU_PRINCIPAL: GrupoMenu[] = [
   {
     titulo: "Administração",
     itens: [
-      { titulo: "Meus Dados", href: "/administracao/meus-dados", fase: 3, descricao: "Seu perfil, senha e tempo de sessão." },
+      { titulo: "Meus Dados", href: "/administracao/meus-dados", fase: 4, descricao: "Seu perfil, senha e tempo de sessão." },
       { titulo: "Auditoria", href: "/administracao/auditoria", fase: 11, descricao: "Histórico de tudo o que foi cadastrado, alterado ou excluído." },
     ],
   },

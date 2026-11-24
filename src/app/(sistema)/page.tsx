@@ -8,6 +8,7 @@ import { PainelAjuda } from "@/components/layout/painel-ajuda";
 import { Cartao } from "@/components/ui/cartao";
 import { getDb, schema } from "@/db";
 import { cn } from "@/lib/cn";
+import { realizarAutomaticos } from "@/lib/recorrentes/servidor";
 
 export const metadata = { title: "Visão Geral" };
 
@@ -16,13 +17,14 @@ type Passo = { texto: string; href: string; feito: boolean; emBreve?: string };
 /** Confere no banco quais primeiros passos já foram dados. */
 async function primeirosPassos(): Promise<Passo[]> {
   const db = getDb();
-  const { contaFinanceira, cartaoCredito, auditoria, lancamento } = schema;
-  const [[contas], [cartoes], [categorias], [lancamentos]] = await Promise.all([
+  const { contaFinanceira, cartaoCredito, auditoria, lancamento, recorrencia } = schema;
+  const [[contas], [cartoes], [categorias], [lancamentos], [recorrentes]] = await Promise.all([
     db.select({ total: count() }).from(contaFinanceira),
     db.select({ total: count() }).from(cartaoCredito),
     // "Definir as categorias" = ter criado, editado ou inativado alguma.
     db.select({ total: count() }).from(auditoria).where(eq(auditoria.entidade, "Categoria")),
     db.select({ total: count() }).from(lancamento).where(ne(lancamento.tipo, "saldo_inicial")),
+    db.select({ total: count() }).from(recorrencia),
   ]);
   return [
     { texto: "Entrar no sistema", href: "/", feito: true },
@@ -30,7 +32,7 @@ async function primeirosPassos(): Promise<Passo[]> {
     { texto: "Defina suas Categorias", href: "/cadastros/categorias", feito: categorias.total > 0 },
     { texto: "Cadastre seu Cartão de Crédito", href: "/cadastros/cartoes-de-credito", feito: cartoes.total > 0 },
     { texto: "Registre um Lançamento", href: "/financeiro/lancamentos", feito: lancamentos.total > 0 },
-    { texto: "Crie um Lançamento Recorrente", href: "/financeiro/recorrentes", feito: false, emBreve: "chega na Fase 4" },
+    { texto: "Crie um Lançamento Recorrente", href: "/financeiro/recorrentes", feito: recorrentes.total > 0 },
   ];
 }
 
@@ -47,6 +49,8 @@ export default async function VisaoGeral() {
   const sessao = await auth();
   const nome = sessao?.user?.name?.split(" ")[0] ?? "";
   const hoje = new Intl.DateTimeFormat("pt-BR", { dateStyle: "full", timeZone: "America/Sao_Paulo" }).format(new Date());
+  // "Realizar automaticamente" dos lançamentos e recorrentes que venceram até hoje.
+  await realizarAutomaticos().catch(() => 0);
   const passos = await primeirosPassos();
   const feitos = passos.filter((p) => p.feito).length;
 

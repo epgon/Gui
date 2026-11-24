@@ -46,12 +46,19 @@ export type LinhaLista = {
   parcela: string | null; // "2/12"
   parcelamentoId: number | null;
   transferenciaId: number | null;
+  /** Lançamento gravado a partir de um recorrente. */
+  recorrenciaId: number | null;
+  /** Ocorrência prevista de um recorrente (ainda não gravada): id é null. */
+  previsto: Ocorrencia | null;
   realizarAutomaticamente: boolean;
   observacao: boolean;
   anexos: number;
   itens: ItemDetalhe[];
   compras: LinhaLista[]; // só na linha da fatura
 };
+
+/** Uma ocorrência de recorrente: a regra e a data original. */
+export type Ocorrencia = { recorrenciaId: number; data: string };
 
 export type Resumo = {
   receitas: number;
@@ -111,6 +118,22 @@ export type DadosLancamento = {
   observacao: string;
   itens: ItemFormulario[];
   parcelar: DadosParcelar | null;
+  /** "Gerar Recorrente" ligado no Novo Lançamento. */
+  recorrente?: DadosRecorrencia | null;
+  /** Editando uma ocorrência prevista: ao salvar, ela vira lançamento. */
+  ocorrencia?: Ocorrencia | null;
+};
+
+/** Bloco de recorrência (Intervalo, Dia Fixo, Início, Repetições ou Fim, Apenas dia útil). */
+export type DadosRecorrencia = {
+  intervalo: string;
+  intervaloDias: string;
+  diaFixo: string;
+  dataInicio: string;
+  fim: "repeticoes" | "data";
+  repeticoes: string;
+  dataFim: string;
+  apenasDiaUtil: boolean;
 };
 
 export type AnexoInfo = { id: number; nomeArquivo: string; tipoMime: string; tamanhoBytes: number };

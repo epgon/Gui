@@ -22,7 +22,28 @@ Fases prontas:
   Compras no cartão caem na fatura certa pelo dia de fechamento e aparecem como "Fatura-Cartão" na lista.
   O saldo inicial de cada conta virou o lançamento "Saldo Inicial", e Contas Financeiras mostra o Saldo Atual.
 
+- **Fase 3 (Recorrentes e Agenda)**: Financeiro > Recorrentes com abas (Todos, Receitas, Despesas, Transferências),
+  filtros de conta ou cartão, intervalo, situação, categoria, forma de pagamento, contato, tag e plano, e chave Detalhar.
+  Novo Recorrente nas abas Simples, Detalhado e Transferência, com Intervalo (Semanal, Mensal, Bimestral, Trimestral,
+  Semestral, Anual ou Livre), Dia Fixo, Início, Repetições ou Fim, "Realizar automaticamente" e "Apenas dia útil"
+  (pula sábado, domingo e feriados). Valor fixo ou **Média** (último lançamento ou média dos últimos 2 a 12 pagos).
+  Variáveis `#mes#` e `#ano#` na descrição. **Planos** agrupam recorrentes com a mesma descrição e valor.
+  "Gerar Recorrente" no Novo Lançamento. Financeiro > Agenda: calendário do mês com o anel de "% Realizado" e a janela
+  Lançamentos do Dia.
+
 As outras telas dos menus ainda mostram "Em construção" com a fase em que chegam.
+
+### Como os recorrentes funcionam
+
+- Os meses futuros **não são gravados antes da hora**: a lista de Lançamentos, a Agenda e os saldos calculam as
+  próximas ocorrências na hora (até 360 dias à frente) e mostram com a etiqueta "Previsto".
+- Uma ocorrência vira lançamento gravado quando você **paga/recebe**, **edita** ou quando ela tem
+  "Realizar automaticamente" e o dia chega. Nunca duplica (o banco não aceita a mesma ocorrência duas vezes).
+- "Realizar automaticamente" roda sozinho sempre que alguma tela do sistema é aberta: tudo o que venceu até hoje
+  recebe baixa com a data do vencimento. Não precisa de tarefa agendada nem de configuração.
+- Excluir uma ocorrência (prevista ou já gravada) só tira aquela data; as próximas continuam. Para parar de vez,
+  inative o recorrente.
+- Editar o recorrente muda só o que ainda não foi gravado.
 
 ## Publicar na Vercel (passo a passo)
 
@@ -80,7 +101,7 @@ npm run dev             # abre em http://localhost:3000
 | `npm run db:gerar` | Gera uma nova migração depois de mudar `src/db/schema.ts`. |
 | `npm run criar-usuario` | Cria o usuário ou troca a senha. |
 | `npm run lint` / `npm run typecheck` | Conferências automáticas do código. |
-| `npm test` | Testes das contas de dinheiro (parcelas, fatura do cartão, saldos). |
+| `npm test` | Testes das contas de dinheiro (parcelas, fatura do cartão, saldos, datas dos recorrentes, dia útil e média). |
 
 ## Como o projeto está organizado
 
@@ -94,8 +115,10 @@ npm run dev             # abre em http://localhost:3000
 | `src/components/cadastros` | Peças comuns das listas: barra com Adicionar e busca, painel de Filtros, paginação, menu de três pontos, check de situação, janela de cadastro. |
 | `src/lib/categorias.ts` | Monta a árvore de categorias e calcula a numeração (1., 9.4.1.). |
 | `src/lib/menu.ts` | Itens dos menus e em qual fase cada tela chega. |
+| `src/lib/recorrentes` | Regras dos recorrentes (`regras.ts`, com testes), cálculo das ocorrências previstas, gravação e "Realizar automaticamente" (`servidor.ts`). |
+| `src/app/(sistema)/financeiro/recorrentes` e `.../agenda` | Telas de Recorrentes (com Planos) e Agenda. |
 | `src/db/schema.ts` | As tabelas do banco. |
-| `drizzle/` | Migrações: `0000` cria as tabelas, `0001` faz a carga inicial, `0002` cria a auditoria e o saldo inicial das contas. |
+| `drizzle/` | Migrações: `0000` cria as tabelas, `0001` faz a carga inicial, `0002` cria a auditoria e o saldo inicial das contas, `0003` os lançamentos, `0004` os recorrentes e planos. |
 | `src/auth.ts` | Login (Auth.js), sessão de 20 minutos sem atividade. |
 | `scripts/` | Scripts de terminal: configurar, migrar, criar usuário. |
 
