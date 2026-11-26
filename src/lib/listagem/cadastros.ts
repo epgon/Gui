@@ -8,6 +8,8 @@ import { rotuloTipoConta } from "@/lib/cadastros/opcoes";
 import { alturaAbaixo, montarArvore, motivoParaNaoExcluir } from "@/lib/categorias";
 import { usoDasCategorias } from "@/lib/categorias-uso";
 import { limiteDoCartao } from "@/lib/cartoes/regras";
+import { motivoParaNaoExcluirConta } from "@/lib/contas/exclusao";
+import { usoDasContas } from "@/lib/contas/uso";
 import { usoDosLimites } from "@/lib/cartoes/servidor";
 import { saldosDasContas } from "@/lib/lancamentos/consultas";
 import type { Leitores, ValorCampo } from "./avancado";
@@ -38,7 +40,7 @@ const { contaFinanceira: conta, cartaoCredito: cartao, banco, categoria, contato
 
 export async function carregarContas(sp: ParametrosBusca, pref?: PreferenciaListagem) {
   const { f, tipo, onde } = filtrosContas(sp);
-  const [linhas, saldos] = await Promise.all([
+  const [linhas, saldos, uso] = await Promise.all([
     getDb()
       .select({
         id: conta.id,
@@ -61,8 +63,10 @@ export async function carregarContas(sp: ParametrosBusca, pref?: PreferenciaList
       .where(onde)
       .orderBy(desc(conta.ativo), asc(conta.ordem), asc(sql`lower(${conta.descricao})`)),
     saldosDasContas(),
+    usoDasContas(getDb()),
   ]);
-  const completas = linhas.map((l) => ({ ...l, saldoAtualCentavos: saldos.get(l.id) ?? 0 }));
+  // motivoNaoExcluir: null quando a conta pode ser excluída (ver motivoParaNaoExcluirConta).
+  const completas = linhas.map((l) => ({ ...l, saldoAtualCentavos: saldos.get(l.id) ?? 0, motivoNaoExcluir: motivoParaNaoExcluirConta(uso.get(l.id)) }));
   type Linha = (typeof completas)[number];
   const leitores: Leitores<Linha> = {
     ...leitoresComuns<Linha>(),

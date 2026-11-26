@@ -8,11 +8,14 @@ import { diferencas, registrarAuditoria } from "@/lib/auditoria";
 import { TIPOS_CONTA } from "@/lib/cadastros/opcoes";
 import { falha, idValido, obrigatorio, primeiroErro, type Resultado, ERRO_AUXILIAR, lerCampoAuxiliar } from "@/lib/cadastros/resultado";
 import { dataValida } from "@/lib/datas";
+import { motivoParaNaoExcluirConta, SEM_USO_CONTA } from "@/lib/contas/exclusao";
+import { usoDasContas } from "@/lib/contas/uso";
 import { lerValorEmCentavos } from "@/lib/dinheiro";
 import { sincronizarSaldoInicial } from "@/lib/lancamentos/saldo-inicial";
 import { exigirLogin } from "@/lib/sessao";
+import { CHAVE_OPCOES } from "@/lib/visao-geral/servidor";
 
-const { contaFinanceira: conta, banco } = schema;
+const { contaFinanceira: conta, banco, lancamento, mapeamentoCsv, importacao, configuracao } = schema;
 const TELA = "Contas Financeiras";
 const ENTIDADE = "Conta Financeira";
 /** Limite de segurança: R$ 999 bilhões. */
@@ -99,4 +102,46 @@ export async function alterarSituacaoConta(id: number, ativo: boolean): Promise<
     refresh();
     return { ok: true } as const;
   });
+}
+
+/**
+ * Exclui de vez uma conta que nunca foi usada: sem lançamentos (fora o Saldo Inicial),
+ * sem cartão que pague a fatura nela, sem recorrentes, regras ou importações em rascunho.
+ * As que já foram usadas devem ser inativadas.
+ * Saem junto: o lançamento Saldo Inicial e os vínculos de CSV memorizados para ela.
+ * Importações já concluídas ou canceladas ficam no histórico, sem a conta.
+ */
+export async function excluirConta(id: number): Promise<Resultado> {
+  await exigirLogin();
+  if (!idValido.safeParse(id).success) return falha("Cadastro não encontrado.");
+  try {
+    return await getDb().transaction(async (tx) => {
+      const [alvo] = await tx.select().from(conta).where(eq(conta.id, id)).for("update");
+      if (!alvo) return falha("Esta conta financeira não existe mais.");
+      const uso = (await usoDasContas(tx, id)).get(id) ?? SEM_USO_CONTA;
+      const motivo = motivoParaNaoExcluirConta(uso);
+      if (motivo) return falha(`Não é possível excluir a conta financeira **${alvo.descricao}**. ${motivo}`);
+
+      await tx.delete(lancamento).where(and(eq(lancamento.contaId, id), eq(lancamento.tipo, "saldo_inicial")));
+      await tx.delete(mapeamentoCsv).where(eq(mapeamentoCsv.contaId, id));
+      await tx.update(importacao).set({ contaId: null }).where(and(eq(importacao.contaId, id), ne(importacao.situacao, "rascunho")));
+      // Tira a conta da lista de contas escondidas na Visão Geral.
+      await tx
+        .update(configuracao)
+        .set({
+          valor: sql`jsonb_set(${configuracao.valor}, '{contasOcultas}', (select coalesce(jsonb_agg(e), '[]'::jsonb) from jsonb_array_elements(${configuracao.valor}->'contasOcultas') e where e <> to_jsonb(${id}::int)))`,
+        })
+        .where(and(eq(configuracao.chave, CHAVE_OPCOES), sql`jsonb_typeof(${configuracao.valor}->'contasOcultas') = 'array'`, sql`${configuracao.valor}->'contasOcultas' @> ${JSON.stringify([id])}::jsonb`));
+      await tx.delete(conta).where(eq(conta.id, id));
+      await registrarAuditoria(tx, { tela: TELA, entidade: ENTIDADE, entidadeId: id, acao: "excluiu", descricao: `a Conta Financeira ${alvo.descricao}`, dados: alvo });
+      refresh();
+      return { ok: true } as const;
+    });
+  } catch (e) {
+    // A conta passou a ser usada no mesmo instante (chave estrangeira; o drizzle guarda o erro do banco em cause).
+    if ((e as { cause?: { code?: string } })?.cause?.code === "23503") {
+      return falha("Esta conta financeira acabou de ser usada e não pode mais ser excluída. Recarregue a página para ver onde.");
+    }
+    throw e;
+  }
 }
