@@ -1,7 +1,7 @@
 "use client";
 
-import { Eye, Pencil, Power } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Eye, Pencil, Power, Trash2 } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
 import { AsteriscoPadrao } from "@/components/cadastros/asterisco";
 import { BarraLista } from "@/components/cadastros/barra-lista";
 import { ChaveSituacao } from "@/components/cadastros/chave-situacao";
@@ -14,6 +14,8 @@ import { useSituacao } from "@/components/cadastros/use-situacao";
 import { CampoSelecao, CampoTexto, CampoValor, TextoComDestaque } from "@/components/ui/campo";
 import { Chave } from "@/components/ui/chave";
 import { FaixaErro } from "@/components/ui/faixa-erro";
+import { Modal } from "@/components/ui/modal";
+import { Botao } from "@/components/ui/botao";
 import { Tabela } from "@/components/ui/tabela";
 import { CampoAuxiliarFormulario } from "@/components/listagem/campo-auxiliar";
 import { comComuns, MarcaNovo } from "@/components/listagem/colunas-comuns";
@@ -24,7 +26,7 @@ import type { Situacao } from "@/lib/cadastros/filtros";
 import { type BancoOpcao, rotuloTipoConta, TIPOS_CONTA } from "@/lib/cadastros/opcoes";
 import { formatarData } from "@/lib/datas";
 import { formatarCentavos } from "@/lib/dinheiro";
-import { alterarSituacaoConta, salvarConta, type DadosConta } from "./acoes";
+import { alterarSituacaoConta, excluirConta, salvarConta, type DadosConta } from "./acoes";
 
 type LinhaBase = {
   id: number;
@@ -39,6 +41,8 @@ type LinhaBase = {
   saldoAtualCentavos: number;
   ativo: boolean;
   padraoSistema: boolean;
+  /** Por que a conta não pode ser excluída (null = pode). */
+  motivoNaoExcluir: string | null;
 };
 type Linha = LinhaBase & { campoAuxiliar: string | null; criadoEm: Date; atualizadoEm: Date };
 
@@ -60,6 +64,20 @@ export function TelaContas({ preferencia, linhas, total, filtros, caminho, banco
   const form = useFormularioCadastro(vazio);
   const situacao = useSituacao(alterarSituacaoConta);
   const [detalhando, setDetalhando] = useState<number | null>(null);
+  const [excluindo, setExcluindo] = useState<Linha | null>(null);
+  const [ocupadoExcluir, iniciarExclusao] = useTransition();
+  const confirmarExclusao = (l: Linha) =>
+    iniciarExclusao(async () => {
+      situacao.setAviso("");
+      try {
+        const r = await excluirConta(l.id);
+        if (!r.ok) situacao.setAviso(r.erro);
+      } catch {
+        situacao.setAviso("Não foi possível excluir a conta financeira agora. Tente de novo.");
+      } finally {
+        setExcluindo(null);
+      }
+    });
   const parametros = { busca: filtros.busca, tipo: filtros.tipo, situacao: filtros.situacao === "todos" ? "" : filtros.situacao };
   const bancoEscolhido = bancos.find((b) => String(b.id) === form.dados.bancoId);
 
@@ -155,6 +173,13 @@ export function TelaContas({ preferencia, linhas, total, filtros, caminho, banco
                   { rotulo: "Detalhar", icone: <Eye className="h-4 w-4" />, aoClicar: () => setDetalhando(l.id) },
                   { rotulo: "Editar", icone: <Pencil className="h-4 w-4" />, aoClicar: () => editar(l) },
                   { rotulo: l.ativo ? "Inativar" : "Ativar", icone: <Power className="h-4 w-4" />, aoClicar: () => situacao.alternar(l.id, l.ativo) },
+                  {
+                    rotulo: "Excluir",
+                    icone: <Trash2 className="h-4 w-4" />,
+                    aoClicar: () => setExcluindo(l),
+                    desabilitado: !!l.motivoNaoExcluir,
+                    dica: l.motivoNaoExcluir ?? undefined,
+                  },
                 ]}
               />
             ),
@@ -164,6 +189,28 @@ export function TelaContas({ preferencia, linhas, total, filtros, caminho, banco
       <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={preferencia.porPagina} total={total} />
 
       {detalhando !== null && <DetalhandoConta key={detalhando} contaId={detalhando} aoFechar={() => setDetalhando(null)} />}
+
+      <Modal
+        aberto={!!excluindo}
+        aoFechar={() => !ocupadoExcluir && setExcluindo(null)}
+        titulo="Excluir Conta Financeira"
+        resumo={excluindo ? [excluindo.descricao, excluindo.bancoNome ?? "Outro"].join(" · ") : undefined}
+        rodape={
+          <>
+            <Botao variante="fantasma" onClick={() => setExcluindo(null)} disabled={ocupadoExcluir}>
+              Voltar
+            </Botao>
+            <Botao variante="perigo" carregando={ocupadoExcluir} icone={<Trash2 className="h-4 w-4" />} onClick={() => excluindo && confirmarExclusao(excluindo)}>
+              Excluir
+            </Botao>
+          </>
+        }
+      >
+        <p className="text-sm text-gray-700">
+          A conta <strong>{excluindo?.descricao}</strong> será excluída de vez. Ela não tem lançamentos.
+          {excluindo?.saldoInicialCentavos ? <> O Saldo Inicial de <Valor centavos={excluindo.saldoInicialCentavos} /> sai junto.</> : null} Esta ação não pode ser desfeita.
+        </p>
+      </Modal>
 
       <ModalCadastro
         formulario={form}
