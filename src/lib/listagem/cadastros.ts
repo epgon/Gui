@@ -5,7 +5,8 @@ import { getDb, schema } from "@/db";
 import { filtrarCategorias, filtrosCartoes, filtrosContas, filtrosContatos, filtrosFormas, filtrosTags } from "@/lib/cadastros/condicoes";
 import type { ParametrosBusca } from "@/lib/cadastros/filtros";
 import { rotuloTipoConta } from "@/lib/cadastros/opcoes";
-import { alturaAbaixo, montarArvore } from "@/lib/categorias";
+import { alturaAbaixo, montarArvore, motivoParaNaoExcluir } from "@/lib/categorias";
+import { usoDasCategorias } from "@/lib/categorias-uso";
 import { limiteDoCartao } from "@/lib/cartoes/regras";
 import { usoDosLimites } from "@/lib/cartoes/servidor";
 import { saldosDasContas } from "@/lib/lancamentos/consultas";
@@ -137,7 +138,9 @@ export async function carregarCategorias(sp: ParametrosBusca) {
       atualizadoEm: categoria.atualizadoEm,
     })
     .from(categoria);
-  const arvore = montarArvore(todas).map((c) => ({ ...c, altura: alturaAbaixo(todas, c.id) }));
+  const uso = await usoDasCategorias(getDb());
+  // motivoNaoExcluir: null quando a categoria pode ser excluída (ver motivoParaNaoExcluir).
+  const arvore = montarArvore(todas).map((c) => ({ ...c, altura: alturaAbaixo(todas, c.id), motivoNaoExcluir: motivoParaNaoExcluir(c, uso.get(c.id)) }));
   const { f, aba, raizes, linhas } = filtrarCategorias(arvore, sp);
   type Linha = (typeof arvore)[number];
   const leitores: Leitores<Linha> = {

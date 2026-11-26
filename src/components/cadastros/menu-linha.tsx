@@ -3,7 +3,7 @@
 import { EllipsisVertical } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-export type ItemMenuLinha = { rotulo: string; icone?: React.ReactNode; aoClicar: () => void; desabilitado?: boolean };
+export type ItemMenuLinha = { rotulo: string; icone?: React.ReactNode; aoClicar: () => void; desabilitado?: boolean; /** Por que está desabilitado (aparece embaixo do item). */ dica?: string };
 
 /** Menu de três pontos de cada linha da lista (Editar, Inativar...). */
 export function MenuLinha({ itens, rotulo }: { itens: ItemMenuLinha[]; rotulo: string }) {
@@ -51,7 +51,7 @@ export function MenuLinha({ itens, rotulo }: { itens: ItemMenuLinha[]; rotulo: s
           className="fixed z-50 min-w-44 overflow-hidden rounded-lg border border-borda bg-white py-1 text-left text-sm shadow-lg"
         >
           {itens.map((item) => (
-            <li key={item.rotulo}>
+            <li key={item.rotulo} title={item.dica}>
               <button
                 type="button"
                 role="menuitem"
@@ -60,10 +60,17 @@ export function MenuLinha({ itens, rotulo }: { itens: ItemMenuLinha[]; rotulo: s
                   setPosicao(null);
                   item.aoClicar();
                 }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-gray-700 hover:bg-verde-claro disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex w-full items-center gap-2 px-3 py-2 text-gray-700 hover:bg-verde-claro disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
               >
                 {item.icone}
-                {item.rotulo}
+                {item.dica ? (
+                  <span className="flex flex-col text-left">
+                    {item.rotulo}
+                    <span className="max-w-56 text-xs text-gray-500">{item.dica}</span>
+                  </span>
+                ) : (
+                  item.rotulo
+                )}
               </button>
             </li>
           ))}

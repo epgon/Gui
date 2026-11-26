@@ -1,7 +1,7 @@
 "use client";
 
-import { BarChart3, CornerDownRight, FolderTree, Lock, Pencil, Plus, Power } from "lucide-react";
-import { useState } from "react";
+import { BarChart3, CornerDownRight, FolderTree, Lock, Pencil, Plus, Power, Trash2 } from "lucide-react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { AsteriscoPadrao } from "@/components/cadastros/asterisco";
 import { BarraLista } from "@/components/cadastros/barra-lista";
@@ -12,6 +12,7 @@ import { ModalCadastro, useFormularioCadastro } from "@/components/cadastros/mod
 import { useSituacao } from "@/components/cadastros/use-situacao";
 import { CampoSelecao, CampoTexto, Rotulo, TextoComDestaque } from "@/components/ui/campo";
 import { FaixaErro } from "@/components/ui/faixa-erro";
+import { Modal } from "@/components/ui/modal";
 import { Tabela } from "@/components/ui/tabela";
 import { useSistema } from "@/components/layout/provedor-sistema";
 import { Botao } from "@/components/ui/botao";
@@ -23,9 +24,9 @@ import { colunasVisiveis, type PreferenciaListagem } from "@/lib/listagem/telas"
 import { type CategoriaNaArvore, NIVEL_MAXIMO, rotuloCategoria } from "@/lib/categorias";
 import { cn } from "@/lib/cn";
 import type { Situacao } from "@/lib/cadastros/filtros";
-import { alterarSituacaoCategoria, salvarCategoria, type DadosCategoria } from "./acoes";
+import { alterarSituacaoCategoria, excluirCategoria, salvarCategoria, type DadosCategoria } from "./acoes";
 
-type Linha = CategoriaNaArvore & { altura: number } & { campoAuxiliar: string | null; criadoEm: Date; atualizadoEm: Date };
+type Linha = CategoriaNaArvore & { altura: number; motivoNaoExcluir: string | null } & { campoAuxiliar: string | null; criadoEm: Date; atualizadoEm: Date };
 type Aba = { id: number | null; nome: string; cor: string | null; total: number };
 
 /** Cores sugeridas para as categorias principais. */
@@ -52,6 +53,20 @@ export function TelaCategorias({ preferencia, linhas, arvore, abas, aba, filtros
   const form = useFormularioCadastro(VAZIO);
   const situacao = useSituacao(alterarSituacaoCategoria);
   const [detalhar, setDetalhar] = useState<number | null>(null);
+  const [excluindo, setExcluindo] = useState<Linha | null>(null);
+  const [ocupadoExcluir, iniciarExclusao] = useTransition();
+  const confirmarExclusao = (l: Linha) =>
+    iniciarExclusao(async () => {
+      situacao.setAviso("");
+      try {
+        const r = await excluirCategoria(l.id);
+        if (!r.ok) situacao.setAviso(r.erro);
+      } catch {
+        situacao.setAviso("Não foi possível excluir a categoria agora. Tente de novo.");
+      } finally {
+        setExcluindo(null);
+      }
+    });
   const parametros = { aba: aba ? String(aba) : "", busca: filtros.busca, situacao: filtros.situacao === "todos" ? "" : filtros.situacao };
   const linkAba = (id: number | null) => {
     const sp = new URLSearchParams(Object.entries({ ...parametros, aba: id ? String(id) : "" }).filter(([, v]) => v));
@@ -203,6 +218,13 @@ export function TelaCategorias({ preferencia, linhas, arvore, abas, aba, filtros
                       icone: <Power className="h-4 w-4" />,
                       aoClicar: () => situacao.alternar(l.id, l.ativo),
                     },
+                    {
+                      rotulo: "Excluir",
+                      icone: <Trash2 className="h-4 w-4" />,
+                      aoClicar: () => setExcluindo(l),
+                      desabilitado: !!l.motivoNaoExcluir,
+                      dica: l.motivoNaoExcluir ?? undefined,
+                    },
                   ]}
                 />
               ),
@@ -287,6 +309,26 @@ export function TelaCategorias({ preferencia, linhas, arvore, abas, aba, filtros
         <CampoAuxiliarFormulario cadastro="categorias" className="mt-4" valor={form.dados.campoAuxiliar ?? ""} aoMudar={(v) => form.mudar("campoAuxiliar", v)} />
       </ModalCadastro>
       <DetalhandoCategoria id={detalhar} aoFechar={() => setDetalhar(null)} />
+      <Modal
+        aberto={!!excluindo}
+        aoFechar={() => !ocupadoExcluir && setExcluindo(null)}
+        titulo="Excluir Categoria"
+        resumo={excluindo ? rotuloCategoria(excluindo) : undefined}
+        rodape={
+          <>
+            <Botao variante="fantasma" onClick={() => setExcluindo(null)} disabled={ocupadoExcluir}>
+              Voltar
+            </Botao>
+            <Botao variante="perigo" carregando={ocupadoExcluir} icone={<Trash2 className="h-4 w-4" />} onClick={() => excluindo && confirmarExclusao(excluindo)}>
+              Excluir
+            </Botao>
+          </>
+        }
+      >
+        <p className="text-sm text-gray-700">
+          A categoria <strong>{excluindo?.nome}</strong> será excluída de vez. Ela não tem lançamentos nem subcategorias. Se ela estiver em algum orçamento, sai dele também. Esta ação não pode ser desfeita.
+        </p>
+      </Modal>
     </>
   );
 }

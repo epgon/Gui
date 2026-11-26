@@ -5,7 +5,8 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
 import { diferencas, registrarAuditoria, type Transacao } from "@/lib/auditoria";
-import { alturaAbaixo, descendentes, montarArvore, NIVEL_MAXIMO } from "@/lib/categorias";
+import { alturaAbaixo, descendentes, montarArvore, motivoParaNaoExcluir, NIVEL_MAXIMO, SEM_USO } from "@/lib/categorias";
+import { usoDasCategorias } from "@/lib/categorias-uso";
 import { conferirArvore } from "@/lib/categorias-organizar";
 import { falha, idValido, obrigatorio, primeiroErro, type Resultado, ERRO_AUXILIAR, lerCampoAuxiliar } from "@/lib/cadastros/resultado";
 import { exigirLogin } from "@/lib/sessao";
@@ -123,6 +124,38 @@ export async function alterarSituacaoCategoria(id: number, ativo: boolean): Prom
     refresh();
     return { ok: true } as const;
   });
+}
+
+/**
+ * Exclui de vez uma categoria que nunca foi usada: sem filhas, sem lançamentos, recorrentes,
+ * regras ou importações em rascunho. As que já foram usadas devem ser inativadas.
+ * Os limites de orçamento dela saem junto.
+ */
+export async function excluirCategoria(id: number): Promise<Resultado> {
+  await exigirLogin();
+  if (!idValido.safeParse(id).success) return falha("Cadastro não encontrado.");
+  try {
+    return await getDb().transaction(async (tx) => {
+      const todas = await carregarTodas(tx);
+      const alvo = todas.find((c) => c.id === id);
+      if (!alvo) return falha("Esta categoria não existe mais.");
+      const quantidadeFilhas = todas.filter((c) => c.categoriaPaiId === id).length;
+      const uso = (await usoDasCategorias(tx, id)).get(id) ?? SEM_USO;
+      const motivo = motivoParaNaoExcluir({ especial: alvo.especial, quantidadeFilhas }, uso);
+      if (motivo) return falha(`Não é possível excluir a categoria **${alvo.nome}**. ${motivo}`);
+
+      await tx.delete(categoria).where(eq(categoria.id, id));
+      await registrarAuditoria(tx, { tela: TELA, entidade: ENTIDADE, entidadeId: id, acao: "excluiu", descricao: `a Categoria ${alvo.nome}`, dados: alvo });
+      refresh();
+      return { ok: true } as const;
+    });
+  } catch (e) {
+    // A categoria passou a ser usada no mesmo instante (chave estrangeira; o drizzle guarda o erro do banco em cause).
+    if ((e as { cause?: { code?: string } })?.cause?.code === "23503") {
+      return falha("Esta categoria acabou de ser usada e não pode mais ser excluída. Recarregue a página para ver onde.");
+    }
+    throw e;
+  }
 }
 
 /**
