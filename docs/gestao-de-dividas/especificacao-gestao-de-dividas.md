@@ -461,3 +461,13 @@ A pessoa pediu que as fases fossem construídas sem esperar (26/11/2026). Para c
 10. Percentuais dos cenários (25%, 50%, 100%) e reserva mínima (3 meses): servem como ponto de partida?
 11. Fase 6: além do Gemini, quer deixar pronto um segundo provedor (ex.: Groq, também com plano gratuito)? (proposta: começar só com Gemini, com o código preparado para trocar)
 12. O módulo deve ir para o celular (PWA) junto, ou o celular continua como fase separada do plano do Gui?
+
+### Decisões tomadas na construção da D2 (26/11/2026)
+
+- A situação **Em negociação** não é gravada: vale enquanto a dívida está em uma negociação Em andamento, Proposta recebida ou Aguardando resposta, e tem prioridade sobre Em dia e Em atraso (os dias de atraso continuam sendo mostrados; o filtro "Em atraso" também lista a dívida em negociação que tem parcela vencida).
+- Uma negociação junta só dívidas **ativas do mesmo credor**. Aceita, ela não pode mais ser editada nem excluída; para voltar atrás, desfaz-se a renegociação no acordo, que reabre a negociação e a proposta aceita.
+- Proposta à vista é guardada com entrada = valor à vista e zero parcelas. Nesta fase a **sobra mensal** é um campo digitado na negociação; a comparação com a reserva e a sobra calculada chegam na D3 (o botão Simular também).
+- Na renegociação, a entrada do acordo é a **parcela 1** e as demais seguem a periodicidade. Saem de Lançamentos todos os lançamentos não pagos ligados diretamente à dívida (parcelas, restantes, encargos e contas acompanhadas), como em Quitar. Ocorrências já geradas de um recorrente acompanhado continuam em Lançamentos; o recorrente é inativado. A fatura acompanhada deixa de ser acompanhada, mas continua no cartão.
+- Uma dívida renegociada pode estar em outra negociação aberta; ela continua listada lá, já como Renegociada.
+- Ficam para depois (não são da D2 no plano): Filtro Avançado e Configurações da Listagem em Minhas Dívidas, e "Lembrar todo mês".
+

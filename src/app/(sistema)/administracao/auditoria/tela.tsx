@@ -19,6 +19,8 @@ const COR_ACAO: Record<string, string> = {
   excluiu: "bg-red-50 text-negativo",
   pagou: "bg-verde-claro text-verde",
   importou: "bg-amarelo text-amarelo-texto",
+  renegociou: "bg-amarelo text-amarelo-texto",
+  aprovou: "bg-pago-fundo text-pago-texto",
 };
 
 const fuso = { timeZone: "America/Sao_Paulo" } as const;

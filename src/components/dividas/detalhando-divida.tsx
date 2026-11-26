@@ -1,6 +1,6 @@
 "use client";
 
-import { Banknote, ExternalLink, Gauge, Link2Off, NotebookPen, Scale, Wallet } from "lucide-react";
+import { Banknote, ExternalLink, Gauge, Handshake, Link2Off, NotebookPen, Scale, Undo2, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { desligarVinculoDivida, detalharDivida } from "@/app/(sistema)/gestao/dividas/acoes";
@@ -14,13 +14,13 @@ import { ProvedorOcultar, ValorOcultavel } from "@/components/ui/ocultar-valores
 import { cn } from "@/lib/cn";
 import { formatarData } from "@/lib/datas";
 import { formatarCentavos } from "@/lib/dinheiro";
-import { rotuloGarantia, rotuloTipoDivida } from "@/lib/dividas/regras";
+import { estaAtiva, rotuloGarantia, rotuloTipoDivida } from "@/lib/dividas/regras";
 import type { DetalheDivida, LinhaObrigacao } from "@/lib/dividas/tipos";
 import { PilulaSituacao, NotaSaldo } from "./comuns";
 import { useAnotacao } from "./janelas-divida";
 
 type Aba = "resumo" | "parcelas" | "historico" | "vinculos";
-export type AcaoDivida = "pagar" | "amortizar" | "quitar" | "saldo" | "encargo";
+export type AcaoDivida = "pagar" | "amortizar" | "quitar" | "saldo" | "encargo" | "renegociar" | "desfazer";
 
 const ABAS: { chave: Aba; rotulo: string }[] = [
   { chave: "resumo", rotulo: "Resumo" },
@@ -33,12 +33,14 @@ const ABAS: { chave: Aba; rotulo: string }[] = [
  * Janela "Detalhando Dívida", no padrão do Detalhando Conta e Cartão: Resumo, Parcelas, Histórico e Vínculos.
  * `versao` muda quando algo foi gravado fora da janela (pagar, amortizar...), para ela recarregar.
  */
-export function DetalhandoDivida({ dividaId, versao, aoFechar, aoAcao, aoPagarParcela }: {
+export function DetalhandoDivida({ dividaId, versao, aoFechar, aoAcao, aoPagarParcela, aoAbrirDivida }: {
   dividaId: number;
   versao: number;
   aoFechar: () => void;
   aoAcao: (acao: AcaoDivida) => void;
   aoPagarParcela: (o: LinhaObrigacao) => void;
+  /** Abre outra dívida (o acordo ou uma original) sem sair da tela. */
+  aoAbrirDivida?: (id: number) => void;
 }) {
   const [dados, setDados] = useState<DetalheDivida | null>(null);
   const [erro, setErro] = useState("");
@@ -91,7 +93,7 @@ export function DetalhandoDivida({ dividaId, versao, aoFechar, aoAcao, aoPagarPa
             {aba === "resumo" && <Resumo dados={dados} aoAcao={aoAcao} />}
             {aba === "parcelas" && <Parcelas dados={dados} aoPagar={aoPagarParcela} />}
             {aba === "historico" && <Historico dados={dados} aoMudar={carregar} />}
-            {aba === "vinculos" && <Vinculos dados={dados} aoMudar={carregar} />}
+            {aba === "vinculos" && <Vinculos dados={dados} aoMudar={carregar} aoAbrirDivida={aoAbrirDivida} />}
           </div>
         )}
       </ProvedorOcultar>
@@ -117,7 +119,7 @@ function Anel({ percentual }: { percentual: number }) {
 
 function Resumo({ dados, aoAcao }: { dados: DetalheDivida; aoAcao: (a: AcaoDivida) => void }) {
   const d = dados.divida;
-  const ativa = d.situacao === "em_dia" || d.situacao === "em_atraso";
+  const ativa = estaAtiva(d.situacao);
   const maior = Math.max(1, ...dados.evolucao.map((e) => e.saldoCentavos));
   return (
     <div className="space-y-4">
@@ -133,10 +135,26 @@ function Resumo({ dados, aoAcao }: { dados: DetalheDivida; aoAcao: (a: AcaoDivid
             )}
             <Botao variante="secundario" className="h-8" icone={<Gauge className="h-4 w-4" />} onClick={() => aoAcao("saldo")}>Atualizar saldo</Botao>
             <Botao variante="secundario" className="h-8" icone={<NotebookPen className="h-4 w-4" />} onClick={() => aoAcao("encargo")}>Lançar encargo</Botao>
+            <Botao variante="secundario" className="h-8" icone={<Handshake className="h-4 w-4" />} onClick={() => aoAcao("renegociar")}>Renegociar</Botao>
             <Botao variante="secundario" className="h-8" icone={<Scale className="h-4 w-4" />} onClick={() => aoAcao("quitar")}>Quitar</Botao>
           </span>
         )}
       </div>
+      {d.situacao === "em_negociacao" && <p className="rounded-md border border-amarelo-borda bg-amarelo px-3 py-2 text-sm text-amarelo-texto">Há uma negociação em andamento com este credor. Veja na aba Negociações.</p>}
+      {d.situacao === "renegociada" && <p className="rounded-md border border-borda bg-gray-50 px-3 py-2 text-sm text-gray-600">Esta dívida foi substituída por um acordo. As parcelas não pagas saíram de Lançamentos e estão guardadas no Histórico. Veja o acordo na aba Vínculos.</p>}
+      {dados.desfazerRenegociacao && (
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-borda bg-gray-50 px-3 py-2 text-sm text-gray-600">
+          <span className="flex-1">
+            Este acordo substituiu {d.originaisIds.length === 1 ? "uma dívida" : `${d.originaisIds.length} dívidas`}.{" "}
+            {dados.desfazerRenegociacao.pode ? "Enquanto nenhuma parcela do acordo for paga, dá para desfazer e voltar tudo como estava." : dados.desfazerRenegociacao.motivo}
+          </span>
+          {dados.desfazerRenegociacao.pode && (
+            <Botao variante="secundario" className="h-8" icone={<Undo2 className="h-4 w-4" />} onClick={() => aoAcao("desfazer")}>
+              Desfazer renegociação
+            </Botao>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Quadro titulo="Saldo devedor" dica="O que falta pagar hoje. Mostra o saldo informado pelo credor (se for recente) ou a estimativa." destaque>
@@ -260,7 +278,7 @@ function Parcelas({ dados, aoPagar }: { dados: DetalheDivida; aoPagar: (o: Linha
   );
 }
 
-const COR_EVENTO: Record<string, string> = { pagamento: "bg-verde-vivo", quitacao: "bg-verde-vivo", atualizacao_saldo: "bg-receita", amortizacao: "bg-receita", encargo: "bg-despesa", cancelamento: "bg-gray-400", vinculo: "bg-dourado", anotacao: "bg-gray-400", cadastro: "bg-verde" };
+const COR_EVENTO: Record<string, string> = { pagamento: "bg-verde-vivo", quitacao: "bg-verde-vivo", atualizacao_saldo: "bg-receita", amortizacao: "bg-receita", encargo: "bg-despesa", cancelamento: "bg-gray-400", vinculo: "bg-dourado", anotacao: "bg-gray-400", cadastro: "bg-verde", renegociacao: "bg-dourado", desfeito: "bg-gray-400" };
 
 function Historico({ dados, aoMudar }: { dados: DetalheDivida; aoMudar: () => void }) {
   const nota = useAnotacao(dados.divida.id, aoMudar);
@@ -297,11 +315,12 @@ function Historico({ dados, aoMudar }: { dados: DetalheDivida; aoMudar: () => vo
   );
 }
 
-function Vinculos({ dados, aoMudar }: { dados: DetalheDivida; aoMudar: () => void }) {
+function Vinculos({ dados, aoMudar, aoAbrirDivida }: { dados: DetalheDivida; aoMudar: () => void; aoAbrirDivida?: (id: number) => void }) {
   const [erro, setErro] = useState("");
   const [ocupado, iniciar] = useTransition();
-  const desligar = (tipo: "fatura" | "recorrencia" | "lancamento", id: number) =>
+  const desligar = (tipo: "fatura" | "recorrencia" | "lancamento" | "divida", id: number) =>
     iniciar(async () => {
+      if (tipo === "divida") return;
       setErro("");
       try {
         const r = await desligarVinculoDivida(dados.divida.id, { tipo, id });
@@ -314,7 +333,7 @@ function Vinculos({ dados, aoMudar }: { dados: DetalheDivida; aoMudar: () => voi
   return (
     <div className="space-y-3">
       <p className="text-sm text-gray-600">
-        Faturas, recorrentes e lançamentos que esta dívida acompanha. Cada um continua existindo uma vez só, no lugar de origem: desligar não apaga nada.
+        Faturas, recorrentes e lançamentos que esta dívida acompanha, e o acordo ou as dívidas originais quando há renegociação. Cada obrigação continua existindo uma vez só, no lugar de origem: desligar não apaga nada.
       </p>
       <FaixaErro>{erro && <TextoComDestaque texto={erro} />}</FaixaErro>
       {dados.vinculos.length === 0 ? (
@@ -327,12 +346,20 @@ function Vinculos({ dados, aoMudar }: { dados: DetalheDivida; aoMudar: () => voi
                 <p className="truncate text-sm font-medium text-gray-900">{v.rotulo}</p>
                 <p className="text-xs text-gray-500">{v.detalhe}</p>
               </div>
-              <Link href={v.href} className="inline-flex items-center gap-1 text-sm text-verde hover:underline">
-                Abrir <ExternalLink className="h-3.5 w-3.5" />
-              </Link>
-              <Botao variante="secundario" className="h-8" disabled={ocupado} icone={<Link2Off className="h-4 w-4" />} onClick={() => desligar(v.tipo, v.id)}>
-                Desligar
-              </Botao>
+              {v.tipo === "divida" && aoAbrirDivida ? (
+                <button type="button" onClick={() => aoAbrirDivida(v.id)} className="inline-flex items-center gap-1 text-sm text-verde hover:underline">
+                  Abrir <ExternalLink className="h-3.5 w-3.5" />
+                </button>
+              ) : (
+                <Link href={v.href} className="inline-flex items-center gap-1 text-sm text-verde hover:underline">
+                  Abrir <ExternalLink className="h-3.5 w-3.5" />
+                </Link>
+              )}
+              {v.tipo !== "divida" && (
+                <Botao variante="secundario" className="h-8" disabled={ocupado} icone={<Link2Off className="h-4 w-4" />} onClick={() => desligar(v.tipo, v.id)}>
+                  Desligar
+                </Botao>
+              )}
             </li>
           ))}
         </ul>

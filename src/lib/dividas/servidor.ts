@@ -6,6 +6,7 @@ import { listarFaturas } from "@/lib/cartoes/servidor";
 import { hojeIso } from "@/lib/datas";
 import { situacaoDe } from "@/lib/lancamentos/regras";
 import { lerParametros } from "@/lib/parametros/servidor";
+import { SITUACOES_ABERTAS_NEGOCIACAO, podeDesfazerRenegociacao } from "./negociacao";
 import {
   diasEntre,
   estimarAtraso,
@@ -22,7 +23,7 @@ import {
 } from "./regras";
 import type { ContaEmAberto, DetalheDivida, EventoLinha, FiltrosDividas, LinhaDivida, LinhaObrigacao, ResumoDividas, VinculoLinha } from "./tipos";
 
-const { divida, dividaVinculo, dividaEvento, lancamento: l, contato, fatura, cartaoCredito: cartao, recorrencia, parcelamento, categoria } = schema;
+const { divida, dividaVinculo, dividaEvento, dividaRenegociacao, negociacao, negociacaoDivida, lancamento: l, contato, fatura, cartaoCredito: cartao, recorrencia, parcelamento, categoria } = schema;
 
 const numero = (v: string | null) => (v === null ? null : Number(v));
 
@@ -51,7 +52,17 @@ async function lerBase(ids: number[] | null, hoje: string) {
     .where(ids ? inArray(divida.id, ids) : undefined)
     .orderBy(asc(divida.id));
   const idsDividas = dividas.map((x) => x.d.id);
-  if (!idsDividas.length) return { parametros, dividas, lancamentos: [], eventos: [], vinculos: [], faturas: [], hoje };
+  if (!idsDividas.length) return { parametros, dividas, lancamentos: [], eventos: [], vinculos: [], faturas: [], renegociacoes: [], emNegociacao: new Set<number>(), hoje };
+
+  const [renegociacoes, naoFechadas] = await Promise.all([
+    db.select().from(dividaRenegociacao).where(or(inArray(dividaRenegociacao.acordoId, idsDividas), inArray(dividaRenegociacao.originalId, idsDividas))),
+    db
+      .select({ dividaId: negociacaoDivida.dividaId })
+      .from(negociacaoDivida)
+      .innerJoin(negociacao, eq(negociacao.id, negociacaoDivida.negociacaoId))
+      .where(and(inArray(negociacaoDivida.dividaId, idsDividas), inArray(negociacao.situacao, SITUACOES_ABERTAS_NEGOCIACAO))),
+  ]);
+  const emNegociacao = new Set(naoFechadas.map((x) => x.dividaId));
 
   const vinculos = await db.select().from(dividaVinculo).where(inArray(dividaVinculo.dividaId, idsDividas));
   const idsFaturas = vinculos.map((v) => v.faturaId).filter((x): x is number => x !== null);
@@ -82,7 +93,7 @@ async function lerBase(ids: number[] | null, hoje: string) {
     db.select().from(dividaEvento).where(inArray(dividaEvento.dividaId, idsDividas)).orderBy(asc(dividaEvento.data), asc(dividaEvento.id)),
     idsFaturas.length ? listarFaturas(inArray(fatura.id, idsFaturas), hoje) : Promise.resolve([]),
   ]);
-  return { parametros, dividas, lancamentos, eventos, vinculos, faturas, hoje };
+  return { parametros, dividas, lancamentos, eventos, vinculos, faturas, renegociacoes, emNegociacao, hoje };
 }
 type Base = Awaited<ReturnType<typeof lerBase>>;
 
@@ -169,7 +180,7 @@ function montarLinha(base: Base, d: Base["dividas"][number]): { linha: LinhaDivi
   const informado: SaldoInformado | null = ultimo ? { saldoCentavos: Number(ultimo.saldoCentavos), data: ultimo.data, registradoEm: ultimo.criadoEm.getTime() } : null;
   const forma = d.d.forma as FormaDivida;
   const saldo = resumirSaldo({ forma, obrigacoes, informado, hoje, atraso: cfg });
-  const sit = situacaoDaDivida({ situacao: d.d.situacao, forma, obrigacoes, saldoCentavos: saldo.exibido, hoje });
+  const sit = situacaoDaDivida({ situacao: d.d.situacao, forma, obrigacoes, saldoCentavos: saldo.exibido, hoje, emNegociacao: base.emNegociacao.has(d.d.id) });
   const abertas = obrigacoes.filter((o) => !o.dataPagamento);
   const anterior = eventos.filter((e) => e.tipo === "pagamento" && e.lancamentoId === null).reduce((s, e) => s + Number(e.valorCentavos ?? 0), 0);
   const pagoCentavos = obrigacoes.filter((o) => o.dataPagamento).reduce((s, o) => s + o.valorCentavos, 0) + anterior;
@@ -189,6 +200,8 @@ function montarLinha(base: Base, d: Base["dividas"][number]): { linha: LinhaDivi
       forma,
       situacao: sit.situacao,
       situacaoGravada: d.d.situacao,
+      acordoId: base.renegociacoes.find((r) => r.originalId === d.d.id)?.acordoId ?? null,
+      originaisIds: base.renegociacoes.filter((r) => r.acordoId === d.d.id).map((r) => r.originalId),
       diasAtraso: sit.diasAtraso,
       parcelasAtrasadas: sit.parcelasAtrasadas,
       taxaMensal: numero(d.d.taxaMensal),
@@ -222,7 +235,7 @@ export async function carregarTodasDividas(hoje = hojeIso()): Promise<LinhaDivid
   return base.dividas.map((d) => montarLinha(base, d).linha);
 }
 
-const ESTA_ABERTA = new Set(["em_dia", "em_atraso"]);
+const ESTA_ABERTA = new Set(["em_dia", "em_atraso", "em_negociacao"]);
 
 /** Os números do topo (Visão Geral do módulo e faixa de totais da lista). */
 export function resumirDividas(linhas: LinhaDivida[], contas: Map<number, { vencimento: string; valor: number; aberta: boolean }[]>, hoje: string): ResumoDividas {
@@ -266,7 +279,8 @@ export function filtrarDividas(linhas: LinhaDivida[], f: FiltrosDividas): LinhaD
     if (termo && !semAcento(`${x.descricao} ${x.credor}`).toLowerCase().includes(termo)) return false;
     if (f.credor && String(x.contatoId) !== f.credor) return false;
     if (f.tipo && x.tipo !== f.tipo) return false;
-    if (f.situacao && x.situacao !== f.situacao) return false;
+    // "Em atraso" também mostra a dívida em negociação que tem parcela vencida (é o que o indicador da Visão Geral conta).
+    if (f.situacao === "em_atraso" ? !(x.situacao === "em_atraso" || (x.situacao === "em_negociacao" && x.diasAtraso > 0)) : f.situacao && x.situacao !== f.situacao) return false;
     if (f.conta && String(x.contaId ?? "") !== f.conta) return false;
     return true;
   });
@@ -274,7 +288,7 @@ export function filtrarDividas(linhas: LinhaDivida[], f: FiltrosDividas): LinhaD
 
 /** Ordem da lista: em atraso primeiro, depois pelo próximo vencimento; encerradas por último. */
 export function ordenarDividas(linhas: LinhaDivida[]): LinhaDivida[] {
-  const peso = (x: LinhaDivida) => (x.situacao === "em_atraso" ? 0 : x.situacao === "em_dia" ? 1 : 2);
+  const peso = (x: LinhaDivida) => (x.situacao === "em_atraso" || (x.situacao === "em_negociacao" && x.diasAtraso > 0) ? 0 : x.situacao === "em_dia" || x.situacao === "em_negociacao" ? 1 : 2);
   return [...linhas].sort((a, b) => peso(a) - peso(b) || (a.proximoVencimento ?? "9999").localeCompare(b.proximoVencimento ?? "9999") || a.descricao.localeCompare(b.descricao, "pt-BR"));
 }
 
@@ -365,6 +379,19 @@ export async function carregarDetalheDivida(id: number, hoje = hojeIso()): Promi
     vinculos.push({ chave: `l${c.linha.id}`, tipo: "lancamento", id: c.linha.id, rotulo: c.linha.descricao, detalhe: "Lançamento acompanhado como dívida", href: `/financeiro/lancamentos?mes=${c.linha.vencimento.slice(0, 7)}&busca=${encodeURIComponent(c.linha.descricao)}` });
   }
 
+  // Acordo e dívidas originais (renegociação).
+  const nomesDividas = new Map<number, string>();
+  const outras = [...new Set(base.renegociacoes.flatMap((r) => [r.acordoId, r.originalId]).filter((x) => x !== id))];
+  if (outras.length) for (const o of await db.select({ id: divida.id, descricao: divida.descricao }).from(divida).where(inArray(divida.id, outras))) nomesDividas.set(o.id, o.descricao);
+  for (const r of base.renegociacoes) {
+    if (r.originalId === id) vinculos.push({ chave: `a${r.acordoId}`, tipo: "divida", id: r.acordoId, rotulo: nomesDividas.get(r.acordoId) ?? `Acordo #${r.acordoId}`, detalhe: "Acordo que substituiu esta dívida", href: `/gestao/dividas/minhas?detalhar=${r.acordoId}` });
+    if (r.acordoId === id) vinculos.push({ chave: `o${r.originalId}`, tipo: "divida", id: r.originalId, rotulo: nomesDividas.get(r.originalId) ?? `Dívida #${r.originalId}`, detalhe: "Dívida original, renegociada neste acordo", href: `/gestao/dividas/minhas?detalhar=${r.originalId}` });
+  }
+  const ehAcordo = base.renegociacoes.some((r) => r.acordoId === id);
+  const podeDesfazer = ehAcordo
+    ? podeDesfazerRenegociacao({ acordoSituacao: d.d.situacao, lancamentosAcordo: base.lancamentos.filter((x) => x.dividaId === id).map((x) => ({ dataPagamento: x.dataPagamento })) })
+    : null;
+
   // Evolução do saldo: parte do total e desce a cada pagamento.
   const pagas = contas.filter((c) => c.o.dataPagamento).sort((a, b) => (a.o.dataPagamento! < b.o.dataPagamento! ? -1 : 1));
   const totalInicial = contas.reduce((s, c) => s + c.o.valorCentavos, 0);
@@ -386,6 +413,7 @@ export async function carregarDetalheDivida(id: number, hoje = hojeIso()): Promi
     previsaoTermino: abertas.length ? abertas[abertas.length - 1].vencimento : null,
     evolucao: evolucao.length > 24 ? evolucao.slice(-24) : evolucao,
     taxaAnual: linha.taxaMensal ? taxaMensalParaAnual(linha.taxaMensal) : null,
+    desfazerRenegociacao: podeDesfazer ? { pode: podeDesfazer.ok, motivo: podeDesfazer.ok ? null : podeDesfazer.motivo } : null,
     valorPresenteCentavos: linha.taxaMensal && linha.forma === "parcelas_fixas" ? valorPresente(contas.map((c) => c.o), hoje, cfg.taxaMensalPct) : null,
   };
 }

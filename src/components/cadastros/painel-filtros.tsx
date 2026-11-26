@@ -28,6 +28,16 @@ export function FiltroTexto({ nome, rotulo, valor }: { nome: string; rotulo: str
   );
 }
 
+/** Campo de data do painel de filtros (envia pela URL, ex.: "de" e "ate"). */
+export function FiltroData({ nome, rotulo, valor }: { nome: string; rotulo: string; valor: string }) {
+  return (
+    <label className="block text-sm">
+      <span className="mb-1 block font-medium text-gray-700">{rotulo}</span>
+      <input type="date" name={nome} defaultValue={valor} className={estilo} />
+    </label>
+  );
+}
+
 /** Lista de opções do painel de filtros. */
 export function FiltroSelecao({ nome, rotulo, valor, opcoes }: {
   nome: string;

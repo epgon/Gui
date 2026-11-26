@@ -18,7 +18,7 @@ import { Modal } from "@/components/ui/modal";
 import { ProvedorOcultar, ValorOcultavel } from "@/components/ui/ocultar-valores";
 import { Tabela } from "@/components/ui/tabela";
 import { formatarData } from "@/lib/datas";
-import { TIPOS_DIVIDA } from "@/lib/dividas/regras";
+import { estaAtiva, TIPOS_DIVIDA } from "@/lib/dividas/regras";
 import type { ContaEmAberto, LinhaDivida } from "@/lib/dividas/tipos";
 import type { OpcaoSimples } from "@/lib/lancamentos/tipos";
 
@@ -130,7 +130,7 @@ export function ContasEmAberto({ contas, recorrentes, dividas, contatos, hoje }:
 /** Escolhe uma dívida (ou cria uma) para acompanhar a conta. */
 function ModalAcompanhar({ conta, dividas, contatos, aoFechar }: { conta: ContaEmAberto; dividas: LinhaDivida[]; contatos: OpcaoSimples[]; aoFechar: () => void }) {
   const router = useRouter();
-  const abertas = dividas.filter((d) => d.situacao === "em_dia" || d.situacao === "em_atraso");
+  const abertas = dividas.filter((d) => estaAtiva(d.situacao));
   const [escolha, setEscolha] = useState(abertas[0] ? String(abertas[0].id) : "nova");
   const [descricao, setDescricao] = useState(conta.descricao);
   const [credor, setCredor] = useState("");

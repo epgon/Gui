@@ -227,11 +227,15 @@ export function valorPresente(obrigacoes: Obrigacao[], hoje: string, taxaMensalP
 // Situação
 // ---------------------------------------------------------------------------
 
-export type SituacaoDivida = "em_dia" | "em_atraso" | "quitada" | "renegociada" | "cancelada";
+export type SituacaoDivida = "em_dia" | "em_atraso" | "em_negociacao" | "quitada" | "renegociada" | "cancelada";
+
+/** Dívida com algo a pagar: em dia, em atraso ou em negociação. */
+export const estaAtiva = (s: SituacaoDivida) => s === "em_dia" || s === "em_atraso" || s === "em_negociacao";
 
 export const ROTULO_SITUACAO_DIVIDA: Record<SituacaoDivida, string> = {
   em_dia: "Em dia",
   em_atraso: "Em atraso",
+  em_negociacao: "Em negociação",
   quitada: "Quitada",
   renegociada: "Renegociada",
   cancelada: "Cancelada",
@@ -241,7 +245,8 @@ export type SituacaoCalculada = { situacao: SituacaoDivida; diasAtraso: number; 
 
 /**
  * Situação mostrada (seção 6.5). Renegociada e Cancelada vêm do cadastro. As outras saem das parcelas:
- * sem nada a pagar é Quitada; com parcela vencida e não paga, Em atraso (com os dias da mais antiga); senão, Em dia.
+ * sem nada a pagar é Quitada; com uma negociação em andamento, Em negociação (os dias de atraso continuam sendo calculados);
+ * com parcela vencida e não paga, Em atraso (com os dias da mais antiga); senão, Em dia.
  * Assim, "Voltar para não pago" numa parcela reabre a dívida sozinho.
  */
 export function situacaoDaDivida(p: {
@@ -250,6 +255,8 @@ export function situacaoDaDivida(p: {
   obrigacoes: Obrigacao[];
   saldoCentavos: number;
   hoje: string;
+  /** Há uma negociação em andamento envolvendo esta dívida. */
+  emNegociacao?: boolean;
 }): SituacaoCalculada {
   if (p.situacao === "renegociada") return { situacao: "renegociada", diasAtraso: 0, parcelasAtrasadas: 0 };
   if (p.situacao === "cancelada") return { situacao: "cancelada", diasAtraso: 0, parcelasAtrasadas: 0 };
@@ -258,6 +265,7 @@ export function situacaoDaDivida(p: {
   const diasAtraso = vencidas.length ? Math.max(...vencidas.map((o) => diasEntre(o.vencimento, p.hoje))) : 0;
   const nadaAPagar = p.forma === "parcelas_fixas" ? abertas.length === 0 && p.obrigacoes.length > 0 : p.saldoCentavos <= 0;
   if (nadaAPagar || (p.situacao === "quitada" && abertas.length === 0)) return { situacao: "quitada", diasAtraso: 0, parcelasAtrasadas: 0 };
+  if (p.emNegociacao) return { situacao: "em_negociacao", diasAtraso, parcelasAtrasadas: vencidas.length };
   if (vencidas.length) return { situacao: "em_atraso", diasAtraso, parcelasAtrasadas: vencidas.length };
   return { situacao: "em_dia", diasAtraso: 0, parcelasAtrasadas: 0 };
 }

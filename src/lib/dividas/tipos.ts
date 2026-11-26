@@ -41,7 +41,7 @@ export type EventoLinha = {
 
 export type VinculoLinha = {
   chave: string;
-  tipo: "fatura" | "recorrencia" | "lancamento";
+  tipo: "fatura" | "recorrencia" | "lancamento" | "divida";
   id: number;
   rotulo: string;
   detalhe: string;
@@ -58,6 +58,10 @@ export type LinhaDivida = {
   forma: FormaDivida;
   situacao: SituacaoDivida;
   situacaoGravada: "ativa" | "quitada" | "renegociada" | "cancelada";
+  /** Renegociada: o acordo que a substituiu. */
+  acordoId: number | null;
+  /** Acordo: as dívidas originais que ele juntou. */
+  originaisIds: number[];
   diasAtraso: number;
   parcelasAtrasadas: number;
   taxaMensal: number | null;
@@ -93,6 +97,8 @@ export type DetalheDivida = {
   evolucao: { data: string; saldoCentavos: number }[];
   /** Taxa ao ano equivalente (quando há taxa mensal). */
   taxaAnual: number | null;
+  /** Acordo de uma renegociação: se ainda dá para desfazer (e por que não). */
+  desfazerRenegociacao: { pode: boolean; motivo: string | null } | null;
   /** Quanto custaria quitar hoje, trazendo as parcelas futuras a valor presente (só com taxa). */
   valorPresenteCentavos: number | null;
 };
@@ -134,4 +140,66 @@ export type FiltrosDividas = {
   situacao: string;
   conta: string;
   pagina: number;
+};
+
+// ---------------------------------------------------------------------------
+// Negociações e renegociação (fase D2)
+// ---------------------------------------------------------------------------
+
+export type PropostaLinha = {
+  id: number;
+  negociacaoId: number;
+  data: string;
+  quemPropos: "credor" | "eu";
+  modalidade: "a_vista" | "parcelada";
+  entradaCentavos: number;
+  parcelas: number;
+  valorParcelaCentavos: number;
+  primeiroVencimento: string | null;
+  totalCentavos: number;
+  validade: string | null;
+  situacao: "aberta" | "aceita" | "recusada";
+  observacao: string | null;
+};
+
+export type LinhaNegociacao = {
+  id: number;
+  contatoId: number;
+  credor: string;
+  situacao: import("./negociacao").SituacaoNegociacao;
+  canal: import("./negociacao").CanalNegociacao;
+  protocolo: string | null;
+  dataInicio: string;
+  prazoResposta: string | null;
+  sobraMensalCentavos: number | null;
+  observacao: string | null;
+  acordoId: number | null;
+  /** Dívidas da negociação, com o saldo de hoje. */
+  dividas: { id: number; descricao: string; saldoCentavos: number; situacao: SituacaoDivida }[];
+  /** Soma do saldo das dívidas da negociação (a base de comparação das propostas). */
+  saldoCentavos: number;
+  propostas: PropostaLinha[];
+  /** A proposta aberta de menor total. */
+  melhorPropostaId: number | null;
+};
+
+export type FiltrosNegociacoes = {
+  busca: string;
+  credor: string;
+  situacao: string;
+  de: string;
+  ate: string;
+  pagina: number;
+};
+
+/** O que o assistente de Renegociação precisa saber de uma dívida: os lançamentos e o que será encerrado. */
+export type DividaParaRenegociar = {
+  id: number;
+  descricao: string;
+  contatoId: number;
+  credor: string;
+  saldoCentavos: number;
+  lancamentos: { id: number; descricao: string; vencimento: string; valorCentavos: number; dataPagamento: string | null }[];
+  faturas: string[];
+  recorrentes: string[];
 };

@@ -787,6 +787,102 @@ export const dividaEvento = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Gestão de Dívidas (fase D2): negociações e renegociação
+// ---------------------------------------------------------------------------
+
+export const situacaoNegociacaoEnum = pgEnum("situacao_negociacao", ["em_andamento", "proposta_recebida", "aguardando_resposta", "aceita", "recusada", "desistida"]);
+export const canalNegociacaoEnum = pgEnum("canal_negociacao", ["telefone", "aplicativo", "agencia", "site", "feirao", "advogado", "outro"]);
+export const quemProposEnum = pgEnum("quem_propos", ["credor", "eu"]);
+export const modalidadePropostaEnum = pgEnum("modalidade_proposta", ["a_vista", "parcelada"]);
+export const situacaoPropostaEnum = pgEnum("situacao_proposta", ["aberta", "aceita", "recusada"]);
+
+/** A conversa com o credor antes de virar acordo. */
+export const negociacao = pgTable(
+  "negociacao",
+  {
+    id: serial("id").primaryKey(),
+    contatoId: integer("contato_id")
+      .notNull()
+      .references(() => contato.id),
+    situacao: situacaoNegociacaoEnum("situacao").notNull().default("em_andamento"),
+    canal: canalNegociacaoEnum("canal").notNull().default("telefone"),
+    protocolo: varchar("protocolo", { length: 60 }),
+    dataInicio: date("data_inicio").notNull(),
+    prazoResposta: date("prazo_resposta"),
+    /** Quanto sobra por mês para pagar o acordo (digitado; a sobra calculada chega com o Simulador). */
+    sobraMensalCentavos: bigint("sobra_mensal_centavos", { mode: "number" }),
+    observacao: varchar("observacao", { length: 1000 }),
+    /** A dívida Acordo criada quando a negociação foi aceita. */
+    acordoId: integer("acordo_id").references((): AnyPgColumn => divida.id, { onDelete: "set null" }),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [index("negociacao_contato_idx").on(t.contatoId), index("negociacao_situacao_idx").on(t.situacao)],
+);
+
+export const negociacaoDivida = pgTable(
+  "negociacao_divida",
+  {
+    id: serial("id").primaryKey(),
+    negociacaoId: integer("negociacao_id")
+      .notNull()
+      .references(() => negociacao.id, { onDelete: "cascade" }),
+    dividaId: integer("divida_id")
+      .notNull()
+      .references(() => divida.id, { onDelete: "cascade" }),
+  },
+  (t) => [uniqueIndex("negociacao_divida_unico").on(t.negociacaoId, t.dividaId), index("negociacao_divida_divida_idx").on(t.dividaId)],
+);
+
+/** Proposta dentro da negociação. À vista: entrada = valor à vista e parcelas = 0. */
+export const negociacaoProposta = pgTable(
+  "negociacao_proposta",
+  {
+    id: serial("id").primaryKey(),
+    negociacaoId: integer("negociacao_id")
+      .notNull()
+      .references(() => negociacao.id, { onDelete: "cascade" }),
+    data: date("data").notNull(),
+    quemPropos: quemProposEnum("quem_propos").notNull(),
+    modalidade: modalidadePropostaEnum("modalidade").notNull(),
+    entradaCentavos: bigint("entrada_centavos", { mode: "number" }).notNull().default(0),
+    parcelas: smallint("parcelas").notNull().default(0),
+    valorParcelaCentavos: bigint("valor_parcela_centavos", { mode: "number" }).notNull().default(0),
+    primeiroVencimento: date("primeiro_vencimento"),
+    totalCentavos: bigint("total_centavos", { mode: "number" }).notNull(),
+    validade: date("validade"),
+    situacao: situacaoPropostaEnum("situacao").notNull().default("aberta"),
+    observacao: varchar("observacao", { length: 500 }),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [index("negociacao_proposta_negociacao_idx").on(t.negociacaoId)],
+);
+
+/** Liga o acordo às dívidas originais que ele juntou (um acordo pode juntar várias). */
+export const dividaRenegociacao = pgTable(
+  "divida_renegociacao",
+  {
+    id: serial("id").primaryKey(),
+    acordoId: integer("acordo_id")
+      .notNull()
+      .references(() => divida.id, { onDelete: "cascade" }),
+    originalId: integer("original_id")
+      .notNull()
+      .references(() => divida.id),
+    negociacaoId: integer("negociacao_id").references(() => negociacao.id, { onDelete: "set null" }),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("divida_renegociacao_unico").on(t.acordoId, t.originalId), index("divida_renegociacao_original_idx").on(t.originalId)],
+);
+
+// ---------------------------------------------------------------------------
 // 4.8. Auditoria
 // ---------------------------------------------------------------------------
 
@@ -798,6 +894,8 @@ export const acaoAuditoriaEnum = pgEnum("acao_auditoria", [
   "excluiu",
   "pagou",
   "importou",
+  "renegociou",
+  "aprovou",
 ]);
 
 /**

@@ -9,12 +9,12 @@ import { EstadoVazio } from "@/components/ui/estado-vazio";
 import { Cartao } from "@/components/ui/cartao";
 import { cn } from "@/lib/cn";
 import { formatarData } from "@/lib/datas";
-import { rotuloTipoDivida } from "@/lib/dividas/regras";
+import { estaAtiva, rotuloTipoDivida } from "@/lib/dividas/regras";
 import type { LinhaDivida, ResumoDividas } from "@/lib/dividas/tipos";
 
 /** Visão Geral do módulo (versão simples da D1): Total devido, Em atraso e Vence em 30 dias. */
 export function TelaVisaoGeralDividas({ resumo, linhas, abertas, hoje }: { resumo: ResumoDividas; linhas: LinhaDivida[]; abertas: { quantidade: number; valorCentavos: number }; hoje: string }) {
-  const ativas = linhas.filter((d) => d.situacao === "em_dia" || d.situacao === "em_atraso");
+  const ativas = linhas.filter((d) => estaAtiva(d.situacao));
   return (
     <>
       <AbasDividas ativa="/gestao/dividas" />

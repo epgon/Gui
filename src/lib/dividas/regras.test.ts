@@ -4,6 +4,7 @@ import {
   amortizarReduzindoQuantidade,
   amortizarReduzindoValor,
   diasEntre,
+  estaAtiva,
   dividaQueJaTem,
   estimarAtraso,
   percentualPago,
@@ -138,6 +139,18 @@ describe("situação da dívida", () => {
   it("em atraso: mostra os dias da parcela mais antiga", () => {
     const r = situacaoDaDivida({ ...base, situacao: "ativa", obrigacoes: [ob(1, 100, "2026-11-16"), ob(2, 100, "2026-10-27"), ob(3, 100, "2026-12-10")] });
     expect(r).toEqual({ situacao: "em_atraso", diasAtraso: 30, parcelasAtrasadas: 2 });
+  });
+  it("em negociação: negociação em andamento, mesmo com atraso (os dias continuam)", () => {
+    expect(situacaoDaDivida({ ...base, situacao: "ativa", emNegociacao: true, obrigacoes: [ob(1, 100, "2026-12-10")] })).toEqual({ situacao: "em_negociacao", diasAtraso: 0, parcelasAtrasadas: 0 });
+    expect(situacaoDaDivida({ ...base, situacao: "ativa", emNegociacao: true, obrigacoes: [ob(1, 100, "2026-10-27")] })).toEqual({ situacao: "em_negociacao", diasAtraso: 30, parcelasAtrasadas: 1 });
+    expect(estaAtiva("em_negociacao")).toBe(true);
+    expect(estaAtiva("renegociada")).toBe(false);
+  });
+  it("em negociação não vale para dívida quitada, renegociada ou cancelada", () => {
+    const pagas = [ob(1, 100, "2026-10-10", "2026-10-10")];
+    expect(situacaoDaDivida({ ...base, situacao: "ativa", emNegociacao: true, obrigacoes: pagas }).situacao).toBe("quitada");
+    expect(situacaoDaDivida({ ...base, situacao: "renegociada", emNegociacao: true, obrigacoes: [] }).situacao).toBe("renegociada");
+    expect(situacaoDaDivida({ ...base, situacao: "cancelada", emNegociacao: true, obrigacoes: [] }).situacao).toBe("cancelada");
   });
   it("quitada: tudo pago; voltar uma parcela para não paga reabre a dívida", () => {
     const pagas = [ob(1, 100, "2026-10-10", "2026-10-10"), ob(2, 100, "2026-11-10", "2026-11-10")];

@@ -1,12 +1,13 @@
 "use client";
 
-import { Banknote, Copy, Eye, Gauge, HandCoins, NotebookPen, Pencil, Scale, Wallet, XCircle } from "lucide-react";
+import { Banknote, Copy, Eye, Gauge, HandCoins, Handshake, NotebookPen, Pencil, Scale, Wallet, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { BarraLista } from "@/components/cadastros/barra-lista";
 import { MenuLinha } from "@/components/cadastros/menu-linha";
 import { useFormularioCadastro } from "@/components/cadastros/modal-cadastro";
 import { Paginacao } from "@/components/cadastros/paginacao";
+import { AssistenteRenegociacao, type InicioRenegociacao } from "@/components/dividas/assistente-renegociacao";
 import { AbasDividas, BarraProgresso, NotaSaldo, PilulaSituacao } from "@/components/dividas/comuns";
 import { ContasEmAberto } from "@/components/dividas/contas-em-aberto";
 import { DetalhandoDivida, type AcaoDivida } from "@/components/dividas/detalhando-divida";
@@ -17,12 +18,13 @@ import { TextoComDestaque } from "@/components/ui/campo";
 import { ProvedorOcultar, ValorOcultavel } from "@/components/ui/ocultar-valores";
 import { Tabela } from "@/components/ui/tabela";
 import { formatarData } from "@/lib/datas";
-import { rotuloTipoDivida } from "@/lib/dividas/regras";
+import { estaAtiva, rotuloTipoDivida } from "@/lib/dividas/regras";
 import type { ContaEmAberto, FiltrosDividas, LinhaDivida, LinhaObrigacao } from "@/lib/dividas/tipos";
 import type { Opcoes } from "@/lib/lancamentos/tipos";
 import { realizarLancamentos } from "@/app/(sistema)/financeiro/lancamentos/acoes";
 import { ModalPagar } from "@/app/(sistema)/financeiro/lancamentos/linhas";
 import { proximaParcela } from "../acoes";
+import { desfazerRenegociacao } from "../negociacoes/acoes";
 
 type Janela = { acao: AcaoDivida | "cancelar"; divida: LinhaDivida };
 type Parcela = { id: number; descricao: string; valorCentavos: number; vencimento: string; dividaId: number };
@@ -53,6 +55,7 @@ export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoj
   const [janela, setJanela] = useState<Janela | null>(null);
   const [parcela, setParcela] = useState<Parcela | null>(null);
   const [aviso, setAviso] = useState("");
+  const [assistente, setAssistente] = useState<InicioRenegociacao | null>(null);
   const [erroPagar, setErroPagar] = useState("");
   const [ocupado, iniciar] = useTransition();
   const aberto = useRef(false);
@@ -76,7 +79,7 @@ export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoj
     mudou();
   };
 
-  const ativa = (d: LinhaDivida) => d.situacao === "em_dia" || d.situacao === "em_atraso";
+  const ativa = (d: LinhaDivida) => estaAtiva(d.situacao);
 
   const pagarProxima = (d: LinhaDivida) =>
     iniciar(async () => {
@@ -106,7 +109,24 @@ export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoj
       }
     });
 
+  const desfazer = (d: LinhaDivida) => {
+    if (!confirm(`Desfazer a renegociação? As parcelas originais voltam para Lançamentos e o acordo ${d.descricao} é apagado.`)) return;
+    iniciar(async () => {
+      setAviso("");
+      try {
+        const r = await desfazerRenegociacao(d.id);
+        if (!r.ok) return setAviso(r.erro);
+        setDetalhando(null);
+        mudou();
+      } catch {
+        setAviso("Não foi possível desfazer agora. Tente de novo.");
+      }
+    });
+  };
+
   const abrirAcao = (acao: AcaoDivida | "cancelar", d: LinhaDivida) => {
+    if (acao === "renegociar") return setAssistente({ dividaIds: [d.id] });
+    if (acao === "desfazer") return desfazer(d);
     if (acao === "pagar" && d.forma === "parcelas_fixas") return pagarProxima(d);
     setJanela({ acao, divida: d });
   };
@@ -173,6 +193,7 @@ export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoj
                           { rotulo: "Quitar", icone: <Scale className="h-4 w-4" />, aoClicar: () => abrirAcao("quitar", d) },
                           { rotulo: "Atualizar saldo", icone: <Gauge className="h-4 w-4" />, aoClicar: () => abrirAcao("saldo", d) },
                           { rotulo: "Lançar encargo", icone: <NotebookPen className="h-4 w-4" />, aoClicar: () => abrirAcao("encargo", d) },
+                          { rotulo: "Renegociar", icone: <Handshake className="h-4 w-4" />, aoClicar: () => abrirAcao("renegociar", d) },
                         ]
                       : []),
                     { rotulo: "Editar", icone: <Pencil className="h-4 w-4" />, aoClicar: () => editar(d) },
@@ -205,6 +226,26 @@ export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoj
           aoFechar={() => setDetalhando(null)}
           aoAcao={(a) => dividaAberta && abrirAcao(a, dividaAberta)}
           aoPagarParcela={(o) => pagarParcela(o, detalhando)}
+          aoAbrirDivida={setDetalhando}
+        />
+      )}
+
+      {assistente && (
+        <AssistenteRenegociacao
+          dividas={todas}
+          opcoes={opcoes}
+          hoje={hoje}
+          inicio={assistente}
+          padroes={padroes}
+          aoFechar={() => {
+            setAssistente(null);
+            mudou();
+          }}
+          aoConcluir={(acordoId) => {
+            setAssistente(null);
+            setDetalhando(acordoId);
+            mudou();
+          }}
         />
       )}
 
