@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, ExternalLink, Handshake, Pencil, Plus, Trash2, XCircle } from "lucide-react";
+import { Calculator, CheckCircle2, ExternalLink, Handshake, Pencil, Plus, Trash2, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { detalharNegociacao, excluirProposta, recusarProposta, salvarNegociacao, salvarProposta, type DadosNegociacao, type DadosProposta } from "@/app/(sistema)/gestao/dividas/negociacoes/acoes";
@@ -71,7 +71,7 @@ function Rodape({ ocupado, aoFechar, rotulo }: { ocupado: boolean; aoFechar: () 
 // Nova negociação / editar
 // ---------------------------------------------------------------------------
 
-export function ModalNegociacao({ id, inicial, dividas, hoje, aoFechar }: { id: number | null; inicial: DadosNegociacao; dividas: LinhaDivida[]; hoje: string; aoFechar: () => void }) {
+export function ModalNegociacao({ id, inicial, dividas, hoje, sobraCalculadaCentavos, aoFechar }: { id: number | null; inicial: DadosNegociacao; dividas: LinhaDivida[]; hoje: string; sobraCalculadaCentavos?: number | null; aoFechar: () => void }) {
   const { erro, ocupado, enviar } = useEnvio(aoFechar);
   const [d, setD] = useState(inicial);
   const mudar = <K extends keyof DadosNegociacao>(chave: K, valor: DadosNegociacao[K]) => setD((x) => ({ ...x, [chave]: valor }));
@@ -120,7 +120,14 @@ export function ModalNegociacao({ id, inicial, dividas, hoje, aoFechar }: { id: 
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
               <CampoTexto rotulo="Prazo de Resposta" type="date" valor={d.prazoResposta} aoMudar={(v) => mudar("prazoResposta", v)} ajuda="Até quando o credor ou você precisa responder." />
-              <CampoValor rotulo="Sobra Mensal" valor={d.sobraMensal} aoMudar={(v) => mudar("sobraMensal", v)} ajuda="Quanto sobra por mês para pagar o acordo. Usada para dizer se a parcela cabe. Digitada por enquanto; a sobra calculada chega com o Simulador." />
+              <div>
+                <CampoValor rotulo="Sobra Mensal" valor={d.sobraMensal} aoMudar={(v) => mudar("sobraMensal", v)} ajuda="Quanto sobra por mês para pagar o acordo. Usada para dizer se a parcela cabe. Você pode digitar ou usar a sobra calculada pelo Simulador." />
+                {sobraCalculadaCentavos !== null && sobraCalculadaCentavos !== undefined && sobraCalculadaCentavos > 0 && (
+                  <button type="button" className="mt-1 text-xs text-verde hover:underline" onClick={() => mudar("sobraMensal", formatarCentavos(sobraCalculadaCentavos))}>
+                    Usar a sobra calculada: R$ {formatarCentavos(sobraCalculadaCentavos)}
+                  </button>
+                )}
+              </div>
               {edicao && (
                 <CampoSelecao
                   rotulo="Situação"
@@ -353,6 +360,9 @@ function CartaoProposta({ n, p, hoje, melhor, aberta, aoAceitar, aoEditar, aoRec
       {aberta && emAberto && (
         <div className="mt-3 flex flex-wrap gap-2">
           <Botao className="h-8" icone={<Handshake className="h-4 w-4" />} onClick={aoAceitar}>Aceitar e renegociar</Botao>
+          <Link href={`/gestao/dividas/simulador?modo=proposta&negociacao=${n.id}&proposta=${p.id}`} className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-borda bg-white px-4 text-sm font-semibold text-gray-700 transition hover:bg-gray-50">
+            <Calculator className="h-4 w-4" /> Simular
+          </Link>
           <Botao variante="secundario" className="h-8" icone={<Pencil className="h-4 w-4" />} onClick={aoEditar}>Editar</Botao>
           <Botao variante="secundario" className="h-8" icone={<XCircle className="h-4 w-4" />} onClick={aoRecusar}>Recusar</Botao>
           <Botao variante="secundario" className="h-8" icone={<Trash2 className="h-4 w-4" />} onClick={aoExcluir}>Excluir</Botao>

@@ -7,6 +7,7 @@ import { CampoAreaTexto, CampoSelecao, CampoTexto, CampoValor } from "@/componen
 import { Chave } from "@/components/ui/chave";
 import { CampoCategoria, CampoComNovo, CampoDestino } from "@/app/(sistema)/financeiro/lancamentos/campos";
 import { ModalNovoContato } from "@/app/(sistema)/financeiro/lancamentos/formulario";
+import { useSistema } from "@/components/layout/provedor-sistema";
 import { formatarData } from "@/lib/datas";
 import { formatarCentavos, lerValorEmCentavos } from "@/lib/dinheiro";
 import { FORMAS_DIVIDA, GARANTIAS, taxaAnualParaMensal, TIPOS_DIVIDA } from "@/lib/dividas/regras";
@@ -38,6 +39,7 @@ export function dadosVaziosDivida(padroes: PadroesDivida, hoje: string): DadosDi
     formaPagamentoId: "",
     observacao: "",
     registrarEntrada: false,
+    lembrete: { ativo: false, dia: String(Number(hoje.slice(8, 10)) || 1), valor: "" },
   };
 }
 
@@ -65,6 +67,7 @@ export function dadosDaDivida(d: LinhaDivida, hoje: string, padroes: PadroesDivi
 type Formulario = ReturnType<typeof useFormularioCadastro<DadosDivida>>;
 
 export function ModalDivida({ formulario: form, opcoes, multaPadrao, moraPadrao }: { formulario: Formulario; opcoes: Opcoes; multaPadrao: number; moraPadrao: number }) {
+  const { recursos } = useSistema();
   const [novoCredor, setNovoCredor] = useState(false);
   const [credoresNovos, setCredoresNovos] = useState<{ id: number; rotulo: string; ativo: boolean }[]>([]);
   const d = form.dados;
@@ -136,6 +139,17 @@ export function ModalDivida({ formulario: form, opcoes, multaPadrao, moraPadrao 
         {!edicao && !fixa && (
           <div className="rounded-lg bg-creme p-4">
             <CampoValor rotulo="Saldo devedor hoje" obrigatorio valor={d.saldoHoje} aoMudar={(v) => form.mudar("saldoHoje", v)} ajuda="Quanto você deve hoje, conferido no extrato ou com o credor. Nenhum lançamento é criado: cada pagamento é registrado pelo botão Pagar." />
+            {recursos.recorrentes && (
+              <div className="mt-4 border-t border-borda pt-3">
+                <Chave ligada={!!d.lembrete?.ativo} aoMudar={(v) => form.mudar("lembrete", { ativo: v, dia: d.lembrete?.dia ?? "1", valor: d.lembrete?.valor ?? "" })} rotulo="Lembrar todo mês" />
+                {d.lembrete?.ativo && (
+                  <div className="mt-3 grid gap-4 sm:grid-cols-2">
+                    <CampoTexto rotulo="No dia" obrigatorio inputMode="numeric" maxLength={2} valor={d.lembrete.dia} aoMudar={(v) => form.mudar("lembrete", { ...d.lembrete!, dia: v.replace(/\D/g, "") })} ajuda="Cria um lançamento recorrente ligado a esta dívida: todo mês aparece em Lançamentos e na Agenda para você pagar." />
+                    <CampoValor rotulo="Valor do lembrete" obrigatorio valor={d.lembrete.valor} aoMudar={(v) => form.mudar("lembrete", { ...d.lembrete!, valor: v })} ajuda="O quanto pretende pagar por mês. Ao pagar, o saldo da dívida cai pelo valor pago." />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
         {edicao && fixa && <p className="rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-600">As parcelas já criadas não mudam por aqui. Para mudar uma parcela, edite o lançamento dela em Lançamentos.</p>}

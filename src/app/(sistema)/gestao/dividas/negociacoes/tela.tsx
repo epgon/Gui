@@ -21,7 +21,7 @@ import { desistirNegociacao, excluirNegociacao, recusarNegociacao } from "./acoe
 
 type Edicao = { id: number | null; dados: ReturnType<typeof dadosVaziosNegociacao> };
 
-export function TelaNegociacoes({ linhas, total, filtros, caminho, dividas, opcoes, hoje, padroes, abrirNova, abrirDetalhe, porPagina }: {
+export function TelaNegociacoes({ linhas, total, filtros, caminho, dividas, opcoes, hoje, padroes, sobraCalculadaCentavos, abrirNova, abrirDetalhe, porPagina }: {
   linhas: LinhaNegociacao[];
   total: number;
   filtros: FiltrosNegociacoes;
@@ -30,6 +30,8 @@ export function TelaNegociacoes({ linhas, total, filtros, caminho, dividas, opco
   opcoes: Opcoes;
   hoje: string;
   padroes: { contaId: string; categoriaId: string };
+  /** Sobra mensal calculada pelo Simulador (sugestão para o campo Sobra Mensal). */
+  sobraCalculadaCentavos?: number | null;
   abrirNova: boolean;
   abrirDetalhe: number | null;
   porPagina: number;
@@ -169,6 +171,7 @@ export function TelaNegociacoes({ linhas, total, filtros, caminho, dividas, opco
           inicial={edicao.dados}
           dividas={dividas}
           hoje={hoje}
+          sobraCalculadaCentavos={sobraCalculadaCentavos}
           aoFechar={() => {
             setEdicao(null);
             mudou();

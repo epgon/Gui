@@ -9,6 +9,7 @@ import { lerParametros } from "@/lib/parametros/servidor";
 import { SITUACOES_ABERTAS_NEGOCIACAO, podeDesfazerRenegociacao } from "./negociacao";
 import {
   diasEntre,
+  estaAtiva,
   estimarAtraso,
   percentualPago,
   resumirSaldo,
@@ -21,6 +22,7 @@ import {
   type SaldoInformado,
   type TipoDivida,
 } from "./regras";
+import { mesDe, montarDividaComParcelas, montarDividaSemParcelas, type DividaSim } from "./simulador";
 import type { ContaEmAberto, DetalheDivida, EventoLinha, FiltrosDividas, LinhaDivida, LinhaObrigacao, ResumoDividas, VinculoLinha } from "./tipos";
 
 const { divida, dividaVinculo, dividaEvento, dividaRenegociacao, negociacao, negociacaoDivida, lancamento: l, contato, fatura, cartaoCredito: cartao, recorrencia, parcelamento, categoria } = schema;
@@ -227,6 +229,28 @@ function montarLinha(base: Base, d: Base["dividas"][number]): { linha: LinhaDivi
     cfg,
     informado,
   };
+}
+
+/**
+ * As dívidas ativas no formato do Simulador (só leitura): o que falta pagar de cada uma, com a estimativa de atraso no mês atual.
+ * Devolve também a linha da dívida, para a tela mostrar saldo, taxa e situação.
+ */
+export async function carregarDividasParaSimular(hoje = hojeIso()): Promise<{ linha: LinhaDivida; sim: DividaSim }[]> {
+  const base = await lerBase(null, hoje);
+  const inicioYm = mesDe(hoje);
+  const resultado: { linha: LinhaDivida; sim: DividaSim }[] = [];
+  for (const d of base.dividas) {
+    const { linha, contas } = montarLinha(base, d);
+    if (!estaAtiva(linha.situacao)) continue;
+    const comum = { id: `d${d.d.id}`, nome: d.d.descricao, credor: d.credor, taxaMensalPct: linha.taxaMensal ?? 0, atrasoDias: linha.diasAtraso, comGarantia: linha.garantia !== "nenhuma" };
+    const abertas = contas.filter((c) => !c.o.dataPagamento).map((c) => ({ vencimento: c.o.vencimento, valorCentavos: c.o.valorCentavos, acrescimoCentavos: c.linha.acrescimoCentavos }));
+    const sim =
+      linha.forma === "parcelas_fixas" && abertas.length > 0
+        ? montarDividaComParcelas({ ...comum, abertas, inicioYm })
+        : montarDividaSemParcelas({ ...comum, saldoCentavos: linha.saldo.exibido });
+    if (sim.saldoCentavos > 0) resultado.push({ linha, sim });
+  }
+  return resultado;
 }
 
 /** Todas as dívidas com saldo e situação calculados na hora. */

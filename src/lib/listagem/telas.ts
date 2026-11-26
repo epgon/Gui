@@ -2,6 +2,7 @@
  * Configurações da Listagem (engrenagem acima da tabela): colunas, ordenação e "Outros"
  * de cada lista, e os campos do Filtro Avançado e da Impressão Personalizada.
  */
+import { GARANTIAS, ROTULO_SITUACAO_DIVIDA, TIPOS_DIVIDA } from "@/lib/dividas/regras";
 import type { CampoAvancado } from "./avancado";
 
 export type ColunaConfig = { chave: string; rotulo: string; fixa?: boolean; padrao: boolean };
@@ -35,6 +36,36 @@ const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "
 const SIM_NAO: CampoAvancado["tipo"] = "booleano";
 
 export const TELAS_LISTAGEM: Record<string, TelaListagem> = {
+  dividas: {
+    titulo: "Minhas Dívidas",
+    colunas: [
+      { chave: "divida", rotulo: "Dívida", fixa: true, padrao: true },
+      { chave: "tipo", rotulo: "Tipo", padrao: true },
+      { chave: "situacao", rotulo: "Situação", padrao: true },
+      { chave: "proximo", rotulo: "Próximo Vencimento", padrao: true },
+      { chave: "parcelas", rotulo: "Parcelas", padrao: true },
+      { chave: "taxa", rotulo: "Taxa (% a.m.)", padrao: true },
+      { chave: "saldo", rotulo: "Saldo Devedor", padrao: true },
+      { chave: "progresso", rotulo: "Progresso", padrao: true },
+      ...colunasComuns(false),
+    ],
+    campos: [
+      { chave: "descricao", rotulo: "Dívida", tipo: "texto" },
+      { chave: "credor", rotulo: "Credor", tipo: "texto" },
+      { chave: "tipo", rotulo: "Tipo", tipo: "lista", opcoes: TIPOS_DIVIDA.map((t) => ({ valor: t.rotulo, rotulo: t.rotulo })) },
+      { chave: "situacao", rotulo: "Situação", tipo: "lista", opcoes: Object.values(ROTULO_SITUACAO_DIVIDA).map((r) => ({ valor: r, rotulo: r })) },
+      { chave: "garantia", rotulo: "Garantia", tipo: "lista", opcoes: GARANTIAS.map((g) => ({ valor: g.rotulo, rotulo: g.rotulo })) },
+      { chave: "proximo", rotulo: "Próximo Vencimento", tipo: "data" },
+      { chave: "contratacao", rotulo: "Data da Contratação", tipo: "data" },
+      { chave: "parcelasPagas", rotulo: "Parcelas Pagas", tipo: "numero" },
+      { chave: "parcelasTotal", rotulo: "Total de Parcelas", tipo: "numero" },
+      { chave: "taxa", rotulo: "Taxa (% a.m.)", tipo: "numero" },
+      { chave: "saldo", rotulo: "Saldo Devedor", tipo: "dinheiro" },
+      { chave: "valorOriginal", rotulo: "Valor Original", tipo: "dinheiro" },
+      { chave: "diasAtraso", rotulo: "Dias de Atraso", tipo: "numero" },
+      ...comuns(false),
+    ],
+  },
   "contas-financeiras": {
     titulo: "Contas Financeiras",
     auxiliar: "contas",

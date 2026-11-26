@@ -64,6 +64,8 @@ export type Movimento = {
   contatoId: number | null;
   formaId: number | null;
   tagIds: number[];
+  /** Parcela ou lançamento de uma dívida da Gestão de Dívidas (o relatório não usa; o Simulador usa para tirar as parcelas da sobra). */
+  dividaId?: number | null;
 };
 
 export type FiltrosRelatorio = {

@@ -7,7 +7,7 @@ import { diferencas, registrarAuditoria, type Transacao } from "@/lib/auditoria"
 import { falha, idValido, type Resultado } from "@/lib/cadastros/resultado";
 import { dataValida, formatarData, hojeIso } from "@/lib/datas";
 import { formatarCentavos, lerValorEmCentavos } from "@/lib/dinheiro";
-import { amortizarReduzindoQuantidade, amortizarReduzindoValor, dividaQueJaTem, GARANTIAS, taxaAnualParaMensal, TIPOS_DIVIDA, type VinculoExistente } from "@/lib/dividas/regras";
+import { amortizarReduzindoQuantidade, amortizarReduzindoValor, dividaQueJaTem, GARANTIAS, primeiroDiaDoLembrete, taxaAnualParaMensal, TIPOS_DIVIDA, type VinculoExistente } from "@/lib/dividas/regras";
 import { carregarDetalheDivida, categoriasDeDividas } from "@/lib/dividas/servidor";
 import type { DetalheDivida } from "@/lib/dividas/tipos";
 import { inserirLancamento } from "@/lib/lancamentos/gravacao";
@@ -147,6 +147,8 @@ export type DadosDivida = {
   formaPagamentoId: string;
   observacao: string;
   registrarEntrada: boolean;
+  /** Sem parcelas: "Lembrar todo mês no dia X" cria um recorrente ligado à dívida (só no cadastro). */
+  lembrete?: { ativo: boolean; dia: string; valor: string };
 };
 
 function lerComuns(d: DadosDivida) {
@@ -229,6 +231,23 @@ export async function salvarDivida(id: number | null, d: DadosDivida): Promise<R
         const saldo = lerValor(d.saldoHoje, "Saldo devedor hoje")!;
         await evento(tx, nova.id, { data: hoje, tipo: "atualizacao_saldo", descricao: `Saldo inicial de ${formatarCentavos(saldo!)} informado no cadastro`, saldoCentavos: saldo, origemSaldo: "cadastro" });
         resumoParcelas = `sem parcelas, saldo de ${formatarCentavos(saldo!)}`;
+
+        if (d.lembrete?.ativo) {
+          if (!(await recursoAtivo("recorrentes"))) erro("Para **Lembrar todo mês**, ligue o recurso Lançamentos Recorrentes em Configurações > Recursos.");
+          const dia = Number(d.lembrete.dia);
+          if (!Number.isInteger(dia) || dia < 1 || dia > 31) erro("Informe um dia de 1 a 31 em **Lembrar todo mês no dia**.");
+          const valorLembrete = lerValor(d.lembrete.valor, "Valor do lembrete")!;
+          // Primeira ocorrência: o dia escolhido neste mês, ou no próximo se já passou.
+          const dataInicio = primeiroDiaDoLembrete(hoje, dia);
+          const [lembrete] = await tx
+            .insert(recorrencia)
+            .values({ formato: "simples", tipo: "despesa", descricao: `Pagamento: ${comuns.descricao}`, valorCentavos: valorLembrete, intervalo: "mensal", diaFixo: dia, dataInicio, contaId, categoriaId, formaPagamentoId, contatoId: credor.id, observacao: `Lembrete mensal criado pela dívida ${comuns.descricao}.` })
+            .returning();
+          await tx.insert(dividaVinculo).values({ dividaId: nova.id, recorrenciaId: lembrete.id });
+          await registrarAuditoria(tx, { tela: "Lançamentos Recorrentes", entidade: "Recorrente", entidadeId: lembrete.id, acao: "cadastrou", descricao: `o Recorrente Pagamento: ${comuns.descricao} (lembrete da dívida)`, dados: { ...lembrete, dividaId: nova.id } });
+          await evento(tx, nova.id, { data: hoje, tipo: "vinculo", descricao: `Lembrete mensal criado: todo dia ${dia}, ${formatarCentavos(valorLembrete)}`, valorCentavos: valorLembrete });
+          resumoParcelas += `, lembrete todo dia ${dia}`;
+        }
       }
 
       await evento(tx, nova.id, { data: hoje, tipo: "cadastro", descricao: `Dívida cadastrada com ${credor.nome} (${resumoParcelas})` });

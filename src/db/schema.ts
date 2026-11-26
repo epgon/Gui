@@ -886,6 +886,24 @@ export const dividaRenegociacao = pgTable(
 // 4.8. Auditoria
 // ---------------------------------------------------------------------------
 
+/**
+ * Simulação guardada (Gestão de Dívidas, Simulador). Só os parâmetros e o resumo do cálculo:
+ * não se liga a lançamentos nem a dívidas e nunca altera dado real.
+ */
+export const simulacao = pgTable("simulacao", {
+  id: serial("id").primaryKey(),
+  nome: varchar("nome", { length: 80 }).notNull(),
+  /** quitar, estrategias, cenarios ou proposta. */
+  modo: varchar("modo", { length: 20 }).notNull(),
+  parametros: jsonb("parametros").notNull(),
+  resumo: jsonb("resumo").notNull(),
+  criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
 export const acaoAuditoriaEnum = pgEnum("acao_auditoria", [
   "cadastrou",
   "alterou",

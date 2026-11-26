@@ -69,7 +69,16 @@ export async function salvarParametrosLancamentos(entrada: DadosLancamentos): Pr
   return { ok: true };
 }
 
-export type DadosDividas = { multaPadraoPct: string; moraMensalPct: string };
+export type DadosDividas = {
+  multaPadraoPct: string;
+  moraMensalPct: string;
+  reservaMeses: string;
+  contasReserva: number[];
+  sobraMeses: string;
+  cenarioConservador: string;
+  cenarioIntermediario: string;
+  cenarioAcelerado: string;
+};
 
 const pct = (rotulo: string) =>
   z
@@ -78,18 +87,42 @@ const pct = (rotulo: string) =>
     .transform((v) => Number(v.replace(",", ".")))
     .refine((n) => Number.isFinite(n) && n >= 0 && n <= 100, `Informe um percentual entre 0 e 100 em **${rotulo}**.`);
 
-const dividas = z.object({ multaPadraoPct: pct("Multa padrão"), moraMensalPct: pct("Juros de mora ao mês") });
+const inteiro = (rotulo: string, min: number, max: number) =>
+  z
+    .string()
+    .trim()
+    .transform((v) => Number(v))
+    .refine((n) => Number.isInteger(n) && n >= min && n <= max, `Informe um número inteiro de ${min} a ${max} em **${rotulo}**.`);
 
-/** Gestão de Dívidas: multa e mora usadas na estimativa de saldo em atraso quando a dívida não tem as próprias. */
+const dividas = z.object({
+  multaPadraoPct: pct("Multa padrão"),
+  moraMensalPct: pct("Juros de mora ao mês"),
+  reservaMeses: inteiro("Reserva mínima (meses de despesas)", 0, 24),
+  contasReserva: z.array(idValido).max(500),
+  sobraMeses: inteiro("Meses na média da sobra", 1, 12),
+  cenarioConservador: pct("Cenário Conservador"),
+  cenarioIntermediario: pct("Cenário Intermediário"),
+  cenarioAcelerado: pct("Cenário Acelerado"),
+});
+
+/** Gestão de Dívidas: multa e mora da estimativa de atraso, e as contas do Simulador (reserva, sobra e cenários). */
 export async function salvarParametrosDividas(entrada: DadosDividas): Promise<Resultado> {
   await exigirLogin();
   const v = dividas.safeParse(entrada);
   if (!v.success) return primeiroErro(v.error);
   const d = v.data;
   const fmt = (n: number) => String(n).replace(".", ",");
+  const contas = [...new Set(d.contasReserva)];
   await getDb().transaction(async (tx) => {
-    await gravarConfiguracao(tx, "dividas.multa_padrao", d.multaPadraoPct, { tela: TELA, descricao: `a Multa padrão das dívidas para ${fmt(d.multaPadraoPct)}%` });
-    await gravarConfiguracao(tx, "dividas.mora_padrao", d.moraMensalPct, { tela: TELA, descricao: `os Juros de mora padrão das dívidas para ${fmt(d.moraMensalPct)}% ao mês` });
+    const aud = (descricao: string) => ({ tela: TELA, descricao });
+    await gravarConfiguracao(tx, "dividas.multa_padrao", d.multaPadraoPct, aud(`a Multa padrão das dívidas para ${fmt(d.multaPadraoPct)}%`));
+    await gravarConfiguracao(tx, "dividas.mora_padrao", d.moraMensalPct, aud(`os Juros de mora padrão das dívidas para ${fmt(d.moraMensalPct)}% ao mês`));
+    await gravarConfiguracao(tx, "dividas.reserva_meses", d.reservaMeses, aud(`a Reserva mínima das dívidas para ${d.reservaMeses} meses de despesas`));
+    await gravarConfiguracao(tx, "dividas.contas_reserva", contas, aud(contas.length ? `as Contas da reserva (${contas.length})` : "as Contas da reserva para Poupança e Investimento"));
+    await gravarConfiguracao(tx, "dividas.sobra_meses", d.sobraMeses, aud(`os Meses na média da sobra mensal para ${d.sobraMeses}`));
+    await gravarConfiguracao(tx, "dividas.cenario_conservador", d.cenarioConservador, aud(`o Cenário Conservador para ${fmt(d.cenarioConservador)}% da sobra`));
+    await gravarConfiguracao(tx, "dividas.cenario_intermediario", d.cenarioIntermediario, aud(`o Cenário Intermediário para ${fmt(d.cenarioIntermediario)}% da sobra`));
+    await gravarConfiguracao(tx, "dividas.cenario_acelerado", d.cenarioAcelerado, aud(`o Cenário Acelerado para ${fmt(d.cenarioAcelerado)}% da sobra`));
   });
   refresh();
   return { ok: true };

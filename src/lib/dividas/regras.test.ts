@@ -8,6 +8,7 @@ import {
   dividaQueJaTem,
   estimarAtraso,
   percentualPago,
+  primeiroDiaDoLembrete,
   resumirSaldo,
   saldoEstimado,
   saldoInformadoAtual,
@@ -245,5 +246,20 @@ describe("restante de um pagamento parcial", () => {
   it("lançamento sem dívida gera restante sem dívida", () => {
     const original = { id: 11, descricao: "Luz", documento: null, observacao: null, dataReferencia: null, contaId: 1, categoriaId: 2, formaPagamentoId: null, contatoId: null, dividaId: null };
     expect(camposDoRestante(original, 100, "2026-12-30").dividaId).toBeNull();
+  });
+});
+
+describe("Lembrar todo mês", () => {
+  it("usa o dia deste mês se ainda não passou, senão o do próximo", () => {
+    expect(primeiroDiaDoLembrete("2026-11-26", 28)).toBe("2026-11-28");
+    expect(primeiroDiaDoLembrete("2026-11-26", 26)).toBe("2026-11-26");
+    expect(primeiroDiaDoLembrete("2026-11-26", 10)).toBe("2026-12-10");
+    expect(primeiroDiaDoLembrete("2026-12-20", 5)).toBe("2027-01-05");
+  });
+
+  it("dia 31 vale o último dia dos meses mais curtos", () => {
+    expect(primeiroDiaDoLembrete("2026-11-26", 31)).toBe("2026-11-30");
+    expect(primeiroDiaDoLembrete("2027-01-31", 31)).toBe("2027-01-31");
+    expect(primeiroDiaDoLembrete("2027-02-01", 31)).toBe("2027-02-28");
   });
 });

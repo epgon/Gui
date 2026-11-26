@@ -46,3 +46,23 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
+
+/* Imprimir/PDF do Simulador de Dívidas: só a área de resultados sai no papel. */
+@media print {
+  body.imprimindo-simulacao * {
+    visibility: hidden;
+  }
+  body.imprimindo-simulacao #area-impressao,
+  body.imprimindo-simulacao #area-impressao * {
+    visibility: visible;
+  }
+  body.imprimindo-simulacao #area-impressao {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  body.imprimindo-simulacao details {
+    display: block;
+  }
+}

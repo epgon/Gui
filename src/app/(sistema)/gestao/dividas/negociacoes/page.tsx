@@ -5,6 +5,7 @@ import { parametro, type ParametrosBusca } from "@/lib/cadastros/filtros";
 import { hojeIso } from "@/lib/datas";
 import { SITUACOES_NEGOCIACAO } from "@/lib/dividas/negociacao";
 import { carregarNegociacoes, lerFiltrosNegociacoes } from "@/lib/dividas/negociacoes";
+import { carregarSituacaoFinanceira } from "@/lib/dividas/simulador-servidor";
 import { carregarTodasDividas, categoriasDeDividas } from "@/lib/dividas/servidor";
 import { carregarOpcoes } from "@/lib/lancamentos/consultas";
 import { paginar } from "@/lib/listagem/servidor";
@@ -23,7 +24,7 @@ export default async function PaginaNegociacoes({ searchParams }: { searchParams
   await realizarAutomaticos(hoje);
   const f = lerFiltrosNegociacoes(sp);
   const dividas = await carregarTodasDividas(hoje);
-  const [dados, opcoes, categorias] = await Promise.all([carregarNegociacoes(f, dividas), carregarOpcoes(), categoriasDeDividas()]);
+  const [dados, opcoes, categorias, financeiro] = await Promise.all([carregarNegociacoes(f, dividas), carregarOpcoes(), categoriasDeDividas(), carregarSituacaoFinanceira(hoje)]);
   const pagina = paginar(dados.linhas, f.pagina, POR_PAGINA);
   const contas = opcoes.destinos.filter((d) => d.grupo === "Contas" && d.ativo);
   const abrirDetalhe = /^\d+$/.test(parametro(sp, "detalhar")) ? Number(parametro(sp, "detalhar")) : null;
@@ -42,6 +43,7 @@ export default async function PaginaNegociacoes({ searchParams }: { searchParams
             opcoes={opcoes}
             hoje={hoje}
             padroes={{ contaId: contas[0]?.valor.replace("conta:", "") ?? "", categoriaId: categorias.parcelas ? String(categorias.parcelas) : "" }}
+            sobraCalculadaCentavos={financeiro.situacao.sobraMensalCentavos}
             abrirNova={parametro(sp, "nova") === "1"}
             abrirDetalhe={abrirDetalhe}
             porPagina={POR_PAGINA}
