@@ -100,3 +100,23 @@ export function alturaAbaixo(linhas: Pick<CategoriaBase, "id" | "categoriaPaiId"
   const filhas = linhas.filter((c) => c.categoriaPaiId === id);
   return filhas.length ? 1 + Math.max(...filhas.map((f) => alturaAbaixo(linhas, f.id))) : 0;
 }
+
+/** Onde uma categoria está sendo usada (para saber se ela pode ser excluída). */
+export type UsoCategoria = { lancamentos: number; recorrentes: number; regras: number; importacoes: number };
+export const SEM_USO: UsoCategoria = { lancamentos: 0, recorrentes: 0, regras: 0, importacoes: 0 };
+
+const vezes = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
+
+/**
+ * Excluir só vale para categoria que não é especial, não tem filhas e não é usada em nada.
+ * Devolve o motivo de não poder (para a dica do menu e o erro da ação) ou null quando pode.
+ */
+export function motivoParaNaoExcluir(c: Pick<CategoriaBase, "especial"> & { quantidadeFilhas: number }, uso: UsoCategoria = SEM_USO): string | null {
+  if (c.especial) return "É uma categoria especial, usada pelo sistema.";
+  if (c.quantidadeFilhas > 0) return `É categoria pai (tem ${vezes(c.quantidadeFilhas, "subcategoria", "subcategorias")}). Exclua ou mova as filhas antes.`;
+  if (uso.lancamentos > 0) return `Tem ${vezes(uso.lancamentos, "lançamento", "lançamentos")}. Se não for mais usá-la, inative-a.`;
+  if (uso.recorrentes > 0) return `É usada em ${vezes(uso.recorrentes, "recorrente", "recorrentes")}. Troque a categoria ${uso.recorrentes === 1 ? "nele" : "neles"} antes.`;
+  if (uso.regras > 0) return `É usada em ${vezes(uso.regras, "regra de importação", "regras de importação")}. Troque a categoria ${uso.regras === 1 ? "nela" : "nelas"} antes.`;
+  if (uso.importacoes > 0) return "É usada em uma importação ainda em rascunho. Conclua ou exclua a importação antes.";
+  return null;
+}
