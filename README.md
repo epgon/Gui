@@ -133,6 +133,14 @@ Fases prontas:
   - **Desfazer renegociação** (no acordo, enquanto nenhuma parcela dele foi paga) devolve exatamente as parcelas originais.
   - Dívidas com negociação em andamento mostram a situação **Em negociação**. A Auditoria ganhou as ações Renegociou e Aprovou.
   - A migração 0011 só **acrescenta** tabelas e valores de lista.
+- **Fase D3 (Gestão de Dívidas: simulador)**: nova aba **Simulador** (só cálculo: nenhum lançamento, dívida ou saldo é alterado).
+  Entradas: dívidas ativas (dá para desmarcar ou incluir uma **dívida hipotética**), valor por mês, pagamento extra pontual, uso da
+  reserva e estratégia (**Bola de Neve, Avalanche, Risco primeiro, Personalizada**). Quatro modos: **Quitar uma dívida**, **Comparar
+  estratégias**, **Cenários** (Conservador, Intermediário, Acelerado) e **Proposta de negociação**. Mostra frase-resumo, avisos (mês
+  negativo, reserva abaixo do mínimo, não quita em 30 anos), gráfico, tabela mês a mês, **Guardar simulação** e Imprimir/PDF. Botão
+  **Simular** na proposta de negociação e no menu e no detalhe da dívida; a negociação ganhou "Usar a sobra calculada". Em Parâmetros
+  há reserva mínima, contas da reserva, meses da média e percentuais dos cenários. Pequenos itens deixados pela D2: **Filtro Avançado e
+  Configurações da Listagem** em Minhas Dívidas e **Lembrar todo mês** (cria um recorrente ligado à dívida sem parcelas).
 
 Todas as telas dos menus estão prontas.
 
@@ -206,6 +214,18 @@ Todas as telas dos menus estão prontas.
   acompanhados são inativados.
 - **Desfazer** só vale enquanto o acordo está ativo e sem nenhuma parcela paga. Ele recria as parcelas originais com os mesmos
   números, reativa vínculos e recorrentes, apaga o acordo e reabre a negociação.
+
+### Como o simulador funciona
+
+- É só cálculo: guardar uma simulação grava apenas o nome, as escolhas e o resumo (tabela `simulacao`).
+- **Sobra mensal** = média dos últimos meses fechados (padrão 3) de receitas menos despesas pagas, **sem as parcelas de dívida**, com as
+  mesmas contas do Fluxo de Caixa. É o quanto dá para pagar por mês em todas as dívidas, parcelas incluídas. **Reserva** = saldo das
+  contas marcadas em Parâmetros (padrão: Poupança e Investimento); **reserva mínima** = N meses de despesas médias (padrão 3).
+- Cada mês: pagam-se as parcelas e o extra (na dívida da vez) e, sobre o que sobra, incidem os juros. As parcelas futuras entram a valor
+  presente pela taxa da dívida e o atraso estimado cai no mês atual. Quando uma dívida acaba, o valor dela passa para a próxima. Limite de
+  360 meses.
+- Cenários: parcelas mais o percentual da **sobra livre** (sobra mensal menos as parcelas); o Acelerado também usa, uma vez, o que passa
+  da reserva mínima.
 
 ### Como os recorrentes funcionam
 

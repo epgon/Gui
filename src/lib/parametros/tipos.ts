@@ -36,8 +36,19 @@ export type Parametros = {
   pagamentoParcial: boolean;
   campos: { dataReferencia: boolean; documento: boolean; observacao: boolean; anexos: boolean };
   camposAuxiliares: Record<CadastroAuxiliar, CampoAuxiliar>;
-  /** Gestão de Dívidas: multa e juros de mora que valem para a dívida que não tem os seus. */
-  dividas: { multaPadraoPct: number; moraMensalPct: number };
+  /** Gestão de Dívidas: multa e juros de mora padrão e as contas do Simulador (reserva, sobra e cenários). */
+  dividas: {
+    multaPadraoPct: number;
+    moraMensalPct: number;
+    /** Reserva mínima: quantos meses de despesas médias. */
+    reservaMeses: number;
+    /** Contas que formam a reserva. Vazio: as contas dos tipos Poupança e Investimento. */
+    contasReserva: number[];
+    /** Quantos meses fechados entram na média da sobra mensal. */
+    sobraMeses: number;
+    /** Percentual da sobra livre que cada cenário usa. */
+    cenarios: { conservador: number; intermediario: number; acelerado: number };
+  };
 };
 
 /** Recursos que podem ser desligados. Desligado, some dos menus e a tela avisa que está desativado. */
@@ -60,6 +71,8 @@ export type Recursos = Record<Recurso, boolean>;
 const bool = (v: unknown, padrao: boolean) => (typeof v === "boolean" ? v : padrao);
 /** Porcentagem de 0 a 100 (multa e juros de atraso); fora disso volta ao padrão. */
 const percentual = (v: unknown, padrao: number) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 100 ? v : padrao);
+
+const inteiroEntre = (v: unknown, min: number, max: number, padrao: number) => (typeof v === "number" && Number.isInteger(v) && v >= min && v <= max ? v : padrao);
 
 /** Monta os Parâmetros a partir das linhas da tabela, com o padrão para o que faltar ou estiver errado. */
 export function lerParametrosDe(c: Record<string, unknown>): Parametros {
@@ -88,7 +101,18 @@ export function lerParametrosDe(c: Record<string, unknown>): Parametros {
       anexos: bool(c["campos.anexos"], true),
     },
     camposAuxiliares,
-    dividas: { multaPadraoPct: percentual(c["dividas.multa_padrao"], 2), moraMensalPct: percentual(c["dividas.mora_padrao"], 1) },
+    dividas: {
+      multaPadraoPct: percentual(c["dividas.multa_padrao"], 2),
+      moraMensalPct: percentual(c["dividas.mora_padrao"], 1),
+      reservaMeses: inteiroEntre(c["dividas.reserva_meses"], 0, 24, 3),
+      contasReserva: Array.isArray(c["dividas.contas_reserva"]) ? (c["dividas.contas_reserva"] as unknown[]).filter((x): x is number => Number.isInteger(x) && (x as number) > 0) : [],
+      sobraMeses: inteiroEntre(c["dividas.sobra_meses"], 1, 12, 3),
+      cenarios: {
+        conservador: percentual(c["dividas.cenario_conservador"], 25),
+        intermediario: percentual(c["dividas.cenario_intermediario"], 50),
+        acelerado: percentual(c["dividas.cenario_acelerado"], 100),
+      },
+    },
   };
 }
 

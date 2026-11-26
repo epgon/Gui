@@ -469,5 +469,14 @@ A pessoa pediu que as fases fossem construídas sem esperar (26/11/2026). Para c
 - Proposta à vista é guardada com entrada = valor à vista e zero parcelas. Nesta fase a **sobra mensal** é um campo digitado na negociação; a comparação com a reserva e a sobra calculada chegam na D3 (o botão Simular também).
 - Na renegociação, a entrada do acordo é a **parcela 1** e as demais seguem a periodicidade. Saem de Lançamentos todos os lançamentos não pagos ligados diretamente à dívida (parcelas, restantes, encargos e contas acompanhadas), como em Quitar. Ocorrências já geradas de um recorrente acompanhado continuam em Lançamentos; o recorrente é inativado. A fatura acompanhada deixa de ser acompanhada, mas continua no cartão.
 - Uma dívida renegociada pode estar em outra negociação aberta; ela continua listada lá, já como Renegociada.
-- Ficam para depois (não são da D2 no plano): Filtro Avançado e Configurações da Listagem em Minhas Dívidas, e "Lembrar todo mês".
+- Ficam para depois (não são da D2 no plano): Filtro Avançado e Configurações da Listagem em Minhas Dívidas, e "Lembrar todo mês" (feitos na D3).
 
+
+### Decisões tomadas na construção da D3 (26/11/2026)
+
+- A **sobra mensal** é a média dos últimos meses fechados (padrão 3, editável em Parâmetros) de receitas menos despesas pagas **sem as parcelas de dívida**, pela data de pagamento, com as mesmas contas do Fluxo de Caixa. Ficaram para depois: somar os recorrentes previstos e a opção "usar o orçamento".
+- Nos **cenários**, o percentual vale sobre a **sobra livre** (sobra mensal menos as parcelas de referência), e o valor mensal sugerido é a sobra mensal inteira (ou só as parcelas, se a sobra não for positiva).
+- Em cada mês as parcelas e o extra são pagos primeiro e os juros incidem sobre o restante; parcelas futuras entram a valor presente pela taxa da dívida e o atraso estimado cai no mês atual. Dívida sem parcelas usa como pagamento mínimo, por padrão, os juros do mês (editável na tela).
+- A ordem das estratégias é fixada pelo saldo inicial. A dívida hipotética não recebe extra; o dinheiro do empréstimo pode entrar como extra no primeiro mês.
+- Contas da reserva: se nenhuma for marcada, valem as contas de Poupança e Investimento ativas.
+- "Lembrar todo mês" só existe no cadastro de dívida sem parcelas e exige o recurso Lançamentos Recorrentes ligado.

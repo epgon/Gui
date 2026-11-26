@@ -95,6 +95,7 @@ export async function carregarMovimentos(f: FiltrosRelatorio, arvore: ArvoreCate
       contaId: l.contaId,
       cartaoId: l.cartaoId,
       contatoId: l.contatoId,
+      dividaId: l.dividaId,
       formaId: l.formaPagamentoId,
       tagIds: sql<number[]>`coalesce((select array_agg(${lancamentoTag.tagId}) from ${lancamentoTag} where ${lancamentoTag.lancamentoId} = ${l.id}), '{}')`,
     })
@@ -122,7 +123,7 @@ export async function carregarMovimentos(f: FiltrosRelatorio, arvore: ArvoreCate
   const movimentos: Movimento[] = [];
   for (const x of linhas) {
     const especial = especialDoTipo(x.tipo);
-    const base = { data: x.data, especial, contaId: x.contaId, cartaoId: x.cartaoId, contatoId: x.contatoId, formaId: x.formaId, tagIds: (x.tagIds ?? []).map(Number) };
+    const base = { data: x.data, especial, contaId: x.contaId, cartaoId: x.cartaoId, contatoId: x.contatoId, formaId: x.formaId, tagIds: (x.tagIds ?? []).map(Number), dividaId: x.dividaId };
     const doLancamento = itensPor.get(x.id);
     if (x.formato === "detalhado" && doLancamento?.length) {
       for (const i of doLancamento) {

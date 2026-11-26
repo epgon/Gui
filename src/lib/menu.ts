@@ -65,6 +65,7 @@ export const ABAS_DIVIDAS: ItemMenu[] = [
   { titulo: "Visão Geral", href: "/gestao/dividas", fase: 13 },
   { titulo: "Minhas Dívidas", href: "/gestao/dividas/minhas", fase: 13, descricao: "Lista das suas dívidas, com saldo, parcelas e situação." },
   { titulo: "Negociações", href: "/gestao/dividas/negociacoes", fase: 13, descricao: "A conversa com o credor, as propostas e a renegociação em acordo." },
+  { titulo: "Simulador", href: "/gestao/dividas/simulador", fase: 13, descricao: "Compare estratégias, cenários e propostas para quitar. Só cálculo: nada real é alterado." },
 ];
 
 export function encontrarItem(caminho: string): (ItemMenu & { grupo: string }) | null {

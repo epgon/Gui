@@ -1,6 +1,6 @@
 "use client";
 
-import { Banknote, Copy, Eye, Gauge, HandCoins, Handshake, NotebookPen, Pencil, Scale, Wallet, XCircle } from "lucide-react";
+import { Banknote, Calculator, Copy, Eye, Gauge, HandCoins, Handshake, NotebookPen, Pencil, Scale, Wallet, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { BarraLista } from "@/components/cadastros/barra-lista";
@@ -9,6 +9,7 @@ import { useFormularioCadastro } from "@/components/cadastros/modal-cadastro";
 import { Paginacao } from "@/components/cadastros/paginacao";
 import { AssistenteRenegociacao, type InicioRenegociacao } from "@/components/dividas/assistente-renegociacao";
 import { AbasDividas, BarraProgresso, NotaSaldo, PilulaSituacao } from "@/components/dividas/comuns";
+import { colunasComuns } from "@/components/listagem/colunas-comuns";
 import { ContasEmAberto } from "@/components/dividas/contas-em-aberto";
 import { DetalhandoDivida, type AcaoDivida } from "@/components/dividas/detalhando-divida";
 import { dadosDaDivida, dadosVaziosDivida, ModalDivida, type PadroesDivida } from "@/components/dividas/formulario-divida";
@@ -16,20 +17,21 @@ import { JanelaAmortizar, JanelaCancelar, JanelaEncargo, JanelaPagarDivida, Jane
 import { FaixaErro } from "@/components/ui/faixa-erro";
 import { TextoComDestaque } from "@/components/ui/campo";
 import { ProvedorOcultar, ValorOcultavel } from "@/components/ui/ocultar-valores";
-import { Tabela } from "@/components/ui/tabela";
+import { Tabela, type Coluna } from "@/components/ui/tabela";
 import { formatarData } from "@/lib/datas";
 import { estaAtiva, rotuloTipoDivida } from "@/lib/dividas/regras";
 import type { ContaEmAberto, FiltrosDividas, LinhaDivida, LinhaObrigacao } from "@/lib/dividas/tipos";
 import type { Opcoes } from "@/lib/lancamentos/tipos";
 import { realizarLancamentos } from "@/app/(sistema)/financeiro/lancamentos/acoes";
 import { ModalPagar } from "@/app/(sistema)/financeiro/lancamentos/linhas";
+import { colunasVisiveis, type PreferenciaListagem } from "@/lib/listagem/telas";
 import { proximaParcela } from "../acoes";
 import { desfazerRenegociacao } from "../negociacoes/acoes";
 
 type Janela = { acao: AcaoDivida | "cancelar"; divida: LinhaDivida };
 type Parcela = { id: number; descricao: string; valorCentavos: number; vencimento: string; dividaId: number };
 
-export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoje, totalDevido, todas, contasEmAberto, recorrentes, padroes, multaPadrao, moraPadrao, abrirNova, abrirDetalhe, porPagina }: {
+export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoje, totalDevido, todas, contasEmAberto, recorrentes, padroes, multaPadrao, moraPadrao, abrirNova, abrirDetalhe, porPagina, preferencia }: {
   linhas: LinhaDivida[];
   total: number;
   filtros: FiltrosDividas;
@@ -46,6 +48,7 @@ export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoj
   abrirNova: boolean;
   abrirDetalhe: number | null;
   porPagina: number;
+  preferencia: PreferenciaListagem;
 }) {
   const router = useRouter();
   const vazio = dadosVaziosDivida(padroes, hoje);
@@ -80,6 +83,7 @@ export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoj
   };
 
   const ativa = (d: LinhaDivida) => estaAtiva(d.situacao);
+  const comuns = colunasComuns<LinhaDivida>("").filter((c) => c.chave !== "auxiliar");
 
   const pagarProxima = (d: LinhaDivida) =>
     iniciar(async () => {
@@ -138,14 +142,16 @@ export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoj
   return (
     <>
       <AbasDividas ativa="/gestao/dividas/minhas" />
-      <BarraLista tela="dividas" aoAdicionar={() => form.abrirNovo()} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar dívida ou credor" />
+      <BarraLista tela="dividas" preferencia={preferencia} aoAdicionar={() => form.abrirNovo()} caminho={caminho} busca={filtros.busca} parametros={parametros} rotuloBusca="Buscar dívida ou credor" />
       <FaixaErro>{aviso && <TextoComDestaque texto={aviso} />}</FaixaErro>
       <ProvedorOcultar>
         <Tabela
           linhas={linhas}
+          compacta={preferencia.compactar}
+          destacarPares={preferencia.destacarPares}
           chaveLinha={(d) => d.id}
           vazio={filtros.busca || filtros.credor || filtros.tipo || filtros.situacao || filtros.conta ? "Nenhuma dívida encontrada com esses filtros." : "Nenhuma dívida cadastrada. Clique em Adicionar para cadastrar a primeira, ou veja as contas em aberto no Gui logo abaixo."}
-          colunas={[
+          colunas={colunasVisiveis<Coluna<LinhaDivida>>("dividas", [
             {
               chave: "divida",
               titulo: "Dívida",
@@ -175,6 +181,7 @@ export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoj
               ),
             },
             { chave: "progresso", titulo: "Progresso", render: (d) => <span className="block w-24" title={`${d.progresso}% pago`}><BarraProgresso percentual={d.situacao === "quitada" ? 100 : d.progresso} /></span> },
+            ...comuns,
             {
               chave: "menu",
               titulo: <span className="sr-only">Opções</span>,
@@ -194,6 +201,7 @@ export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoj
                           { rotulo: "Atualizar saldo", icone: <Gauge className="h-4 w-4" />, aoClicar: () => abrirAcao("saldo", d) },
                           { rotulo: "Lançar encargo", icone: <NotebookPen className="h-4 w-4" />, aoClicar: () => abrirAcao("encargo", d) },
                           { rotulo: "Renegociar", icone: <Handshake className="h-4 w-4" />, aoClicar: () => abrirAcao("renegociar", d) },
+                          { rotulo: "Simular", icone: <Calculator className="h-4 w-4" />, aoClicar: () => router.push(`/gestao/dividas/simulador?modo=quitar&divida=${d.id}`) },
                         ]
                       : []),
                     { rotulo: "Editar", icone: <Pencil className="h-4 w-4" />, aoClicar: () => editar(d) },
@@ -203,7 +211,7 @@ export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoj
                 />
               ),
             },
-          ]}
+          ], preferencia)}
         />
         <div className="flex items-center justify-between rounded-lg bg-creme px-4 py-2 text-sm font-semibold text-gray-700">
           <span className="flex items-center gap-2">

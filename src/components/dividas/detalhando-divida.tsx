@@ -1,6 +1,6 @@
 "use client";
 
-import { Banknote, ExternalLink, Gauge, Handshake, Link2Off, NotebookPen, Scale, Undo2, Wallet } from "lucide-react";
+import { Banknote, Calculator, ExternalLink, Gauge, Handshake, Link2Off, NotebookPen, Scale, Undo2, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { desligarVinculoDivida, detalharDivida } from "@/app/(sistema)/gestao/dividas/acoes";
@@ -137,6 +137,9 @@ function Resumo({ dados, aoAcao }: { dados: DetalheDivida; aoAcao: (a: AcaoDivid
             <Botao variante="secundario" className="h-8" icone={<NotebookPen className="h-4 w-4" />} onClick={() => aoAcao("encargo")}>Lançar encargo</Botao>
             <Botao variante="secundario" className="h-8" icone={<Handshake className="h-4 w-4" />} onClick={() => aoAcao("renegociar")}>Renegociar</Botao>
             <Botao variante="secundario" className="h-8" icone={<Scale className="h-4 w-4" />} onClick={() => aoAcao("quitar")}>Quitar</Botao>
+            <Link href={`/gestao/dividas/simulador?modo=quitar&divida=${d.id}`} className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-borda bg-white px-4 text-sm font-semibold text-gray-700 transition hover:bg-gray-50">
+              <Calculator className="h-4 w-4" /> Simular
+            </Link>
           </span>
         )}
       </div>

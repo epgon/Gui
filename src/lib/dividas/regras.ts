@@ -4,6 +4,8 @@
  * Arredondamento para o centavo mais próximo (meio centavo sobe).
  */
 
+import { dataComDia, somarMeses } from "@/lib/lancamentos/regras";
+
 export const TIPOS_DIVIDA = [
   { valor: "emprestimo_pessoal", rotulo: "Empréstimo pessoal" },
   { valor: "consignado", rotulo: "Consignado" },
@@ -352,4 +354,12 @@ export type VinculoExistente = AlvoVinculo & { dividaId: number };
  */
 export function dividaQueJaTem(existentes: VinculoExistente[], alvo: AlvoVinculo): number | null {
   return existentes.find((v) => v.tipo === alvo.tipo && v.id === alvo.id)?.dividaId ?? null;
+}
+
+/** "Lembrar todo mês": a primeira data com o dia escolhido, de hoje em diante (dia 31 vale o último dia de meses mais curtos). */
+export function primeiroDiaDoLembrete(hoje: string, dia: number): string {
+  const noMes = dataComDia(Number(hoje.slice(0, 4)), Number(hoje.slice(5, 7)), dia);
+  if (noMes >= hoje) return noMes;
+  const proximo = somarMeses(`${hoje.slice(0, 7)}-01`, 1);
+  return dataComDia(Number(proximo.slice(0, 4)), Number(proximo.slice(5, 7)), dia);
 }

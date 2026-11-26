@@ -119,7 +119,7 @@ export function TelaParametros({ secao, parametros, feriados, contas, cartoes, a
         {secao === "lancamentos" && <Lancamentos p={parametros} />}
         {secao === "contas" && <ContasCartoes contas={contas} cartoes={cartoes} />}
         {secao === "auxiliares" && <Auxiliares p={parametros} />}
-        {secao === "dividas" && <Dividas p={parametros} />}
+        {secao === "dividas" && <Dividas p={parametros} contas={contas} />}
         {secao === "feriados" && <Feriados feriados={feriados} anoAtual={anoAtual} />}
       </div>
     </div>
@@ -199,22 +199,60 @@ function Lancamentos({ p }: { p: Parametros }) {
   );
 }
 
-function Dividas({ p }: { p: Parametros }) {
+function Dividas({ p, contas }: { p: Parametros; contas: Item[] }) {
   const fmt = (n: number) => String(n).replace(".", ",");
-  const [d, setD] = useState({ multaPadraoPct: fmt(p.dividas.multaPadraoPct), moraMensalPct: fmt(p.dividas.moraMensalPct) });
+  const c = p.dividas;
+  const [d, setD] = useState({
+    multaPadraoPct: fmt(c.multaPadraoPct),
+    moraMensalPct: fmt(c.moraMensalPct),
+    reservaMeses: String(c.reservaMeses),
+    sobraMeses: String(c.sobraMeses),
+    cenarioConservador: fmt(c.cenarios.conservador),
+    cenarioIntermediario: fmt(c.cenarios.intermediario),
+    cenarioAcelerado: fmt(c.cenarios.acelerado),
+  });
+  const [reserva, setReserva] = useState<number[]>(c.contasReserva);
   const s = useSalvar();
   const mudar = (k: keyof typeof d) => (v: string) => {
     setD((x) => ({ ...x, [k]: v }));
     s.marcarMudanca();
   };
+  const alternar = (id: number) => {
+    setReserva((r) => (r.includes(id) ? r.filter((x) => x !== id) : [...r, id]));
+    s.marcarMudanca();
+  };
   return (
     <Cartao titulo="Gestão de Dívidas">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Atraso</p>
       <div className="grid gap-4 sm:grid-cols-2">
         <CampoTexto rotulo="Multa padrão (%)" valor={d.multaPadraoPct} aoMudar={mudar("multaPadraoPct")} maxLength={6} ajuda="Cobrada uma vez sobre a parcela vencida. Usada quando a dívida não tem a própria multa." />
         <CampoTexto rotulo="Juros de mora ao mês (%)" valor={d.moraMensalPct} aoMudar={mudar("moraMensalPct")} maxLength={6} ajuda="Proporcional aos dias de atraso. Usado quando a dívida não tem os próprios juros de mora." />
       </div>
       <p className="mt-3 text-xs text-gray-500">São só estimativas para o saldo em atraso: o valor certo é o que o credor informa (Atualizar saldo). Mudar aqui não altera pagamentos já feitos.</p>
-      <Rodape s={s} aoSalvar={() => s.executar(() => salvarParametrosDividas(d))} />
+
+      <p className="mt-6 mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Simulador</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <CampoTexto rotulo="Reserva mínima (meses de despesas)" valor={d.reservaMeses} aoMudar={mudar("reservaMeses")} maxLength={2} inputMode="numeric" ajuda="A reserva mínima é este número de meses multiplicado pela despesa média mensal (sem as parcelas de dívida)." />
+        <CampoTexto rotulo="Meses na média da sobra" valor={d.sobraMeses} aoMudar={mudar("sobraMeses")} maxLength={2} inputMode="numeric" ajuda="Quantos meses fechados entram na média de receitas menos despesas (sem as parcelas de dívida)." />
+      </div>
+      <div className="mt-4 grid gap-4 sm:grid-cols-3">
+        <CampoTexto rotulo="Cenário Conservador (%)" valor={d.cenarioConservador} aoMudar={mudar("cenarioConservador")} maxLength={6} ajuda="Parcelas mais este percentual da sobra que fica livre depois delas. A reserva fica intocada." />
+        <CampoTexto rotulo="Cenário Intermediário (%)" valor={d.cenarioIntermediario} aoMudar={mudar("cenarioIntermediario")} maxLength={6} ajuda="Parcelas mais este percentual da sobra livre. A reserva fica intocada." />
+        <CampoTexto rotulo="Cenário Acelerado (%)" valor={d.cenarioAcelerado} aoMudar={mudar("cenarioAcelerado")} maxLength={6} ajuda="Parcelas mais este percentual da sobra livre e, uma vez, o que passar da reserva mínima." />
+      </div>
+      <div className="mt-4">
+        <p className="mb-1 text-sm font-medium text-gray-700">Contas que formam a reserva</p>
+        <div className="grid gap-1 sm:grid-cols-2">
+          {contas.filter((x) => x.ativo || reserva.includes(x.id)).map((x) => (
+            <label key={x.id} className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={reserva.includes(x.id)} onChange={() => alternar(x.id)} className="h-4 w-4 accent-verde" />
+              {x.descricao}
+            </label>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-gray-500">{reserva.length === 0 ? "Nenhuma marcada: o Simulador usa as contas dos tipos Poupança e Investimento." : `${reserva.length} ${reserva.length === 1 ? "conta marcada" : "contas marcadas"}.`}</p>
+      </div>
+      <Rodape s={s} aoSalvar={() => s.executar(() => salvarParametrosDividas({ ...d, contasReserva: reserva }))} />
     </Cartao>
   );
 }

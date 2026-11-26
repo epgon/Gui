@@ -85,6 +85,13 @@
       "when": 1795735036337,
       "tag": "0011_negociacoes",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1795736380677,
+      "tag": "0012_simulacoes",
+      "breakpoints": true
     }
   ]
 }
