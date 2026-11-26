@@ -63,6 +63,7 @@ export default async function PaginaMinhasDividas({ searchParams }: { searchPara
             { valor: "", rotulo: "Todas" },
             { valor: "em_dia", rotulo: "Em dia" },
             { valor: "em_atraso", rotulo: "Em atraso" },
+            { valor: "em_negociacao", rotulo: "Em negociação" },
             { valor: "quitada", rotulo: "Quitada" },
             { valor: "renegociada", rotulo: "Renegociada" },
             { valor: "cancelada", rotulo: "Cancelada" },

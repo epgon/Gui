@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { formatarData } from "@/lib/datas";
+import { rotuloSituacaoNegociacao, type SituacaoNegociacao } from "@/lib/dividas/negociacao";
 import { ROTULO_SITUACAO_DIVIDA, type ResumoSaldo, type SituacaoDivida } from "@/lib/dividas/regras";
 import { ABAS_DIVIDAS } from "@/lib/menu";
 
@@ -28,6 +29,7 @@ export function AbasDividas({ ativa }: { ativa: string }) {
 const ESTILO_SITUACAO: Record<SituacaoDivida, string> = {
   em_dia: "bg-pago-fundo text-pago-texto",
   em_atraso: "bg-orange-100 text-despesa",
+  em_negociacao: "bg-amarelo text-amarelo-texto",
   quitada: "bg-blue-50 text-receita",
   renegociada: "bg-gray-100 text-gray-600",
   cancelada: "bg-gray-100 text-gray-500",
@@ -41,6 +43,20 @@ export function PilulaSituacao({ situacao, diasAtraso }: { situacao: SituacaoDiv
       {situacao === "em_atraso" && diasAtraso ? ` há ${diasAtraso} d` : ""}
     </span>
   );
+}
+
+const ESTILO_NEGOCIACAO: Record<SituacaoNegociacao, string> = {
+  em_andamento: "bg-amarelo text-amarelo-texto",
+  proposta_recebida: "bg-blue-50 text-receita",
+  aguardando_resposta: "bg-amarelo text-amarelo-texto",
+  aceita: "bg-pago-fundo text-pago-texto",
+  recusada: "bg-orange-100 text-despesa",
+  desistida: "bg-gray-100 text-gray-500",
+};
+
+/** Pílula da situação da negociação. */
+export function PilulaNegociacao({ situacao }: { situacao: SituacaoNegociacao }) {
+  return <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold", ESTILO_NEGOCIACAO[situacao])}>{rotuloSituacaoNegociacao(situacao)}</span>;
 }
 
 /** De onde vem o saldo mostrado: "informado em 10/11", "estimado" (com atraso) ou nada (pelas parcelas). */

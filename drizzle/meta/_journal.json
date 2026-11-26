@@ -78,6 +78,13 @@
       "when": 1795733674782,
       "tag": "0010_dividas",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795735036337,
+      "tag": "0011_negociacoes",
+      "breakpoints": true
     }
   ]
 }

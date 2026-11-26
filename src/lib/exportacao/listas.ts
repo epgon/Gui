@@ -13,7 +13,7 @@ import { descreverFiltro, lerFiltrosAvancados } from "@/lib/listagem/avancado";
 import { INTERVALOS } from "@/lib/recorrentes/regras";
 import { lerFiltrosRecorrentes, listarRecorrentes } from "@/lib/recorrentes/lista";
 import { carregarListaDividas, lerFiltrosDividas } from "@/lib/dividas/servidor";
-import { ROTULO_SITUACAO_DIVIDA, rotuloTipoDivida } from "@/lib/dividas/regras";
+import { estaAtiva, ROTULO_SITUACAO_DIVIDA, rotuloTipoDivida } from "@/lib/dividas/regras";
 import { recursoAtivo } from "@/lib/parametros/servidor";
 import { nomeArquivo, type ColunaTabela, type LinhaTabela, type Tabela } from "./tabela";
 
@@ -344,7 +344,7 @@ async function dividas(sp: ParametrosBusca, hoje: string): Promise<Tabela> {
     f.tipo && `Tipo: ${rotuloTipoDivida(f.tipo as never)}`,
     f.situacao && `Situação: ${ROTULO_SITUACAO_DIVIDA[f.situacao as keyof typeof ROTULO_SITUACAO_DIVIDA] ?? f.situacao}`,
   ].filter((x): x is string => !!x);
-  const aberta = (x: (typeof linhas)[number]) => x.situacao === "em_dia" || x.situacao === "em_atraso";
+  const aberta = (x: (typeof linhas)[number]) => estaAtiva(x.situacao);
   const total = linhas.filter(aberta).reduce((s, x) => s + x.saldo.exibido, 0);
   return {
     titulo: "Minhas Dívidas",

@@ -118,8 +118,21 @@ Fases prontas:
   - Em **Lançamentos**, as parcelas ganham a etiqueta "Dívida" e o Filtro Avançado ganha a origem **Dívida**. Em
     **Configurações > Parâmetros** há a seção **Gestão de Dívidas** (multa e juros de mora padrão).
   - A migração 0010 só **acrescenta** tabelas e uma coluna; a categoria **13. Dívidas** só é criada se ainda não existir.
-  - Ficou para as próximas fases: renegociação e simulação de quitação (D2/D3), Filtro Avançado e Configurações da Listagem em
+  - Ficou para as próximas fases: simulação de quitação (D3), Filtro Avançado e Configurações da Listagem em
     Minhas Dívidas, e a opção "Lembrar todo mês".
+
+- **Fase D2 (Gestão de Dívidas: negociações e renegociação)**: nova aba **Negociações** (lista com filtros por credor, situação e
+  período, busca, e o menu Detalhar, Nova proposta, Aceitar proposta, Recusar, Desistir, Editar e Excluir).
+  - Cada negociação junta uma ou mais dívidas do **mesmo credor**, com canal, protocolo, prazo de resposta e a **sobra mensal**
+    (digitada por enquanto; a sobra calculada chega com o Simulador). As **propostas** (do credor ou suas, à vista ou parceladas)
+    mostram o total, o desconto ou acréscimo sobre o saldo, os **juros implícitos ao mês** e se a parcela cabe na sobra.
+  - **Assistente de Renegociação** em três etapas (dívidas originais, condições do acordo, revisão com Confirmar), aberto pela
+    proposta aceita ou direto pelo menu **Renegociar** da dívida. Ao confirmar, as dívidas originais ficam **Renegociadas**, as
+    parcelas não pagas saem de Lançamentos (com cópia no Histórico e na Auditoria), o acordo é uma dívida nova com as parcelas e a
+    negociação fica Aceita.
+  - **Desfazer renegociação** (no acordo, enquanto nenhuma parcela dele foi paga) devolve exatamente as parcelas originais.
+  - Dívidas com negociação em andamento mostram a situação **Em negociação**. A Auditoria ganhou as ações Renegociou e Aprovou.
+  - A migração 0011 só **acrescenta** tabelas e valores de lista.
 
 Todas as telas dos menus estão prontas.
 
@@ -180,6 +193,19 @@ Todas as telas dos menus estão prontas.
 - A situação (Em dia, Em atraso, Quitada) é calculada na hora; só Ativa, Quitada, Renegociada e Cancelada ficam gravadas.
 - Dívida antiga com parcelas já pagas: só as que faltam viram lançamentos; as pagas ficam no Histórico, sem mexer nos saldos.
 - Quitar e cancelar apagam só as parcelas ainda não pagas (com cópia no Histórico e na Auditoria); o que já foi pago fica.
+
+### Como a renegociação funciona
+
+- Uma negociação **não mexe em nada** até você aceitar uma proposta: só registra a conversa. Enquanto estiver em andamento, as
+  dívidas dela aparecem como **Em negociação** (continuam contando nos totais e mostrando os dias de atraso).
+- Os **juros implícitos** de uma proposta são a taxa ao mês que faz as parcelas valerem o saldo de hoje (financiado = saldo menos
+  entrada, tabela Price). Parcelas que somam menos que o saldo são desconto, não juros.
+- Ao **confirmar** o acordo, tudo acontece numa transação só: o acordo nasce como dívida de tipo Acordo (a entrada, se houver, é a
+  parcela 1); só saem de Lançamentos as parcelas **não pagas** das dívidas originais (as pagas ficam intactas), então o Saldo
+  Previsto não conta em dobro. Faturas acompanhadas deixam de ser acompanhadas (a fatura continua no cartão) e recorrentes
+  acompanhados são inativados.
+- **Desfazer** só vale enquanto o acordo está ativo e sem nenhuma parcela paga. Ele recria as parcelas originais com os mesmos
+  números, reativa vínculos e recorrentes, apaga o acordo e reabre a negociação.
 
 ### Como os recorrentes funcionam
 

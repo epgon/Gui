@@ -10,7 +10,7 @@ import { TelaAuditoria } from "./tela";
 export const metadata = { title: "Auditoria" };
 const CAMINHO = "/administracao/auditoria";
 const TELA = "auditoria";
-const ACOES = ["cadastrou", "alterou", "ativou", "inativou", "excluiu", "pagou", "importou"] as const;
+const ACOES = ["cadastrou", "alterou", "ativou", "inativou", "excluiu", "pagou", "importou", "renegociou", "aprovou"] as const;
 
 export default async function PaginaAuditoria({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
   const sp = await searchParams;
