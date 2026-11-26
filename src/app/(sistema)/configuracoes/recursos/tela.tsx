@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, CreditCard, FileDown, FileUp, PiggyBank, Printer, Repeat, Tag, Users, Wallet } from "lucide-react";
+import { CalendarDays, CreditCard, FileDown, FileUp, Landmark, PiggyBank, Printer, Repeat, Tag, Users, Wallet } from "lucide-react";
 import { useState, useTransition } from "react";
 import { alterarRecurso } from "@/app/(sistema)/sistema-acoes";
 import { Cartao } from "@/components/ui/cartao";
@@ -17,6 +17,7 @@ const ICONES: Record<Recurso, React.ComponentType<{ className?: string }>> = {
   formas_pagamento: Wallet,
   tags: Tag,
   orcamentos: PiggyBank,
+  dividas: Landmark,
   importacao: FileUp,
   exportacao: FileDown,
   impressao: Printer,

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { AlertTriangle, ArrowDown, ArrowLeftRight, ArrowUp, CheckCircle2, Circle, Clock, CreditCard, Landmark, MessageSquareText, Paperclip, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { IconeBanco } from "@/components/cadastros/icone-banco";
@@ -151,6 +152,11 @@ export function LinhaComFilhos({ linha: l, ocultar, marcado, aoMarcar, aoAbrir, 
                 )}
                 {l.parcela && !l.descricao.includes(l.parcela) && <span className="rounded bg-gray-100 px-1.5 text-xs text-gray-600">{l.parcela}</span>}
                 {l.formato === "detalhado" && <span className="rounded bg-verde-claro px-1.5 text-xs text-verde">Detalhado</span>}
+                {l.dividaId && l.dividaNome && (
+                  <Link href={`/gestao/dividas/minhas?detalhar=${l.dividaId}`} onClick={(e) => e.stopPropagation()} className="rounded bg-red-50 px-1.5 text-xs text-despesa hover:underline" title={`Parte da dívida ${l.dividaNome}. Clique para abrir.`}>
+                    Dívida
+                  </Link>
+                )}
                 {l.restante && (
                   <span className="rounded bg-amarelo px-1.5 text-xs text-amarelo-texto" title="O que faltou pagar ou receber de um pagamento parcial.">
                     Restante

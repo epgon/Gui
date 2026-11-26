@@ -12,6 +12,9 @@ import { CAMPOS_LANCAMENTOS_BASE } from "@/lib/lancamentos/avancado";
 import { descreverFiltro, lerFiltrosAvancados } from "@/lib/listagem/avancado";
 import { INTERVALOS } from "@/lib/recorrentes/regras";
 import { lerFiltrosRecorrentes, listarRecorrentes } from "@/lib/recorrentes/lista";
+import { carregarListaDividas, lerFiltrosDividas } from "@/lib/dividas/servidor";
+import { ROTULO_SITUACAO_DIVIDA, rotuloTipoDivida } from "@/lib/dividas/regras";
+import { recursoAtivo } from "@/lib/parametros/servidor";
 import { nomeArquivo, type ColunaTabela, type LinhaTabela, type Tabela } from "./tabela";
 
 const ROTULO_SITUACAO = { realizado: "Realizado", a_vencer: "A Vencer", vencido: "Vencido" } as const;
@@ -330,6 +333,43 @@ async function tags(sp: ParametrosBusca, hoje: string): Promise<Tabela> {
   };
 }
 
+/** Gestão > Gestão de Dívidas > Minhas Dívidas: as dívidas com os filtros da tela (todas, sem paginar). */
+async function dividas(sp: ParametrosBusca, hoje: string): Promise<Tabela> {
+  if (!(await recursoAtivo("dividas"))) throw new Error("O recurso Gestão de Dívidas está desligado.");
+  const f = lerFiltrosDividas(sp);
+  const { linhas, credores } = await carregarListaDividas(f, hoje);
+  const filtros = [
+    f.busca && `Busca: ${f.busca}`,
+    f.credor && `Credor: ${credores.find((c) => String(c.id) === f.credor)?.nome ?? "?"}`,
+    f.tipo && `Tipo: ${rotuloTipoDivida(f.tipo as never)}`,
+    f.situacao && `Situação: ${ROTULO_SITUACAO_DIVIDA[f.situacao as keyof typeof ROTULO_SITUACAO_DIVIDA] ?? f.situacao}`,
+  ].filter((x): x is string => !!x);
+  const aberta = (x: (typeof linhas)[number]) => x.situacao === "em_dia" || x.situacao === "em_atraso";
+  const total = linhas.filter(aberta).reduce((s, x) => s + x.saldo.exibido, 0);
+  return {
+    titulo: "Minhas Dívidas",
+    filtros,
+    colunas: [
+      { titulo: "Dívida", largura: 3 },
+      { titulo: "Credor", largura: 2 },
+      { titulo: "Tipo", largura: 2 },
+      { titulo: "Parcelas", largura: 1 },
+      { titulo: "Próximo vencimento", tipo: "data", largura: 1.3 },
+      { titulo: "Situação", largura: 1.3 },
+      { titulo: "Saldo devedor", tipo: "dinheiro", largura: 1.4 },
+    ],
+    linhas: [
+      ...linhas.map((x) => ({
+        celulas: [x.descricao, x.credor, rotuloTipoDivida(x.tipo), x.parcelasTotal ? `${x.parcelasPagas}/${x.parcelasTotal}` : "—", x.proximoVencimento, ROTULO_SITUACAO_DIVIDA[x.situacao], aberta(x) ? -x.saldo.exibido : 0],
+      })),
+      ...(linhas.length ? [{ celulas: ["Total devido (dívidas ativas)", null, null, null, null, null, -total], estilo: "total" as const }] : []),
+    ],
+    orientacao: "paisagem",
+    registros: linhas.length,
+    arquivo: nomeArquivo("minhas dividas", hoje),
+  };
+}
+
 /** Cada lista que tem Impressão Padrão e exportação, pelo nome usado no endereço. */
 export const LISTAS: Record<string, (sp: ParametrosBusca, hoje: string) => Promise<Tabela>> = {
   lancamentos,
@@ -340,4 +380,5 @@ export const LISTAS: Record<string, (sp: ParametrosBusca, hoje: string) => Promi
   "clientes-e-fornecedores": contatos,
   "formas-de-pagamento": formas,
   tags,
+  dividas,
 };

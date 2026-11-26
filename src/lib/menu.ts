@@ -17,7 +17,10 @@ export const MENU_PRINCIPAL: GrupoMenu[] = [
   },
   {
     titulo: "Gestão",
-    itens: [{ titulo: "Orçamentos", href: "/gestao/orcamentos", fase: 9, descricao: "Limites de gasto por categoria e mês." }],
+    itens: [
+      { titulo: "Orçamentos", href: "/gestao/orcamentos", fase: 9, descricao: "Limites de gasto por categoria e mês." },
+      { titulo: "Gestão de Dívidas", href: "/gestao/dividas", fase: 13, descricao: "Suas dívidas, acordos e plano para quitar." },
+    ],
   },
   {
     titulo: "Relatórios",
@@ -57,7 +60,15 @@ export function menuVisivel(ocultas: string[]): GrupoMenu[] {
   return MENU_PRINCIPAL.map((g) => ({ ...g, itens: g.itens.filter((i) => !ocultas.includes(i.href)) })).filter((g) => g.itens.length > 0);
 }
 
+/** Abas da Gestão de Dívidas: cada uma tem endereço próprio e pode ser favoritada. */
+export const ABAS_DIVIDAS: ItemMenu[] = [
+  { titulo: "Visão Geral", href: "/gestao/dividas", fase: 13 },
+  { titulo: "Minhas Dívidas", href: "/gestao/dividas/minhas", fase: 13, descricao: "Lista das suas dívidas, com saldo, parcelas e situação." },
+];
+
 export function encontrarItem(caminho: string): (ItemMenu & { grupo: string }) | null {
+  const aba = ABAS_DIVIDAS.find((i) => i.href === caminho && caminho !== "/gestao/dividas");
+  if (aba) return { ...aba, grupo: "Gestão de Dívidas" };
   for (const grupo of MENU_PRINCIPAL) {
     const item = grupo.itens.find((i) => i.href === caminho);
     if (item) return { ...item, grupo: grupo.titulo };

@@ -228,3 +228,30 @@ export function calcularPagamento(valorCentavos: number, valorPagoCentavos: numb
   if (gerarRestante) return { tipo: "parcial", valorCentavos: pago, restanteCentavos: valor - pago };
   return { tipo: "desconto", valorCentavos: pago, diferencaCentavos: valor - pago };
 }
+
+/**
+ * O lançamento "restante" de um pagamento parcial: o que faltou pagar, ainda sem pagamento,
+ * com os mesmos dados do original. Continua na mesma dívida (Gestão de Dívidas), se tiver uma.
+ */
+export function camposDoRestante<T extends { descricao: string; documento: string | null; observacao: string | null; dataReferencia: string | null; contaId: number | null; categoriaId: number | null; formaPagamentoId: number | null; contatoId: number | null; dividaId: number | null; id: number }>(
+  x: T,
+  restanteCentavos: number,
+  vencimento: string,
+) {
+  return {
+    formato: "simples" as const,
+    descricao: x.descricao,
+    documento: x.documento,
+    observacao: x.observacao,
+    valorCentavos: restanteCentavos,
+    dataVencimento: vencimento,
+    dataReferencia: x.dataReferencia,
+    contaId: x.contaId,
+    categoriaId: x.categoriaId,
+    formaPagamentoId: x.formaPagamentoId,
+    contatoId: x.contatoId,
+    dividaId: x.dividaId,
+    lancamentoOrigemId: x.id,
+    origem: "manual" as const,
+  };
+}

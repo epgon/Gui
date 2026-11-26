@@ -13,7 +13,7 @@ import { filtrarAvancado, lerFiltrosAvancados } from "@/lib/listagem/avancado";
 import { CAMPOS_LANCAMENTOS_BASE, LEITORES_LANCAMENTOS } from "./avancado";
 import type { Aba, Filtros, FiltroSituacao, LinhaLista, Opcoes, Resumo } from "./tipos";
 
-const { lancamento: l, contaFinanceira: conta, cartaoCredito: cartao, banco, categoria, contato, formaPagamento: forma, tag, lancamentoTag, lancamentoItem, anexo, fatura } = schema;
+const { lancamento: l, contaFinanceira: conta, cartaoCredito: cartao, banco, categoria, contato, formaPagamento: forma, tag, lancamentoTag, lancamentoItem, anexo, fatura, divida } = schema;
 
 export { valorComSinalSql, valorRealizadoSql } from "./sql";
 
@@ -118,6 +118,8 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
       parcelamentoId: l.parcelamentoId,
       transferenciaId: l.transferenciaId,
       recorrenciaId: l.recorrenciaId,
+      dividaId: l.dividaId,
+      dividaNome: divida.descricao,
       realizarAutomaticamente: l.realizarAutomaticamente,
       valorOriginal: l.valorOriginalCentavos,
       origemId: l.lancamentoOrigemId,
@@ -131,6 +133,7 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
     .leftJoin(banco, sql`${banco.id} = coalesce(${conta.bancoId}, ${cartao.bancoId})`)
     .leftJoin(contato, eq(contato.id, l.contatoId))
     .leftJoin(forma, eq(forma.id, l.formaPagamentoId))
+    .leftJoin(divida, eq(divida.id, l.dividaId))
     // Pagamentos de fatura entram na linha "Fatura-Cartão"; sem ela (compras separadas), ficam de fora para não contar duas vezes.
     .where(and(gte(l.dataVencimento, mes.inicio), lte(l.dataVencimento, mes.fim), escopo, agruparFaturas ? undefined : ne(l.tipo, "pagamento_fatura"), ...filtrosConteudo))
     .orderBy(asc(l.dataVencimento), asc(l.id));
@@ -174,6 +177,8 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
       parcelamentoId: x.parcelamentoId,
       transferenciaId: x.transferenciaId,
       recorrenciaId: x.recorrenciaId,
+      dividaId: x.dividaId,
+      dividaNome: x.dividaNome,
       previsto: null,
       realizarAutomaticamente: x.realizarAutomaticamente,
       valorOriginalCentavos: x.valorOriginal === null ? null : Math.abs(Number(x.valorOriginal)),

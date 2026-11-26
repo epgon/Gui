@@ -69,6 +69,32 @@ export async function salvarParametrosLancamentos(entrada: DadosLancamentos): Pr
   return { ok: true };
 }
 
+export type DadosDividas = { multaPadraoPct: string; moraMensalPct: string };
+
+const pct = (rotulo: string) =>
+  z
+    .string()
+    .trim()
+    .transform((v) => Number(v.replace(",", ".")))
+    .refine((n) => Number.isFinite(n) && n >= 0 && n <= 100, `Informe um percentual entre 0 e 100 em **${rotulo}**.`);
+
+const dividas = z.object({ multaPadraoPct: pct("Multa padrão"), moraMensalPct: pct("Juros de mora ao mês") });
+
+/** Gestão de Dívidas: multa e mora usadas na estimativa de saldo em atraso quando a dívida não tem as próprias. */
+export async function salvarParametrosDividas(entrada: DadosDividas): Promise<Resultado> {
+  await exigirLogin();
+  const v = dividas.safeParse(entrada);
+  if (!v.success) return primeiroErro(v.error);
+  const d = v.data;
+  const fmt = (n: number) => String(n).replace(".", ",");
+  await getDb().transaction(async (tx) => {
+    await gravarConfiguracao(tx, "dividas.multa_padrao", d.multaPadraoPct, { tela: TELA, descricao: `a Multa padrão das dívidas para ${fmt(d.multaPadraoPct)}%` });
+    await gravarConfiguracao(tx, "dividas.mora_padrao", d.moraMensalPct, { tela: TELA, descricao: `os Juros de mora padrão das dívidas para ${fmt(d.moraMensalPct)}% ao mês` });
+  });
+  refresh();
+  return { ok: true };
+}
+
 /** Contas e Cartões: a ordem arrastada vale em todas as listas de opções. */
 export async function salvarOrdemContasCartoes(contas: number[], cartoes: number[]): Promise<Resultado> {
   await exigirLogin();
