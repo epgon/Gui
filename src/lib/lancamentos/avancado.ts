@@ -35,6 +35,7 @@ export function camposLancamentos(opcoes: Opcoes): CampoAvancado[] {
     { origem: "Categoria", chave: "categoria", rotulo: "Nome", tipo: "lista", opcoes: lista(opcoes.categorias) },
     { origem: "Cliente ou Fornecedor", chave: "contato", rotulo: "Nome", tipo: "texto" },
     { origem: "Forma de Pagamento", chave: "forma", rotulo: "Descrição", tipo: "lista", opcoes: lista(opcoes.formas) },
+    { origem: "Dívida", chave: "divida", rotulo: "Nome", tipo: "texto" },
     { origem: "Tag", chave: "tag", rotulo: "Descrição", tipo: "lista", opcoes: lista(opcoes.tags) },
   ];
 }
@@ -62,4 +63,5 @@ export const LEITORES_LANCAMENTOS: Leitores<LinhaLista> = {
   contato: (l) => l.contato,
   forma: (l) => l.forma,
   tag: (l) => l.tags,
+  divida: (l) => l.dividaNome ?? null,
 };

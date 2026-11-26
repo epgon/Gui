@@ -53,6 +53,9 @@ export type LinhaLista = {
   transferenciaId: number | null;
   /** Lançamento gravado a partir de um recorrente. */
   recorrenciaId: number | null;
+  /** Dívida (Gestão de Dívidas) a que o lançamento pertence. */
+  dividaId?: number | null;
+  dividaNome?: string | null;
   /** Ocorrência prevista de um recorrente (ainda não gravada): id é null. */
   previsto: Ocorrencia | null;
   realizarAutomaticamente: boolean;

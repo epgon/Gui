@@ -108,6 +108,19 @@ Fases prontas:
   - **Administração > Auditoria**: tudo o que foi cadastrado, alterado ou excluído, com filtros e os dados de cada registro.
     Guarda os últimos 6 meses.
 
+- **Fase D1 (Gestão de Dívidas: cadastro e integração)**: primeira fase do módulo **Gestão > Gestão de Dívidas** (recurso ligado por
+  padrão; dá para desligar em Configurações > Recursos sem apagar nada). Abas **Visão Geral** (Total devido, Em atraso e Vence em
+  30 dias) e **Minhas Dívidas** (lista com filtros, busca, Imprimir/Exportar e cadastro com credor de Clientes e Fornecedores).
+  - **Detalhando Dívida** com Resumo, Parcelas, Histórico e Vínculos; ações **Pagar parcela, Amortizar** (reduzindo o valor ou a
+    quantidade das parcelas, com prévia), **Quitar, Atualizar saldo, Lançar encargo e Cancelar dívida**.
+  - **Contas em aberto no Gui**: faturas fechadas e despesas vencidas, com Pagar, **Acompanhar como dívida** e Desligar. Nada é
+    cadastrado em dobro.
+  - Em **Lançamentos**, as parcelas ganham a etiqueta "Dívida" e o Filtro Avançado ganha a origem **Dívida**. Em
+    **Configurações > Parâmetros** há a seção **Gestão de Dívidas** (multa e juros de mora padrão).
+  - A migração 0010 só **acrescenta** tabelas e uma coluna; a categoria **13. Dívidas** só é criada se ainda não existir.
+  - Ficou para as próximas fases: renegociação e simulação de quitação (D2/D3), Filtro Avançado e Configurações da Listagem em
+    Minhas Dívidas, e a opção "Lembrar todo mês".
+
 Todas as telas dos menus estão prontas.
 
 ### Como os relatórios funcionam
@@ -155,6 +168,18 @@ Todas as telas dos menus estão prontas.
   ou a fatura, nem ser excluída: para isso, desfaça antes o pagamento da fatura.
 - Se entrar uma compra nova numa fatura já paga (ex.: você pagou antes de fechar), a fatura volta a mostrar o que falta
   pagar e pode ser paga de novo só com a diferença.
+
+### Como a Gestão de Dívidas funciona
+
+- Uma dívida pode ter **parcelas fixas** (cada parcela é um lançamento de despesa ligado à dívida, criado pela mesma rotina do
+  parcelamento) ou **sem parcelas** (só o saldo; ao pagar, o Gui cria um lançamento já pago). Pagar sempre passa pelo mesmo
+  caminho dos Lançamentos, então saldo das contas, pagamento parcial e auditoria valem igual.
+- O **saldo devedor** vem de três fontes, nesta ordem: o que o credor **informou** (menos pagamentos feitos depois), a
+  **estimativa de atraso** (parcela + multa de 2% uma vez + juros de mora de 1% ao mês, ajustáveis em Parâmetros ou por dívida)
+  ou a **soma das parcelas em aberto**. Valores estimados aparecem marcados como "estimado".
+- A situação (Em dia, Em atraso, Quitada) é calculada na hora; só Ativa, Quitada, Renegociada e Cancelada ficam gravadas.
+- Dívida antiga com parcelas já pagas: só as que faltam viram lançamentos; as pagas ficam no Histórico, sem mexer nos saldos.
+- Quitar e cancelar apagam só as parcelas ainda não pagas (com cópia no Histórico e na Auditoria); o que já foi pago fica.
 
 ### Como os recorrentes funcionam
 

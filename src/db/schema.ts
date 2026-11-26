@@ -18,6 +18,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgEnum,
   pgTable,
   serial,
@@ -339,6 +340,8 @@ export const lancamento = pgTable(
     dataOcorrencia: date("data_ocorrencia"),
     /** Restante de um pagamento parcial: o lançamento que foi pago em parte. */
     lancamentoOrigemId: integer("lancamento_origem_id").references((): AnyPgColumn => lancamento.id, { onDelete: "set null" }),
+    /** Gestão de Dívidas: a dívida de que este lançamento é parcela (ou que ele acompanha). */
+    dividaId: integer("divida_id").references((): AnyPgColumn => divida.id, { onDelete: "set null" }),
     origem: origemLancamentoEnum("origem").notNull().default("manual"),
     criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
     atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
@@ -361,6 +364,7 @@ export const lancamento = pgTable(
     index("lancamento_parcelamento_idx").on(t.parcelamentoId),
     index("lancamento_transferencia_idx").on(t.transferenciaId),
     index("lancamento_origem_idx").on(t.lancamentoOrigemId),
+    index("lancamento_divida_idx").on(t.dividaId),
     uniqueIndex("lancamento_saldo_inicial_unico").on(t.contaId).where(sql`${t.tipo} = 'saldo_inicial'`),
     // Uma ocorrência de recorrente vira no máximo um lançamento (dois na transferência: saída e entrada).
     uniqueIndex("lancamento_ocorrencia_unica").on(t.recorrenciaId, t.dataOcorrencia, t.tipo).where(sql`${t.recorrenciaId} is not null`),
@@ -666,6 +670,120 @@ export const orcamentoLimite = pgTable(
     atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("orcamento_limite_categoria_mes_idx").on(t.categoriaId, t.competencia)],
+);
+
+// ---------------------------------------------------------------------------
+// Gestão de Dívidas (fase D1)
+// ---------------------------------------------------------------------------
+
+export const tipoDividaEnum = pgEnum("tipo_divida", [
+  "emprestimo_pessoal",
+  "consignado",
+  "financiamento_veiculo",
+  "financiamento_imovel",
+  "cartao",
+  "cheque_especial",
+  "crediario",
+  "pessoa_fisica",
+  "conta_atrasada",
+  "acordo",
+  "outro",
+]);
+export const formaDividaEnum = pgEnum("forma_divida", ["parcelas_fixas", "sem_parcelas"]);
+/** "Em dia" e "Em atraso" não são guardadas: saem das parcelas vencidas, na hora. */
+export const situacaoDividaEnum = pgEnum("situacao_divida", ["ativa", "quitada", "renegociada", "cancelada"]);
+export const garantiaDividaEnum = pgEnum("garantia_divida", ["nenhuma", "bem_financiado", "desconto_folha", "fiador"]);
+export const tipoEventoDividaEnum = pgEnum("tipo_evento_divida", [
+  "cadastro",
+  "pagamento",
+  "atualizacao_saldo",
+  "amortizacao",
+  "encargo",
+  "renegociacao",
+  "quitacao",
+  "vinculo",
+  "anotacao",
+  "cancelamento",
+  "desfeito",
+]);
+
+/** Contrato ou relacionamento com um credor. As parcelas são lançamentos comuns (lancamento.divida_id). */
+export const divida = pgTable(
+  "divida",
+  {
+    id: serial("id").primaryKey(),
+    descricao: text("descricao").notNull(),
+    contatoId: integer("contato_id")
+      .notNull()
+      .references(() => contato.id),
+    tipo: tipoDividaEnum("tipo").notNull().default("outro"),
+    situacao: situacaoDividaEnum("situacao").notNull().default("ativa"),
+    forma: formaDividaEnum("forma").notNull(),
+    valorOriginalCentavos: bigint("valor_original_centavos", { mode: "number" }),
+    dataContratacao: date("data_contratacao"),
+    /** Taxa de juros ao mês, em % (2,9900 = 2,99% a.m.). Vazio = sem taxa informada. */
+    taxaMensal: numeric("taxa_mensal", { precision: 8, scale: 4 }),
+    multaPercentual: numeric("multa_percentual", { precision: 6, scale: 2 }),
+    moraMensal: numeric("mora_mensal", { precision: 6, scale: 2 }),
+    garantia: garantiaDividaEnum("garantia").notNull().default("nenhuma"),
+    contaId: integer("conta_id").references(() => contaFinanceira.id),
+    categoriaId: integer("categoria_id").references(() => categoria.id),
+    formaPagamentoId: integer("forma_pagamento_id").references(() => formaPagamento.id),
+    parcelamentoId: integer("parcelamento_id").references(() => parcelamento.id, { onDelete: "set null" }),
+    observacao: varchar("observacao", { length: 1000 }),
+    quitadaEm: date("quitada_em"),
+    encerradaEm: date("encerrada_em"),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [index("divida_contato_idx").on(t.contatoId), index("divida_situacao_idx").on(t.situacao)],
+);
+
+/** Ligação de uma fatura de cartão ou de um recorrente a uma dívida (cada um em no máximo uma). */
+export const dividaVinculo = pgTable(
+  "divida_vinculo",
+  {
+    id: serial("id").primaryKey(),
+    dividaId: integer("divida_id")
+      .notNull()
+      .references(() => divida.id, { onDelete: "cascade" }),
+    faturaId: integer("fatura_id").references(() => fatura.id, { onDelete: "cascade" }),
+    recorrenciaId: integer("recorrencia_id").references(() => recorrencia.id, { onDelete: "cascade" }),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("divida_vinculo_so_um", sql`num_nonnulls(${t.faturaId}, ${t.recorrenciaId}) = 1`),
+    uniqueIndex("divida_vinculo_fatura_unico").on(t.faturaId).where(sql`${t.faturaId} is not null`),
+    uniqueIndex("divida_vinculo_recorrencia_unico").on(t.recorrenciaId).where(sql`${t.recorrenciaId} is not null`),
+    index("divida_vinculo_divida_idx").on(t.dividaId),
+  ],
+);
+
+/** Histórico da dívida (linha do tempo). Correções nunca apagam o passado: viram um evento novo. */
+export const dividaEvento = pgTable(
+  "divida_evento",
+  {
+    id: serial("id").primaryKey(),
+    dividaId: integer("divida_id")
+      .notNull()
+      .references(() => divida.id, { onDelete: "cascade" }),
+    data: date("data").notNull(),
+    tipo: tipoEventoDividaEnum("tipo").notNull(),
+    valorCentavos: bigint("valor_centavos", { mode: "number" }),
+    /** Atualização de saldo: o saldo que o credor informou. */
+    saldoCentavos: bigint("saldo_centavos", { mode: "number" }),
+    /** De onde veio o saldo: extrato, app, boleto, contato. */
+    origemSaldo: text("origem_saldo"),
+    lancamentoId: integer("lancamento_id").references(() => lancamento.id, { onDelete: "set null" }),
+    descricao: text("descricao").notNull(),
+    /** Valores antes e depois, cópias de parcelas etc. */
+    dados: jsonb("dados"),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("divida_evento_divida_idx").on(t.dividaId, t.data)],
 );
 
 // ---------------------------------------------------------------------------

@@ -24,6 +24,7 @@ import {
   salvarFeriado,
   salvarOrdemContasCartoes,
   salvarParametrosGerais,
+  salvarParametrosDividas,
   salvarParametrosLancamentos,
   type DadosFeriado,
 } from "./acoes";
@@ -118,6 +119,7 @@ export function TelaParametros({ secao, parametros, feriados, contas, cartoes, a
         {secao === "lancamentos" && <Lancamentos p={parametros} />}
         {secao === "contas" && <ContasCartoes contas={contas} cartoes={cartoes} />}
         {secao === "auxiliares" && <Auxiliares p={parametros} />}
+        {secao === "dividas" && <Dividas p={parametros} />}
         {secao === "feriados" && <Feriados feriados={feriados} anoAtual={anoAtual} />}
       </div>
     </div>
@@ -193,6 +195,26 @@ function Lancamentos({ p }: { p: Parametros }) {
       </div>
       <p className="mt-3 text-xs text-gray-500">Desligar um campo só o esconde do formulário: o que já foi gravado continua guardado e volta a aparecer se você ligar de novo.</p>
       <Rodape s={s} aoSalvar={() => s.executar(() => salvarParametrosLancamentos(d))} />
+    </Cartao>
+  );
+}
+
+function Dividas({ p }: { p: Parametros }) {
+  const fmt = (n: number) => String(n).replace(".", ",");
+  const [d, setD] = useState({ multaPadraoPct: fmt(p.dividas.multaPadraoPct), moraMensalPct: fmt(p.dividas.moraMensalPct) });
+  const s = useSalvar();
+  const mudar = (k: keyof typeof d) => (v: string) => {
+    setD((x) => ({ ...x, [k]: v }));
+    s.marcarMudanca();
+  };
+  return (
+    <Cartao titulo="Gestão de Dívidas">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <CampoTexto rotulo="Multa padrão (%)" valor={d.multaPadraoPct} aoMudar={mudar("multaPadraoPct")} maxLength={6} ajuda="Cobrada uma vez sobre a parcela vencida. Usada quando a dívida não tem a própria multa." />
+        <CampoTexto rotulo="Juros de mora ao mês (%)" valor={d.moraMensalPct} aoMudar={mudar("moraMensalPct")} maxLength={6} ajuda="Proporcional aos dias de atraso. Usado quando a dívida não tem os próprios juros de mora." />
+      </div>
+      <p className="mt-3 text-xs text-gray-500">São só estimativas para o saldo em atraso: o valor certo é o que o credor informa (Atualizar saldo). Mudar aqui não altera pagamentos já feitos.</p>
+      <Rodape s={s} aoSalvar={() => s.executar(() => salvarParametrosDividas(d))} />
     </Cartao>
   );
 }

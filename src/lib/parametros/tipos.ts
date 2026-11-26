@@ -36,6 +36,8 @@ export type Parametros = {
   pagamentoParcial: boolean;
   campos: { dataReferencia: boolean; documento: boolean; observacao: boolean; anexos: boolean };
   camposAuxiliares: Record<CadastroAuxiliar, CampoAuxiliar>;
+  /** Gestão de Dívidas: multa e juros de mora que valem para a dívida que não tem os seus. */
+  dividas: { multaPadraoPct: number; moraMensalPct: number };
 };
 
 /** Recursos que podem ser desligados. Desligado, some dos menus e a tela avisa que está desativado. */
@@ -47,6 +49,7 @@ export const RECURSOS = [
   { chave: "formas_pagamento", rotulo: "Formas de Pagamento", descricao: "Pix, boleto, dinheiro...", telas: ["/cadastros/formas-de-pagamento"] },
   { chave: "tags", rotulo: "Tags", descricao: "Etiquetas livres nos lançamentos.", telas: ["/cadastros/tags"] },
   { chave: "orcamentos", rotulo: "Orçamentos", descricao: "Limites de gasto por categoria.", telas: ["/gestao/orcamentos"] },
+  { chave: "dividas", rotulo: "Gestão de Dívidas", descricao: "Dívidas, parcelas, saldo devedor e contas em aberto.", telas: ["/gestao/dividas"] },
   { chave: "importacao", rotulo: "Importação", descricao: "Extratos OFX e CSV do banco.", telas: ["/financeiro/importacoes"] },
   { chave: "exportacao", rotulo: "Exportação", descricao: "Exportar listas para Excel e CSV.", telas: [] },
   { chave: "impressao", rotulo: "Impressão", descricao: "Impressão em PDF das listas e relatórios.", telas: [] },
@@ -55,6 +58,8 @@ export type Recurso = (typeof RECURSOS)[number]["chave"];
 export type Recursos = Record<Recurso, boolean>;
 
 const bool = (v: unknown, padrao: boolean) => (typeof v === "boolean" ? v : padrao);
+/** Porcentagem de 0 a 100 (multa e juros de atraso); fora disso volta ao padrão. */
+const percentual = (v: unknown, padrao: number) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 100 ? v : padrao);
 
 /** Monta os Parâmetros a partir das linhas da tabela, com o padrão para o que faltar ou estiver errado. */
 export function lerParametrosDe(c: Record<string, unknown>): Parametros {
@@ -83,6 +88,7 @@ export function lerParametrosDe(c: Record<string, unknown>): Parametros {
       anexos: bool(c["campos.anexos"], true),
     },
     camposAuxiliares,
+    dividas: { multaPadraoPct: percentual(c["dividas.multa_padrao"], 2), moraMensalPct: percentual(c["dividas.mora_padrao"], 1) },
   };
 }
 

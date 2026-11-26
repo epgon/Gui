@@ -8,7 +8,7 @@ import { falha, idValido, type Resultado } from "@/lib/cadastros/resultado";
 import { dataValida, formatarData } from "@/lib/datas";
 import { formatarCentavos, lerValorEmCentavos } from "@/lib/dinheiro";
 import { garantirFatura, inserirLancamento } from "@/lib/lancamentos/gravacao";
-import { calcularPagamento, gerarParcelas, PERIODICIDADES, totalDetalhado, type Periodicidade, type TipoLancamento } from "@/lib/lancamentos/regras";
+import { calcularPagamento, camposDoRestante, gerarParcelas, PERIODICIDADES, totalDetalhado, type Periodicidade, type TipoLancamento } from "@/lib/lancamentos/regras";
 import type { DadosLancamento, LancamentoEdicao, Ocorrencia } from "@/lib/lancamentos/tipos";
 import { aplicarVariaveis, primeiraOcorrencia } from "@/lib/recorrentes/regras";
 import { conferirOcorrencia, dadosDaOcorrencia, gravarOcorrencia } from "@/lib/recorrentes/servidor";
@@ -693,22 +693,7 @@ async function aplicarValorPago(tx: Transacao, id: number, v: PagamentoValor) {
   await registrarAuditoria(tx, { tela: TELA, entidade: ENTIDADE, entidadeId: x.id, acao: "alterou", descricao: `o valor do Lançamento ${x.descricao} (${explicacao})`, dados: { valor: { antes: x.valorCentavos, depois: r.valorCentavos } } });
   if (r.tipo !== "parcial") return;
   const tags = await tx.select({ tagId: lancamentoTag.tagId }).from(lancamentoTag).where(eq(lancamentoTag.lancamentoId, x.id));
-  const restante: Linha = {
-    tipo: x.tipo,
-    formato: "simples",
-    descricao: x.descricao,
-    documento: x.documento,
-    observacao: x.observacao,
-    valorCentavos: r.restanteCentavos,
-    dataVencimento: vencimento!,
-    dataReferencia: x.dataReferencia,
-    contaId: x.contaId,
-    categoriaId: x.categoriaId,
-    formaPagamentoId: x.formaPagamentoId,
-    contatoId: x.contatoId,
-    lancamentoOrigemId: x.id,
-    origem: "manual",
-  };
+  const restante: Linha = { tipo: x.tipo, ...camposDoRestante(x, r.restanteCentavos, vencimento!) };
   const novo = await inserirLancamento(tx, restante, tags.map((t) => t.tagId), []);
   await registrarAuditoria(tx, {
     tela: TELA,
