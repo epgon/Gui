@@ -1,6 +1,6 @@
 "use server";
 
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
 import { refresh } from "next/cache";
 import { getDb, schema } from "@/db";
 import { diferencas, registrarAuditoria, type Transacao } from "@/lib/auditoria";
@@ -8,7 +8,9 @@ import { falha, idValido, type Resultado } from "@/lib/cadastros/resultado";
 import { dataValida, formatarData, hojeIso } from "@/lib/datas";
 import { formatarCentavos, lerValorEmCentavos } from "@/lib/dinheiro";
 import { amortizarReduzindoQuantidade, amortizarReduzindoValor, dividaQueJaTem, GARANTIAS, primeiroDiaDoLembrete, taxaAnualParaMensal, TIPOS_DIVIDA, type VinculoExistente } from "@/lib/dividas/regras";
+import { motivoParaNaoExcluirDivida, SEM_USO_DIVIDA } from "@/lib/dividas/exclusao";
 import { carregarDetalheDivida, categoriasDeDividas } from "@/lib/dividas/servidor";
+import { usoDasDividas } from "@/lib/dividas/uso";
 import type { DetalheDivida } from "@/lib/dividas/tipos";
 import { inserirLancamento } from "@/lib/lancamentos/gravacao";
 import { gerarParcelas, PERIODICIDADES, type Periodicidade } from "@/lib/lancamentos/regras";
@@ -514,6 +516,52 @@ export async function cancelarDivida(id: number, retirarParcelas: boolean): Prom
       return { ok: true as const, id };
     }),
   );
+}
+
+/**
+ * Exclui de vez uma dívida sem nenhum pagamento registrado. Saem junto o histórico, os vínculos e as
+ * parcelas e encargos ainda não pagos de Lançamentos (cópia na Auditoria). Lançamentos que a pessoa apenas
+ * acompanhava, faturas e recorrentes continuam onde estavam, sem a ligação. O lembrete mensal criado pela
+ * própria dívida é inativado. Com pagamento, renegociação, negociação ou plano de quitação, não exclui.
+ */
+export async function excluirDivida(id: number): Promise<Resultado> {
+  await exigirRecurso();
+  if (!idValido.safeParse(id).success) return falha("Dívida não encontrada.");
+  try {
+    return await executar(() =>
+      getDb().transaction(async (tx) => {
+        const [d] = await tx.select().from(divida).where(eq(divida.id, id)).for("update");
+        if (!d) return erro("Esta dívida não existe mais.");
+        const uso = (await usoDasDividas(tx, id)).get(id) ?? SEM_USO_DIVIDA;
+        const motivo = motivoParaNaoExcluirDivida(uso);
+        if (motivo) return erro(`Não é possível excluir a dívida **${d.descricao}**. ${motivo}`);
+
+        // Parcelas e encargos que a dívida criou e ainda não foram pagos. Lançamentos acompanhados só perdem a ligação.
+        const encargos = await tx.select({ lancamentoId: dividaEvento.lancamentoId }).from(dividaEvento).where(and(eq(dividaEvento.dividaId, id), eq(dividaEvento.tipo, "encargo")));
+        const idsEncargo = encargos.map((e) => e.lancamentoId).filter((x): x is number => x !== null);
+        const proprios = await tx.select().from(l).where(and(eq(l.dividaId, id), isNull(l.dataPagamento), isNull(l.cartaoId), idsEncargo.length ? or(eq(l.origem, "parcelamento"), inArray(l.id, idsEncargo)) : eq(l.origem, "parcelamento"))).for("update");
+        if (proprios.length) {
+          await tx.delete(l).where(inArray(l.id, proprios.map((x) => x.id)));
+          for (const x of proprios) await registrarAuditoria(tx, { tela: TELA, entidade: "Lançamento", entidadeId: x.id, acao: "excluiu", descricao: `a parcela ${x.descricao} (exclusão da Dívida ${d.descricao})`, dados: x });
+        }
+
+        // O lembrete mensal criado junto com a dívida deixa de avisar.
+        const ligados = await tx.select({ id: recorrencia.id, observacao: recorrencia.observacao }).from(dividaVinculo).innerJoin(recorrencia, eq(recorrencia.id, dividaVinculo.recorrenciaId)).where(eq(dividaVinculo.dividaId, id));
+        const lembretes = ligados.filter((r) => r.observacao?.startsWith("Lembrete mensal criado pela dívida")).map((r) => r.id);
+        if (lembretes.length) await tx.update(recorrencia).set({ ativo: false }).where(inArray(recorrencia.id, lembretes));
+
+        await tx.delete(divida).where(eq(divida.id, id));
+        if (d.parcelamentoId) await tx.delete(parcelamento).where(eq(parcelamento.id, d.parcelamentoId));
+        await registrarAuditoria(tx, { tela: TELA, entidade: ENTIDADE, entidadeId: id, acao: "excluiu", descricao: `a Dívida ${d.descricao}${proprios.length ? ` e ${proprios.length} ${proprios.length === 1 ? "parcela não paga" : "parcelas não pagas"}` : ""}`, dados: d });
+        refresh();
+        return { ok: true as const, id };
+      }),
+    );
+  } catch (e) {
+    // A dívida passou a ser usada no mesmo instante (chave estrangeira; o drizzle guarda o erro do banco em cause).
+    if ((e as { cause?: { code?: string } })?.cause?.code === "23503") return falha("Esta dívida acabou de ser usada e não pode mais ser excluída. Recarregue a página para ver onde.");
+    throw e;
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 "use client";
 
-import { Banknote, Calculator, Copy, Eye, Gauge, HandCoins, Handshake, NotebookPen, Pencil, Scale, Wallet, XCircle } from "lucide-react";
+import { Banknote, Calculator, Copy, Eye, Gauge, HandCoins, Handshake, NotebookPen, Pencil, Scale, Trash2, Wallet, XCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { BarraLista } from "@/components/cadastros/barra-lista";
@@ -14,6 +14,8 @@ import { ContasEmAberto } from "@/components/dividas/contas-em-aberto";
 import { DetalhandoDivida, type AcaoDivida } from "@/components/dividas/detalhando-divida";
 import { dadosDaDivida, dadosVaziosDivida, ModalDivida, type PadroesDivida } from "@/components/dividas/formulario-divida";
 import { JanelaAmortizar, JanelaCancelar, JanelaEncargo, JanelaPagarDivida, JanelaQuitar, JanelaSaldo } from "@/components/dividas/janelas-divida";
+import { Botao } from "@/components/ui/botao";
+import { Modal } from "@/components/ui/modal";
 import { FaixaErro } from "@/components/ui/faixa-erro";
 import { TextoComDestaque } from "@/components/ui/campo";
 import { ProvedorOcultar, ValorOcultavel } from "@/components/ui/ocultar-valores";
@@ -25,13 +27,13 @@ import type { Opcoes } from "@/lib/lancamentos/tipos";
 import { realizarLancamentos } from "@/app/(sistema)/financeiro/lancamentos/acoes";
 import { ModalPagar } from "@/app/(sistema)/financeiro/lancamentos/linhas";
 import { colunasVisiveis, type PreferenciaListagem } from "@/lib/listagem/telas";
-import { proximaParcela } from "../acoes";
+import { excluirDivida, proximaParcela } from "../acoes";
 import { desfazerRenegociacao } from "../negociacoes/acoes";
 
 type Janela = { acao: AcaoDivida | "cancelar"; divida: LinhaDivida };
 type Parcela = { id: number; descricao: string; valorCentavos: number; vencimento: string; dividaId: number };
 
-export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoje, totalDevido, todas, contasEmAberto, recorrentes, padroes, multaPadrao, limiteTaxaAltaPct, moraPadrao, abrirNova, abrirDetalhe, acaoInicial, porPagina, preferencia }: {
+export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoje, totalDevido, todas, motivosNaoExcluir, contasEmAberto, recorrentes, padroes, multaPadrao, limiteTaxaAltaPct, moraPadrao, abrirNova, abrirDetalhe, acaoInicial, porPagina, preferencia }: {
   linhas: LinhaDivida[];
   total: number;
   filtros: FiltrosDividas;
@@ -40,6 +42,8 @@ export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoj
   hoje: string;
   totalDevido: number;
   todas: LinhaDivida[];
+  /** Por que a dívida não pode ser excluída (sem a chave = pode). */
+  motivosNaoExcluir: Record<number, string>;
   contasEmAberto: ContaEmAberto[];
   recorrentes: ContaEmAberto[];
   padroes: PadroesDivida;
@@ -61,6 +65,7 @@ export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoj
   const [janela, setJanela] = useState<Janela | null>(null);
   const [parcela, setParcela] = useState<Parcela | null>(null);
   const [aviso, setAviso] = useState("");
+  const [excluindo, setExcluindo] = useState<LinhaDivida | null>(null);
   const [assistente, setAssistente] = useState<InicioRenegociacao | null>(null);
   const [erroPagar, setErroPagar] = useState("");
   const [ocupado, iniciar] = useTransition();
@@ -132,6 +137,23 @@ export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoj
       }
     });
   };
+
+  const confirmarExclusao = (d: LinhaDivida) =>
+    iniciar(async () => {
+      setAviso("");
+      try {
+        const r = await excluirDivida(d.id);
+        if (!r.ok) setAviso(r.erro);
+        else {
+          if (detalhando === d.id) setDetalhando(null);
+          mudou();
+        }
+      } catch {
+        setAviso("Não foi possível excluir a dívida agora. Tente de novo.");
+      } finally {
+        setExcluindo(null);
+      }
+    });
 
   const abrirAcao = (acao: AcaoDivida | "cancelar", d: LinhaDivida) => {
     if (acao === "renegociar") return setAssistente({ dividaIds: [d.id] });
@@ -221,6 +243,7 @@ export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoj
                     { rotulo: "Editar", icone: <Pencil className="h-4 w-4" />, aoClicar: () => editar(d) },
                     { rotulo: "Clonar", icone: <Copy className="h-4 w-4" />, aoClicar: () => clonar(d) },
                     ...(d.situacao !== "cancelada" && d.situacao !== "renegociada" ? [{ rotulo: "Cancelar dívida", icone: <XCircle className="h-4 w-4" />, aoClicar: () => abrirAcao("cancelar", d) }] : []),
+                    { rotulo: "Excluir", icone: <Trash2 className="h-4 w-4" />, aoClicar: () => setExcluindo(d), desabilitado: !!motivosNaoExcluir[d.id], dica: motivosNaoExcluir[d.id] },
                   ]}
                 />
               ),
@@ -277,6 +300,30 @@ export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoj
       {janela?.acao === "saldo" && <JanelaSaldo divida={janela.divida} hoje={hoje} aoFechar={fecharJanela} />}
       {janela?.acao === "encargo" && <JanelaEncargo divida={janela.divida} destinos={opcoes.destinos} hoje={hoje} aoFechar={fecharJanela} />}
       {janela?.acao === "cancelar" && <JanelaCancelar divida={janela.divida} aoFechar={fecharJanela} />}
+
+      <Modal
+        aberto={!!excluindo}
+        aoFechar={() => !ocupado && setExcluindo(null)}
+        titulo="Excluir Dívida"
+        resumo={excluindo ? [excluindo.descricao, excluindo.credor].join(" · ") : undefined}
+        rodape={
+          <>
+            <Botao variante="fantasma" onClick={() => setExcluindo(null)} disabled={ocupado}>
+              Voltar
+            </Botao>
+            <Botao variante="perigo" carregando={ocupado} icone={<Trash2 className="h-4 w-4" />} onClick={() => excluindo && confirmarExclusao(excluindo)}>
+              Excluir
+            </Botao>
+          </>
+        }
+      >
+        <div className="space-y-2 text-sm text-gray-700">
+          <p>
+            A dívida <strong>{excluindo?.descricao}</strong> será excluída de vez, com o histórico e as parcelas ainda não pagas em Lançamentos. Nenhum pagamento foi feito nela. Esta ação não pode ser desfeita.
+          </p>
+          <p className="text-gray-500">Se a cobrança acabou, mas você quer guardar o registro, use Cancelar dívida.</p>
+        </div>
+      </Modal>
 
       {parcela && (
         <ModalPagar
