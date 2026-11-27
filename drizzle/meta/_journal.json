@@ -120,6 +120,13 @@
       "when": 1795811719543,
       "tag": "0016_importacao_pdf",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1795811779543,
+      "tag": "0017_categoria_tecnologia",
+      "breakpoints": true
     }
   ]
 }
