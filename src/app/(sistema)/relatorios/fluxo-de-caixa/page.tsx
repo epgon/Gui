@@ -39,7 +39,7 @@ export default async function PaginaFluxoDeCaixa({ searchParams }: { searchParam
             </p>
           </div>
         </main>
-        <PainelAjuda artigos={["Como utilizar o relatório de fluxo de caixa", "Como usar os filtros para lançamentos"]} />
+        <PainelAjuda />
       </>
     );
   }

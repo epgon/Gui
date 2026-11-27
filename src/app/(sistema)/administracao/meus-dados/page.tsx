@@ -45,7 +45,7 @@ export default async function PaginaMeusDados() {
           />
         </div>
       </main>
-      <PainelAjuda artigos={["Meus Dados: perfil e endereço", "Trocar a senha de acesso", "Tempo da sessão"]} />
+      <PainelAjuda />
     </>
   );
 }

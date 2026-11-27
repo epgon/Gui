@@ -40,7 +40,7 @@ export default async function PaginaParametros({ searchParams }: { searchParams:
           <TelaParametros secao={secao} parametros={parametros} feriados={feriados} contas={contas} cartoes={cartoes} anoAtual={Number(hojeIso().slice(0, 4))} ia={ia} />
         </div>
       </main>
-      <PainelAjuda trilha={["Configurações", "Parâmetros"]} artigos={["Cada seção tem o seu botão Salvar Alterações.", "Feriados são usados no \"Apenas dia útil\" dos recorrentes."]} />
+      <PainelAjuda />
     </>
   );
 }
