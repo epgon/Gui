@@ -8,10 +8,10 @@ export type TelaAjuda = "visao" | "minhas" | "negociacoes" | "simulador" | "plan
 
 /** Assunto, para agrupar a lista "Todos os artigos". A ordem aqui é a ordem na tela. */
 export const ASSUNTOS_AJUDA = [
-  { valor: "comecar", rotulo: "Primeiros passos" },
-  { valor: "casos", rotulo: "Como lançar cada caso" },
-  { valor: "dia_a_dia", rotulo: "Pagamentos e saldo no dia a dia" },
-  { valor: "telas", rotulo: "Entendendo as telas" },
+  { valor: "comecar", rotulo: "Primeiros passos", sobre: "Sobre Primeiros Passos" },
+  { valor: "casos", rotulo: "Como lançar cada caso", sobre: "Sobre Casos" },
+  { valor: "dia_a_dia", rotulo: "Pagamentos e saldo no dia a dia", sobre: "Sobre Pagamentos e Saldo" },
+  { valor: "telas", rotulo: "Entendendo as telas", sobre: "Sobre as Telas" },
 ] as const;
 export type AssuntoAjuda = (typeof ASSUNTOS_AJUDA)[number]["valor"];
 

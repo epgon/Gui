@@ -1,5 +1,5 @@
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { PainelAjudaDividas } from "@/components/ajuda/central-ajuda";
+import { PainelAjuda } from "@/components/layout/painel-ajuda";
 import { RecursoDesativado } from "@/components/layout/recurso-desativado";
 import { hojeIso } from "@/lib/datas";
 import { carregarPainelDividas } from "@/lib/dividas/consultor/servidor";
@@ -41,7 +41,7 @@ export default async function PaginaDividas() {
           />
         </div>
       </main>
-      <PainelAjudaDividas tela="visao" trilha={["Gestão", "Gestão de Dívidas"]} />
+      <PainelAjuda />
     </>
   );
 }

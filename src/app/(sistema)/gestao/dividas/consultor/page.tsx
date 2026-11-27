@@ -1,5 +1,5 @@
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { PainelAjudaDividas } from "@/components/ajuda/central-ajuda";
+import { PainelAjuda } from "@/components/layout/painel-ajuda";
 import { RecursoDesativado } from "@/components/layout/recurso-desativado";
 import { parametro, type ParametrosBusca } from "@/lib/cadastros/filtros";
 import { hojeIso } from "@/lib/datas";
@@ -28,7 +28,7 @@ export default async function PaginaConsultor({ searchParams }: { searchParams: 
           <TelaConsultor assuntos={assuntos} escolhido={escolhido?.id ?? null} mensagens={mensagens} alertas={{ visiveis: painel.visiveis, escondidos: painel.escondidos }} mostrarArquivados={parametro(sp, "arquivados") === "1"} ia={{ ligado: cfg.ligado, pronto: cfg.pronto, chaveCadastrada: cfg.chaveCadastrada, provedor: cfg.provedor?.rotulo ?? cfg.provedorId, usadasHoje: cfg.usadasHoje, limiteDiario: cfg.limiteDiario }} />
         </div>
       </main>
-      <PainelAjudaDividas tela="consultor" trilha={["Gestão", "Gestão de Dívidas", "Consultor Gui"]} />
+      <PainelAjuda />
     </>
   );
 }
