@@ -16,7 +16,7 @@ export default async function PaginaFormas({ searchParams }: { searchParams: Pro
   const sp = await searchParams;
   const [preferencia, campos] = await Promise.all([lerPreferencia(TELA), camposAvancados(TELA)]);
   const r = await carregarFormas(sp, preferencia);
-  const pagina = paginar(r.linhas, r.f.pagina, preferencia.porPagina);
+  const pagina = paginar(r.linhas, r.f.pagina, preferencia.porPagina, preferencia.semPaginacao);
 
   return (
     <MolduraLista

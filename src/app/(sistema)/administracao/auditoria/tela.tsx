@@ -3,7 +3,6 @@
 import { Minus, Plus } from "lucide-react";
 import { useState } from "react";
 import { Paginacao } from "@/components/cadastros/paginacao";
-import { ConfigurarListagem } from "@/components/listagem/configurar-listagem";
 import { Tabela, type Coluna } from "@/components/ui/tabela";
 import { linhasDosDados } from "@/lib/auditoria-dados";
 import { cn } from "@/lib/cn";
@@ -50,15 +49,13 @@ export function TelaAuditoria({ linhas, total, pagina, preferencia, caminho, par
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-3">
-        <p className="flex-1 rounded-md border border-amarelo-borda bg-amarelo px-3 py-2 text-sm text-amarelo-texto">Os registros ficam disponíveis por 6 meses.</p>
-        <ConfigurarListagem tela="auditoria" pref={preferencia} />
-      </div>
+      <p className="rounded-md border border-amarelo-borda bg-amarelo px-3 py-2 text-sm text-amarelo-texto">Os registros ficam disponíveis por 6 meses.</p>
       <Tabela
         linhas={linhas}
         chaveLinha={(l) => l.id}
         compacta={preferencia.compactar}
         destacarPares={preferencia.destacarPares}
+        configuracao={{ tela: "auditoria", pref: preferencia }}
         vazio="Nenhum registro encontrado com esses filtros."
         colunas={colunasVisiveis<Coluna<Linha>>(
           "auditoria",
@@ -122,7 +119,7 @@ export function TelaAuditoria({ linhas, total, pagina, preferencia, caminho, par
           preferencia,
         )}
       />
-      <Paginacao caminho={caminho} parametros={parametros} pagina={pagina} porPagina={preferencia.porPagina} total={total} />
+      <Paginacao caminho={caminho} parametros={parametros} pagina={pagina} porPagina={preferencia.porPagina} semPaginacao={preferencia.semPaginacao} total={total} />
     </>
   );
 }

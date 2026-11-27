@@ -19,7 +19,7 @@ import { Botao } from "@/components/ui/botao";
 import { OrganizarCategorias } from "./organizar";
 import { CampoAuxiliarFormulario } from "@/components/listagem/campo-auxiliar";
 import { comComuns, MarcaNovo } from "@/components/listagem/colunas-comuns";
-import { useRotuloAuxiliar } from "@/components/listagem/configurar-listagem";
+import { useRotuloAuxiliar } from "@/components/listagem/use-rotulo-auxiliar";
 import { colunasVisiveis, type PreferenciaListagem } from "@/lib/listagem/telas";
 import { type CategoriaNaArvore, NIVEL_MAXIMO, rotuloCategoria } from "@/lib/categorias";
 import { cn } from "@/lib/cn";
@@ -148,6 +148,7 @@ export function TelaCategorias({ preferencia, linhas, arvore, abas, aba, filtros
         vazio="Nenhuma categoria encontrada com esses filtros."
         compacta={preferencia.compactar}
         destacarPares={preferencia.destacarPares}
+        configuracao={{ tela: "categorias", pref: preferencia }}
         colunas={colunasVisiveis("categorias", comComuns<Linha>([
           { chave: "cor", titulo: <span className="sr-only">Cor</span>, render: (l) => <Bolinha cor={l.corEfetiva} /> },
           {

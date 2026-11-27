@@ -1,0 +1,1 @@
+ALTER TABLE "preferencia_listagem" ADD COLUMN "destaques" jsonb DEFAULT '{"hoje":true,"vencidos":true,"situacao":true}'::jsonb NOT NULL;

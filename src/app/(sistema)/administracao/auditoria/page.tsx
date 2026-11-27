@@ -45,14 +45,9 @@ export default async function PaginaAuditoria({ searchParams }: { searchParams: 
     db.select({ total: count() }).from(a).where(onde),
     db.selectDistinct({ tela: a.tela }).from(a).orderBy(a.tela),
   ]);
-  const pagina = Math.min(paginaPedida, Math.max(1, Math.ceil(total / porPagina)));
-  const linhas = await db
-    .select()
-    .from(a)
-    .where(onde)
-    .orderBy(desc(a.quando), desc(a.id))
-    .limit(porPagina)
-    .offset((pagina - 1) * porPagina);
+  const pagina = preferencia.semPaginacao ? 1 : Math.min(paginaPedida, Math.max(1, Math.ceil(total / porPagina)));
+  const consulta = db.select().from(a).where(onde).orderBy(desc(a.quando), desc(a.id));
+  const linhas = await (preferencia.semPaginacao ? consulta : consulta.limit(porPagina).offset((pagina - 1) * porPagina));
 
   return (
     <>

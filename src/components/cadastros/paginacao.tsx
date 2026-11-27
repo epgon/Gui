@@ -6,15 +6,17 @@ import { useComAvancado } from "@/components/listagem/use-avancado";
 import { cn } from "@/lib/cn";
 
 /** "1 a 20 de 54" e setas de página. Mantém os filtros na URL. */
-export function Paginacao({ caminho, parametros: proprios, pagina, porPagina, total }: {
+export function Paginacao({ caminho, parametros: proprios, pagina, porPagina, total, semPaginacao }: {
   caminho: string;
   parametros: Record<string, string>;
   pagina: number;
   porPagina: number;
   total: number;
+  /** "Sem Paginação" das Configurações da Listagem: não mostra as páginas. */
+  semPaginacao?: boolean;
 }) {
   const parametros = useComAvancado(proprios);
-  if (total === 0) return null;
+  if (total === 0 || semPaginacao) return null;
   const paginas = Math.max(1, Math.ceil(total / porPagina));
   const inicio = (pagina - 1) * porPagina + 1;
   const fim = Math.min(total, pagina * porPagina);

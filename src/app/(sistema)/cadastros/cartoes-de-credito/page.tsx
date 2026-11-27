@@ -31,7 +31,7 @@ export default async function PaginaCartoes({ searchParams }: { searchParams: Pr
       .orderBy(asc(contaFinanceira.ordem), asc(contaFinanceira.descricao)),
   ]);
   const r = await carregarCartoes(sp, preferencia);
-  const pagina = paginar(r.linhas, r.f.pagina, preferencia.porPagina);
+  const pagina = paginar(r.linhas, r.f.pagina, preferencia.porPagina, preferencia.semPaginacao);
 
   const opcoesDia = [{ valor: "", rotulo: "Todos" }, ...DIAS_MES.map((d) => ({ valor: d, rotulo: `Dia ${d}` }))];
   return (

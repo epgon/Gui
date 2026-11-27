@@ -3,7 +3,6 @@
 import { Plus, Search } from "lucide-react";
 import Form from "next/form";
 import { BotaoImprimir } from "@/components/exportacao/botao-imprimir";
-import { ConfigurarListagem } from "@/components/listagem/configurar-listagem";
 import { useComAvancado } from "@/components/listagem/use-avancado";
 import { Botao } from "@/components/ui/botao";
 import type { PreferenciaListagem } from "@/lib/listagem/telas";
@@ -18,7 +17,7 @@ export function BarraLista({ aoAdicionar, caminho, busca, parametros: proprios, 
   rotuloBusca?: string;
   /** Nome da lista na Impressão Padrão e exportação (mostra o botão Imprimir). */
   tela?: string;
-  /** Configurações da Listagem (mostra a engrenagem). */
+  /** Configurações da Listagem (liga a Impressão Personalizada; a engrenagem fica no cabeçalho da tabela). */
   preferencia?: PreferenciaListagem;
   /** Troca o botão Imprimir padrão (ex.: com a Impressão Personalizada). */
   imprimir?: React.ReactNode;
@@ -31,7 +30,6 @@ export function BarraLista({ aoAdicionar, caminho, busca, parametros: proprios, 
       </Botao>
       {extra}
       {tela && (imprimir ?? <BotaoImprimir tela={tela} parametros={parametros} personalizada={!!preferencia} className="ml-auto" />)}
-      {tela && preferencia && <ConfigurarListagem tela={tela} pref={preferencia} />}
       <Form action={caminho} className={`${tela ? "" : "ml-auto "}flex w-full items-center sm:w-72`} role="search">
         {Object.entries(parametros)
           .filter(([chave, valor]) => chave !== "busca" && chave !== "pagina" && valor)

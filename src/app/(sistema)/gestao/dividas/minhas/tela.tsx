@@ -185,6 +185,7 @@ export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoj
           linhas={linhas}
           compacta={preferencia.compactar}
           destacarPares={preferencia.destacarPares}
+          configuracao={{ tela: "dividas", pref: preferencia }}
           chaveLinha={(d) => d.id}
           vazio={filtros.busca || filtros.credor || filtros.tipo || filtros.situacao || filtros.conta ? "Nenhuma dívida encontrada com esses filtros." : "Nenhuma dívida cadastrada. Clique em Adicionar para cadastrar a primeira, ou veja as contas em aberto no Gui logo abaixo."}
           colunas={colunasVisiveis<Coluna<LinhaDivida>>("dividas", [
@@ -257,7 +258,7 @@ export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoj
           <ValorOcultavel centavos={-totalDevido || 0} />
         </div>
       </ProvedorOcultar>
-      <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={porPagina} total={total} />
+      <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={porPagina} semPaginacao={preferencia.semPaginacao} total={total} />
 
       <ContasEmAberto contas={contasEmAberto} recorrentes={recorrentes} dividas={todas} contatos={opcoes.contatos} hoje={hoje} />
 
