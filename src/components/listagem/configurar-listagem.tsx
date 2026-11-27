@@ -1,6 +1,6 @@
 "use client";
 
-import { Lock, RotateCcw, Settings2 } from "lucide-react";
+import { Info, Lock, RotateCcw, Settings2 } from "lucide-react";
 import { useState } from "react";
 import { restaurarPreferenciaListagem, salvarPreferenciaListagem } from "@/app/(sistema)/listagem-acoes";
 import { useSistema } from "@/components/layout/provedor-sistema";
@@ -52,7 +52,7 @@ export function ConfigurarListagem({ tela, pref }: { tela: string; pref: Prefere
   type Aba = "colunas" | "ordenacao" | "outros";
   const abas: { chave: Aba; rotulo: string }[] = [
     { chave: "colunas", rotulo: "Colunas" },
-    ...(def.semOrdenacao ? [] : [{ chave: "ordenacao" as const, rotulo: "Ordenação" }]),
+    { chave: "ordenacao", rotulo: "Ordenação" },
     { chave: "outros", rotulo: "Outros" },
   ];
 
@@ -127,7 +127,8 @@ export function ConfigurarListagem({ tela, pref }: { tela: string; pref: Prefere
           </ul>
         )}
 
-        {aba === "ordenacao" && (
+        {aba === "ordenacao" && def.semOrdenacao && <NaoSeAplica o="Ordenação" />}
+        {aba === "ordenacao" && !def.semOrdenacao && (
           <div className="grid gap-4 sm:grid-cols-2">
             <CampoSelecao
               rotulo="Ordenar por"
@@ -150,13 +151,18 @@ export function ConfigurarListagem({ tela, pref }: { tela: string; pref: Prefere
 
         {aba === "outros" && (
           <div className="space-y-4">
-            <CampoSelecao
-              className="sm:w-64"
-              rotulo="Registros por página"
-              valor={String(d.porPagina)}
-              aoMudar={(v) => setD((x) => ({ ...x, porPagina: Number(v) }))}
-              opcoes={POR_PAGINA_OPCOES.map((n) => ({ valor: String(n), rotulo: `${n} registros` }))}
-            />
+            {/* Lista em árvore (Categorias): ordem própria e sem paginação. */}
+            {def.semOrdenacao ? (
+              <NaoSeAplica o="Paginação" />
+            ) : (
+              <CampoSelecao
+                className="sm:w-64"
+                rotulo="Registros por página"
+                valor={String(d.porPagina)}
+                aoMudar={(v) => setD((x) => ({ ...x, porPagina: Number(v) }))}
+                opcoes={POR_PAGINA_OPCOES.map((n) => ({ valor: String(n), rotulo: `${n} registros` }))}
+              />
+            )}
             <div className="flex flex-col gap-3">
               <Chave ligada={d.destacarPares} aoMudar={(v) => setD((x) => ({ ...x, destacarPares: v }))} rotulo="Destacar linhas pares (zebrado)" />
               <Chave ligada={d.compactar} aoMudar={(v) => setD((x) => ({ ...x, compactar: v }))} rotulo="Compactar linhas (mais registros na tela)" />
@@ -166,5 +172,17 @@ export function ConfigurarListagem({ tela, pref }: { tela: string; pref: Prefere
         <FaixaErro className="mt-3">{erro && <TextoComDestaque texto={erro} />}</FaixaErro>
       </Modal>
     </>
+  );
+}
+
+/** Aviso das abas que não valem para a tela (ex.: Ordenação em Categorias, que segue a árvore). */
+function NaoSeAplica({ o }: { o: string }) {
+  return (
+    <p className="flex items-start gap-2 text-sm text-gray-600">
+      <Info className="mt-0.5 h-5 w-5 shrink-0 text-receita" />
+      <span>
+        As configurações de <strong>{o}</strong> não se aplicam nesta tela.
+      </span>
+    </p>
   );
 }

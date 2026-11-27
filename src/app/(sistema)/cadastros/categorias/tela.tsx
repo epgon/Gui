@@ -1,13 +1,14 @@
 "use client";
 
-import { BarChart3, CornerDownRight, FolderTree, Lock, Pencil, Plus, Power, Trash2 } from "lucide-react";
+import { Copy, CornerDownRight, Eye, FolderTree, Lock, Pencil, Plus, Power, ReceiptText, Trash2 } from "lucide-react";
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { AsteriscoPadrao } from "@/components/cadastros/asterisco";
 import { BarraLista } from "@/components/cadastros/barra-lista";
 import { ChaveSituacao } from "@/components/cadastros/chave-situacao";
 import { DetalhandoCategoria } from "@/components/categorias/detalhando-categoria";
-import { MenuLinha } from "@/components/cadastros/menu-linha";
+import { LancamentosDaCategoria } from "@/components/categorias/lancamentos-categoria";
+import { MenuLinha, type ItemMenuLinha } from "@/components/cadastros/menu-linha";
 import { ModalCadastro, useFormularioCadastro } from "@/components/cadastros/modal-cadastro";
 import { useSituacao } from "@/components/cadastros/use-situacao";
 import { CampoSelecao, CampoTexto, Rotulo, TextoComDestaque } from "@/components/ui/campo";
@@ -53,6 +54,9 @@ export function TelaCategorias({ preferencia, linhas, arvore, abas, aba, filtros
   const form = useFormularioCadastro(VAZIO);
   const situacao = useSituacao(alterarSituacaoCategoria);
   const [detalhar, setDetalhar] = useState<number | null>(null);
+  const [verLancamentos, setVerLancamentos] = useState<number | null>(null);
+  /** Categoria de origem quando a janela está em "Clonando Categoria". */
+  const [clonando, setClonando] = useState<Linha | null>(null);
   const [excluindo, setExcluindo] = useState<Linha | null>(null);
   const [ocupadoExcluir, iniciarExclusao] = useTransition();
   const confirmarExclusao = (l: Linha) =>
@@ -100,29 +104,88 @@ export function TelaCategorias({ preferencia, linhas, arvore, abas, aba, filtros
     // Para uma categoria principal nova, sugere uma cor que ainda não está em uso.
     const usadas = new Set(arvore.filter((c) => c.nivel === 1).map((c) => c.corEfetiva.toUpperCase()));
     const cor = PALETA.find((c) => !usadas.has(c)) ?? VAZIO.cor;
+    setClonando(null);
     form.abrirNovo(pai ? { categoriaPaiId: String(pai), cor } : { cor });
   };
-  const editar = (l: Linha) =>
+  const editar = (l: Linha) => {
+    setClonando(null);
     form.abrirEdicao(l.id, { nome: l.nome, categoriaPaiId: l.categoriaPaiId ? String(l.categoriaPaiId) : "", cor: l.cor ?? l.corEfetiva, natureza: l.natureza, campoAuxiliar: l.campoAuxiliar ?? "" });
+  };
+  /**
+   * Clonar: abre uma categoria nova já preenchida com os dados desta, no mesmo nível.
+   * Clonar uma principal cria outra principal (mesmo tipo e cor); clonar uma filha cria uma irmã.
+   */
+  const clonar = (l: Linha) => {
+    setClonando(l);
+    form.abrirNovo({
+      nome: l.nome,
+      categoriaPaiId: l.categoriaPaiId ? String(l.categoriaPaiId) : "",
+      cor: l.cor ?? l.corEfetiva,
+      natureza: l.natureza,
+      campoAuxiliar: l.campoAuxiliar ?? "",
+    });
+  };
+  const situacaoVisivel = preferencia.colunas.includes("situacao");
+  const itensMenu = (l: Linha): ItemMenuLinha[] => {
+    const lancamentos = { rotulo: "Lançamentos", icone: <ReceiptText className="h-4 w-4" />, aoClicar: () => setVerLancamentos(l.id) };
+    // As especiais (Acerto de Saldo, Cartão de Crédito e Transferência) são do sistema: só dá para ver os lançamentos.
+    if (l.especial) return [lancamentos];
+    const podeTerFilho = l.nivel < NIVEL_MAXIMO && l.ativo;
+    const paiInativo = l.categoriaPaiId !== null && !arvore.find((c) => c.id === l.categoriaPaiId)?.ativo;
+    return [
+      { rotulo: "Editar", icone: <Pencil className="h-4 w-4" />, aoClicar: () => editar(l) },
+      {
+        rotulo: "Clonar",
+        icone: <Copy className="h-4 w-4" />,
+        aoClicar: () => clonar(l),
+        desabilitado: paiInativo,
+        dica: paiInativo ? "A categoria pai está inativa. Ative-a para clonar." : undefined,
+      },
+      {
+        rotulo: "Adicionar Filho",
+        icone: <Plus className="h-4 w-4" />,
+        aoClicar: () => abrirNovo(l.id),
+        separar: true,
+        desabilitado: !podeTerFilho,
+        dica: podeTerFilho ? undefined : l.ativo ? `As categorias vão até ${NIVEL_MAXIMO} níveis.` : "Ative a categoria antes de adicionar filhos.",
+      },
+      { rotulo: "Detalhar", icone: <Eye className="h-4 w-4" />, aoClicar: () => setDetalhar(l.id) },
+      lancamentos,
+      // Sem a coluna Situação na tela, o Ativar/Inativar fica no menu.
+      ...(situacaoVisivel
+        ? []
+        : [{ rotulo: (l.ativo ? "Inativar" : "Ativar") + (l.quantidadeFilhas ? " (com as filhas)" : ""), icone: <Power className="h-4 w-4" />, aoClicar: () => situacao.alternar(l.id, l.ativo) }]),
+      {
+        rotulo: "Excluir",
+        icone: <Trash2 className="h-4 w-4" />,
+        aoClicar: () => setExcluindo(l),
+        separar: true,
+        perigo: true,
+        desabilitado: !!l.motivoNaoExcluir,
+        dica: l.motivoNaoExcluir ?? undefined,
+      },
+    ];
+  };
 
   const corResumo = pai ? pai.corEfetiva : form.dados.cor;
   const naturezaEfetiva = pai ? (arvore.find((c) => c.id === pai.raizId)?.natureza ?? form.dados.natureza) : form.dados.natureza;
 
   return (
     <>
-      <nav className="flex flex-wrap gap-x-1 border-b border-borda" aria-label="Categorias principais">
+      <nav className="flex flex-wrap gap-1" aria-label="Categorias principais">
         {abas.map((a) => (
           <Link
             key={a.id ?? "todas"}
             href={linkAba(a.id)}
+            aria-current={aba === a.id ? "page" : undefined}
             className={cn(
-              "-mb-px flex shrink-0 items-center gap-2 border-b-2 px-3 py-2 text-sm font-medium",
-              aba === a.id ? "border-verde text-verde" : "border-transparent text-gray-500 hover:text-gray-800",
+              "flex shrink-0 items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm",
+              aba === a.id ? "border-verde bg-verde font-semibold text-white" : "border-borda bg-white text-gray-700 hover:border-verde hover:text-verde",
             )}
           >
-            {a.cor && exibirCores && <Bolinha cor={a.cor} />}
+            {a.cor && exibirCores && aba !== a.id && <Bolinha cor={a.cor} />}
             {a.nome}
-            <span className="rounded-full bg-gray-100 px-1.5 text-xs text-gray-600">{a.total}</span>
+            <span className={cn("text-xs italic", aba === a.id ? "text-white/80" : "text-gray-500")}>{a.total}</span>
           </Link>
         ))}
       </nav>
@@ -203,31 +266,7 @@ export function TelaCategorias({ preferencia, linhas, arvore, abas, aba, filtros
             chave: "menu",
             titulo: <span className="sr-only">Opções</span>,
             alinhar: "direita",
-            render: (l) =>
-              l.especial ? null : (
-                <MenuLinha
-                  rotulo={l.nome}
-                  itens={[
-                    { rotulo: "Editar", icone: <Pencil className="h-4 w-4" />, aoClicar: () => editar(l) },
-                    { rotulo: "Detalhar", icone: <BarChart3 className="h-4 w-4" />, aoClicar: () => setDetalhar(l.id) },
-                    ...(l.nivel < NIVEL_MAXIMO && l.ativo
-                      ? [{ rotulo: "Adicionar Filha", icone: <Plus className="h-4 w-4" />, aoClicar: () => abrirNovo(l.id) }]
-                      : []),
-                    {
-                      rotulo: (l.ativo ? "Inativar" : "Ativar") + (l.quantidadeFilhas ? " (com as filhas)" : ""),
-                      icone: <Power className="h-4 w-4" />,
-                      aoClicar: () => situacao.alternar(l.id, l.ativo),
-                    },
-                    {
-                      rotulo: "Excluir",
-                      icone: <Trash2 className="h-4 w-4" />,
-                      aoClicar: () => setExcluindo(l),
-                      desabilitado: !!l.motivoNaoExcluir,
-                      dica: l.motivoNaoExcluir ?? undefined,
-                    },
-                  ]}
-                />
-              ),
+            render: (l) => <MenuLinha rotulo={l.nome} itens={itensMenu(l)} />,
           },
         ], rotuloAux), preferencia).filter((c) => (c.chave !== "cor" || exibirCores) && (c.chave !== "numero" || exibirNumeracao))}
       />
@@ -237,7 +276,7 @@ export function TelaCategorias({ preferencia, linhas, arvore, abas, aba, filtros
 
       <ModalCadastro
         formulario={form}
-        titulo={form.novo ? (pai ? "Nova Categoria Filha" : "Nova Categoria") : "Editando Categoria"}
+        titulo={clonando ? "Clonando Categoria" : form.novo ? (pai ? "Nova Categoria Filha" : "Nova Categoria") : "Editando Categoria"}
         resumo={
           <span className="flex items-center gap-2">
             <Bolinha cor={corResumo} />
@@ -309,6 +348,7 @@ export function TelaCategorias({ preferencia, linhas, arvore, abas, aba, filtros
         <CampoAuxiliarFormulario cadastro="categorias" className="mt-4" valor={form.dados.campoAuxiliar ?? ""} aoMudar={(v) => form.mudar("campoAuxiliar", v)} />
       </ModalCadastro>
       <DetalhandoCategoria id={detalhar} aoFechar={() => setDetalhar(null)} />
+      <LancamentosDaCategoria id={verLancamentos} aoFechar={() => setVerLancamentos(null)} />
       <Modal
         aberto={!!excluindo}
         aoFechar={() => !ocupadoExcluir && setExcluindo(null)}
