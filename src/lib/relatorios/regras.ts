@@ -84,7 +84,24 @@ export type FiltrosRelatorio = {
   tag: string;
   incluirAcerto: boolean;
   incluirTransferencia: boolean;
+  /** Mostra também as categorias sem nenhum valor no período (linhas zeradas). */
+  incluirZeradas: boolean;
 };
+
+/**
+ * Engrenagem "Incluir as categorias" dos relatórios. Fica gravada (uma para cada relatório),
+ * e não na URL: vale para a tela, para a impressão e para as próximas vezes. Tudo desligado por padrão.
+ */
+export type InclusoesRelatorio = { zeradas: boolean; acerto: boolean; transferencia: boolean };
+export const INCLUSOES_PADRAO: InclusoesRelatorio = { zeradas: false, acerto: false, transferencia: false };
+export const TELAS_COM_INCLUSOES = ["fluxo-de-caixa", "saldo-detalhado"] as const;
+export type TelaComInclusoes = (typeof TELAS_COM_INCLUSOES)[number];
+
+/** Lê o que veio gravado (ou de fora), aceitando só verdadeiro/falso; o resto fica no padrão. */
+export function lerInclusoes(valor: unknown): InclusoesRelatorio {
+  const v = valor && typeof valor === "object" ? (valor as Record<string, unknown>) : {};
+  return { zeradas: v.zeradas === true, acerto: v.acerto === true, transferencia: v.transferencia === true };
+}
 
 // ---------------------------------------------------------------------------
 // Intervalo
@@ -190,7 +207,7 @@ export function lerAgrupamento(sp: ParametrosBusca): Agrupamento | null {
   return AGRUPAMENTOS.some((x) => x.valor === r) ? (r as Agrupamento) : null;
 }
 
-export function lerFiltrosRelatorio(sp: ParametrosBusca, tipo: Periodicidade | Agrupamento, hoje: string): FiltrosRelatorio {
+export function lerFiltrosRelatorio(sp: ParametrosBusca, tipo: Periodicidade | Agrupamento, hoje: string, inclusoes: InclusoesRelatorio = INCLUSOES_PADRAO): FiltrosRelatorio {
   const id = (nome: string) => (/^\d+$/.test(parametro(sp, nome)) ? parametro(sp, nome) : "");
   const situacao = parametro(sp, "situacao");
   const considerar = parametro(sp, "considerar");
@@ -208,8 +225,9 @@ export function lerFiltrosRelatorio(sp: ParametrosBusca, tipo: Periodicidade | A
     forma: id("forma"),
     contato: id("contato"),
     tag: id("tag"),
-    incluirAcerto: parametro(sp, "acerto") === "1",
-    incluirTransferencia: parametro(sp, "transferencia") === "1",
+    incluirAcerto: inclusoes.acerto,
+    incluirTransferencia: inclusoes.transferencia,
+    incluirZeradas: inclusoes.zeradas,
   };
 }
 
@@ -225,8 +243,6 @@ export function parametrosDosFiltros(f: FiltrosRelatorio): Record<string, string
     forma: f.forma,
     contato: f.contato,
     tag: f.tag,
-    acerto: f.incluirAcerto ? "1" : "",
-    transferencia: f.incluirTransferencia ? "1" : "",
   };
 }
 
@@ -320,25 +336,32 @@ function caminhoDaCategoria(m: Movimento, arvore: Arvore): { chave: string; rotu
   });
 }
 
+/**
+ * Categorias que aparecem zeradas com "Categorias Zeradas" ligada: as ativas, sem as especiais
+ * (Acerto de Saldo e Transferência têm chave própria). Com o filtro de Categoria, só ela e as filhas.
+ */
+export function categoriasZeradas(arvore: Arvore, categoriaFiltro = ""): CategoriaNaArvore[] {
+  const filtro = categoriaFiltro ? Number(categoriaFiltro) : null;
+  return [...arvore.values()].filter((c) => c.ativo && !c.especial && (filtro === null || c.id === filtro || c.ancestrais.includes(filtro)));
+}
+
 const media = (total: number, n: number) => (n ? Math.round(total / n) : 0);
 
 /**
  * Monta o Fluxo de Caixa: Receitas, Despesas e Saldo por coluna, com média e total.
  * Receitas e Despesas abrem por categoria (raiz > filha > neta). O saldo é só o do período
  * (receitas + despesas), sem o saldo das contas.
+ * "zeradas": categorias que entram mesmo sem valor (cada uma do lado da sua natureza).
  */
-export function montarFluxoDeCaixa(movimentos: Movimento[], p: Periodicidade, colunas: Coluna[], arvore: Arvore): FluxoDeCaixa {
+export function montarFluxoDeCaixa(movimentos: Movimento[], p: Periodicidade, colunas: Coluna[], arvore: Arvore, zeradas: CategoriaNaArvore[] = []): FluxoDeCaixa {
   const indice = new Map(colunas.map((c, i) => [c.chave, i]));
   const n = colunas.length;
   const zeros = () => new Array<number>(n).fill(0);
   type NoInterno = { chave: string; rotulo: string; cor: string; ordem: number; nivel: number; valores: number[]; filhos: Map<string, NoInterno> };
   const lados = { receitas: { valores: zeros(), filhos: new Map<string, NoInterno>() }, despesas: { valores: zeros(), filhos: new Map<string, NoInterno>() } };
 
-  for (const m of movimentos) {
-    const i = indice.get(chaveDoPeriodo(p, m.data));
-    if (i === undefined || m.valorCentavos === 0) continue;
-    const lado = m.valorCentavos > 0 ? lados.receitas : lados.despesas;
-    lado.valores[i] += m.valorCentavos;
+  /** Desce (criando o que faltar) pelo caminho da categoria e soma o valor na coluna "i" de cada nível. */
+  const somar = (lado: (typeof lados)["receitas"], m: Movimento, i: number | null) => {
     let filhos = lado.filhos;
     caminhoDaCategoria(m, arvore).forEach((passo, nivel) => {
       let no = filhos.get(passo.chave);
@@ -346,9 +369,19 @@ export function montarFluxoDeCaixa(movimentos: Movimento[], p: Periodicidade, co
         no = { ...passo, nivel: nivel + 1, valores: zeros(), filhos: new Map() };
         filhos.set(passo.chave, no);
       }
-      no.valores[i] += m.valorCentavos;
+      if (i !== null) no.valores[i] += m.valorCentavos;
       filhos = no.filhos;
     });
+  };
+
+  for (const c of zeradas) somar(c.natureza === "receita" ? lados.receitas : lados.despesas, { categoriaId: c.id, especial: null } as Movimento, null);
+
+  for (const m of movimentos) {
+    const i = indice.get(chaveDoPeriodo(p, m.data));
+    if (i === undefined || m.valorCentavos === 0) continue;
+    const lado = m.valorCentavos > 0 ? lados.receitas : lados.despesas;
+    lado.valores[i] += m.valorCentavos;
+    somar(lado, m, i);
   }
 
   const finalizar = (mapa: Map<string, NoInterno>): NoCategoria[] =>
@@ -425,9 +458,16 @@ function grupos(m: Movimento, a: Agrupamento, nomes: Nomes): { chave: string; ro
 /**
  * Monta o Saldo Detalhado: uma linha por dia, mês, ano, categoria, conta, contato, forma ou tag,
  * com Receitas, Despesas e Resultado. Por dia, mês e ano, todos os períodos do intervalo aparecem (zerados em cinza).
+ * Por Categorias, "zeradas" são as categorias que aparecem mesmo sem valor.
  */
-export function montarSaldoDetalhado(movimentos: Movimento[], a: Agrupamento, nomes: Nomes, intervalo: { inicio: string; fim: string }): SaldoDetalhado {
+export function montarSaldoDetalhado(movimentos: Movimento[], a: Agrupamento, nomes: Nomes, intervalo: { inicio: string; fim: string }, zeradas: CategoriaNaArvore[] = []): SaldoDetalhado {
   const mapa = new Map<string, LinhaSaldo & { ordem: number | string }>();
+  if (a === "categoria") {
+    for (const c of zeradas) {
+      const g = grupos({ categoriaId: c.id, especial: null } as Movimento, a, nomes)[0];
+      mapa.set(g.chave, { ...g, receitas: 0, despesas: 0, resultado: 0 });
+    }
+  }
   if (a === "dia" || a === "mes" || a === "ano") {
     const p: Periodicidade = a === "dia" ? "diario" : a === "mes" ? "mensal" : "anual";
     for (const c of colunasDoPeriodo(p, intervalo.inicio, intervalo.fim)) {

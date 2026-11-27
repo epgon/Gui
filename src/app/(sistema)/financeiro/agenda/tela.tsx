@@ -17,7 +17,8 @@ import { formatarData } from "@/lib/datas";
 import { formatarCentavos } from "@/lib/dinheiro";
 import { agruparPorDia, gradeDoMes, resumirDia } from "@/lib/agenda/regras";
 import type { LinhaLista, Opcoes, Resumo } from "@/lib/lancamentos/tipos";
-import { BotaoAtalho, LinhaComFilhos } from "../lancamentos/linhas";
+import { preferenciaPadrao } from "@/lib/listagem/telas";
+import { BotaoAtalho, CabecalhoLinhas, LinhaComFilhos, visualDe } from "../lancamentos/linhas";
 import { SITUACOES } from "../lancamentos/tela";
 import { useAcoesLista } from "../lancamentos/use-acoes-lista";
 
@@ -190,6 +191,7 @@ function ModalDia({ dia, linhas, opcoes, hoje, destino, aoFechar }: { dia: strin
       (!situacao || (situacao === "nao_realizado" ? l.situacao !== "realizado" : l.situacao === situacao)),
   );
   const r = resumirDia(visiveis);
+  const visual = visualDe(preferenciaPadrao("lancamentos"), hoje);
   const [a, m, d] = dia.split("-");
   const semana = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"][new Date(Date.UTC(+a, +m - 1, +d)).getUTCDay()];
 
@@ -244,21 +246,11 @@ function ModalDia({ dia, linhas, opcoes, hoje, destino, aoFechar }: { dia: strin
           <div className="overflow-hidden rounded-lg border border-borda">
             <div className="max-h-[50vh] overflow-auto">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 border-b border-borda bg-subcabecalho text-xs uppercase tracking-wide text-gray-500">
-                  <tr>
-                    <th className="w-6 px-1 py-2" />
-                    <th className="w-8 px-1 py-2" />
-                    <th className="px-3 py-2 text-left font-semibold">Data</th>
-                    <th className="px-3 py-2 text-left font-semibold">Descrição</th>
-                    <th className="px-3 py-2 text-right font-semibold">Valor</th>
-                    <th className="px-3 py-2 text-center font-semibold">Situação</th>
-                    <th className="w-10 px-3 py-2" />
-                  </tr>
-                </thead>
+                <CabecalhoLinhas visual={visual} className="sticky top-0 z-10" />
                 <tbody>
                   {visiveis.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                      <td colSpan={20} className="px-4 py-8 text-center text-gray-500">
                         {linhas.length ? "Nenhum lançamento com esses filtros." : "Nenhum lançamento neste dia. Use Adicionar para lançar."}
                       </td>
                     </tr>
@@ -267,6 +259,7 @@ function ModalDia({ dia, linhas, opcoes, hoje, destino, aoFechar }: { dia: strin
                       <LinhaComFilhos
                         key={l.chave}
                         linha={l}
+                        visual={visual}
                         ocultar={false}
                         marcado={false}
                         aoAbrir={acoes.abrirLinha(l) ?? (() => setExpandidas((e) => (e.includes(l.chave) ? e.filter((x) => x !== l.chave) : [...e, l.chave])))}

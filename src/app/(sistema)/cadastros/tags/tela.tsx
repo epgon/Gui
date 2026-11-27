@@ -13,7 +13,7 @@ import { FaixaErro } from "@/components/ui/faixa-erro";
 import { Tabela } from "@/components/ui/tabela";
 import { CampoAuxiliarFormulario } from "@/components/listagem/campo-auxiliar";
 import { comComuns, MarcaNovo } from "@/components/listagem/colunas-comuns";
-import { useRotuloAuxiliar } from "@/components/listagem/configurar-listagem";
+import { useRotuloAuxiliar } from "@/components/listagem/use-rotulo-auxiliar";
 import { colunasVisiveis, type PreferenciaListagem } from "@/lib/listagem/telas";
 import type { Situacao } from "@/lib/cadastros/filtros";
 import { alterarSituacaoTag, salvarTag, type DadosTag } from "./acoes";
@@ -44,6 +44,7 @@ export function TelaTags({ preferencia, linhas, total, filtros, caminho }: {
         vazio={filtros.busca ? "Nenhuma tag encontrada com essa busca." : "Nenhuma tag cadastrada. Clique em Adicionar para criar a primeira."}
         compacta={preferencia.compactar}
         destacarPares={preferencia.destacarPares}
+        configuracao={{ tela: "tags", pref: preferencia }}
         colunas={colunasVisiveis("tags", comComuns<Linha>([
           {
             chave: "tag",
@@ -81,7 +82,7 @@ export function TelaTags({ preferencia, linhas, total, filtros, caminho }: {
           },
         ], rotuloAux), preferencia)}
       />
-      <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={preferencia.porPagina} total={total} />
+      <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={preferencia.porPagina} semPaginacao={preferencia.semPaginacao} total={total} />
 
       <ModalCadastro
         formulario={form}

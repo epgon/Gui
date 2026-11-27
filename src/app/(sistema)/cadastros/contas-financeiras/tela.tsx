@@ -19,7 +19,7 @@ import { Botao } from "@/components/ui/botao";
 import { Tabela } from "@/components/ui/tabela";
 import { CampoAuxiliarFormulario } from "@/components/listagem/campo-auxiliar";
 import { comComuns, MarcaNovo } from "@/components/listagem/colunas-comuns";
-import { useRotuloAuxiliar } from "@/components/listagem/configurar-listagem";
+import { useRotuloAuxiliar } from "@/components/listagem/use-rotulo-auxiliar";
 import { colunasVisiveis, type PreferenciaListagem } from "@/lib/listagem/telas";
 import { Valor } from "@/components/ui/valor";
 import type { Situacao } from "@/lib/cadastros/filtros";
@@ -106,6 +106,7 @@ export function TelaContas({ preferencia, linhas, total, filtros, caminho, banco
         }
         compacta={preferencia.compactar}
         destacarPares={preferencia.destacarPares}
+        configuracao={{ tela: "contas-financeiras", pref: preferencia }}
         colunas={colunasVisiveis("contas-financeiras", comComuns<Linha>([
           {
             chave: "conta",
@@ -186,7 +187,7 @@ export function TelaContas({ preferencia, linhas, total, filtros, caminho, banco
           },
         ], rotuloAux), preferencia)}
       />
-      <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={preferencia.porPagina} total={total} />
+      <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={preferencia.porPagina} semPaginacao={preferencia.semPaginacao} total={total} />
 
       {detalhando !== null && <DetalhandoConta key={detalhando} contaId={detalhando} aoFechar={() => setDetalhando(null)} />}
 

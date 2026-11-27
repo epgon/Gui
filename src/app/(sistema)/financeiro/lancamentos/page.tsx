@@ -3,7 +3,9 @@ import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { parametro, type ParametrosBusca } from "@/lib/cadastros/filtros";
 import { hojeIso } from "@/lib/datas";
 import { carregarOpcoes, lerFiltros, listarLancamentos } from "@/lib/lancamentos/consultas";
-import { camposLancamentos } from "@/lib/lancamentos/avancado";
+import { camposLancamentos, LEITORES_ORDENACAO_LANCAMENTOS } from "@/lib/lancamentos/avancado";
+import { ordenarPorVarios } from "@/lib/listagem/avancado";
+import { lerPreferencia, paginar } from "@/lib/listagem/servidor";
 import { mesDe } from "@/lib/lancamentos/regras";
 import { realizarAutomaticos } from "@/lib/recorrentes/servidor";
 import { TelaLancamentos } from "./tela";
@@ -17,7 +19,16 @@ export default async function PaginaLancamentos({ searchParams }: { searchParams
   await realizarAutomaticos(hoje);
   const sp = await searchParams;
   const f = lerFiltros(sp, hoje);
-  const [{ linhas, resumo }, opcoes] = await Promise.all([listarLancamentos(f, hoje), carregarOpcoes()]);
+  const [{ linhas: doMes, resumo }, opcoes, pref] = await Promise.all([listarLancamentos(f, hoje), carregarOpcoes(), lerPreferencia("lancamentos")]);
+  // Ordem das Configurações da Listagem (padrão: por data); o Saldo Acumulado segue a ordem exibida.
+  const ordenadas = ordenarPorVarios(doMes, pref.ordenacao.map((o) => ({ leitor: LEITORES_ORDENACAO_LANCAMENTOS[o.campo], direcao: o.direcao })));
+  const saldos: Record<string, number | null> = {};
+  let corrido = resumo.saldoAnterior;
+  for (const l of ordenadas) {
+    corrido = corrido === null ? null : corrido + l.valorCentavos;
+    saldos[l.chave] = corrido;
+  }
+  const { linhas, total, pagina } = paginar(ordenadas, Number(parametro(sp, "pagina")) || 1, pref.porPagina, pref.semPaginacao);
   const todas = { valor: "", rotulo: "Todas" };
   const mantidos = { mes: f.mes, aba: f.aba === "todos" ? "" : f.aba, destino: f.destino, situacao: f.situacao, busca: f.busca, detalhar: f.detalhar ? "1" : "" };
 
@@ -26,7 +37,7 @@ export default async function PaginaLancamentos({ searchParams }: { searchParams
       <main className="min-w-0 flex-1">
         <CabecalhoPagina titulo="Lançamentos" trilha="Financeiro" />
         <div className="space-y-4 p-6">
-          <TelaLancamentos linhas={linhas} resumo={resumo} filtros={f} opcoes={opcoes} hoje={hoje} mes={mesDe(f.mes)} caminho={CAMINHO} abrirNovo={parametro(sp, "novo")} />
+          <TelaLancamentos linhas={linhas} total={total} pagina={pagina} saldos={saldos} preferencia={pref} resumo={resumo} filtros={f} opcoes={opcoes} hoje={hoje} mes={mesDe(f.mes)} caminho={CAMINHO} abrirNovo={parametro(sp, "novo")} />
         </div>
       </main>
       <PainelFiltros caminho={CAMINHO} avancado={{ campos: camposLancamentos(opcoes), valor: f.avancado }}>
@@ -36,14 +47,14 @@ export default async function PaginaLancamentos({ searchParams }: { searchParams
             <input key={k} type="hidden" name={k} value={v} />
           ))}
         <FiltroSelecao
-          nome="categoria"
+          nome="categoria" operador={{ nome: "categoria_op", valor: f.categoriaOp }}
           rotulo="Categorias"
           valor={f.categoria}
           opcoes={[todas, ...opcoes.categorias.map((c) => ({ valor: String(c.id), rotulo: "  ".repeat(c.nivel - 1) + c.rotulo }))]}
         />
-        <FiltroSelecao nome="forma" rotulo="Formas de Pagamento" valor={f.forma} opcoes={[todas, ...opcoes.formas.map((o) => ({ valor: String(o.id), rotulo: o.rotulo }))]} />
-        <FiltroSelecao nome="contato" rotulo="Clientes e Fornecedores" valor={f.contato} opcoes={[{ valor: "", rotulo: "Todos" }, ...opcoes.contatos.map((o) => ({ valor: String(o.id), rotulo: o.rotulo }))]} />
-        <FiltroSelecao nome="tag" rotulo="Tags" valor={f.tag} opcoes={[todas, ...opcoes.tags.map((o) => ({ valor: String(o.id), rotulo: o.rotulo }))]} />
+        <FiltroSelecao nome="forma" operador={{ nome: "forma_op", valor: f.formaOp }} rotulo="Formas de Pagamento" valor={f.forma} opcoes={[todas, ...opcoes.formas.map((o) => ({ valor: String(o.id), rotulo: o.rotulo }))]} />
+        <FiltroSelecao nome="contato" operador={{ nome: "contato_op", valor: f.contatoOp }} rotulo="Clientes e Fornecedores" valor={f.contato} opcoes={[{ valor: "", rotulo: "Todos" }, ...opcoes.contatos.map((o) => ({ valor: String(o.id), rotulo: o.rotulo }))]} />
+        <FiltroSelecao nome="tag" operador={{ nome: "tag_op", valor: f.tagOp }} rotulo="Tags" valor={f.tag} opcoes={[todas, ...opcoes.tags.map((o) => ({ valor: String(o.id), rotulo: o.rotulo }))]} />
       </PainelFiltros>
     </>
   );

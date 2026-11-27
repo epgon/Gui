@@ -19,7 +19,7 @@ export default async function PaginaAgenda({ searchParams }: { searchParams: Pro
   const sp = await searchParams;
   // A agenda usa a mesma lista de Lançamentos do mês (com recorrentes previstos e faturas), sem os outros filtros.
   const base = lerFiltros(sp, hoje);
-  const f = { ...base, aba: "todos" as const, situacao: "" as const, busca: "", detalhar: false, categoria: "", forma: "", contato: "", tag: "" };
+  const f = { ...base, aba: "todos" as const, situacao: "" as const, busca: "", detalhar: false, categoria: "", forma: "", contato: "", tag: "", categoriaOp: "" as const, formaOp: "" as const, contatoOp: "" as const, tagOp: "" as const };
   const [{ linhas, resumo }, opcoes] = await Promise.all([listarLancamentos(f, hoje), carregarOpcoes()]);
   return (
     <>

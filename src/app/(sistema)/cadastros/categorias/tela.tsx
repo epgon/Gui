@@ -20,7 +20,7 @@ import { Botao } from "@/components/ui/botao";
 import { OrganizarCategorias } from "./organizar";
 import { CampoAuxiliarFormulario } from "@/components/listagem/campo-auxiliar";
 import { comComuns, MarcaNovo } from "@/components/listagem/colunas-comuns";
-import { useRotuloAuxiliar } from "@/components/listagem/configurar-listagem";
+import { useRotuloAuxiliar } from "@/components/listagem/use-rotulo-auxiliar";
 import { colunasVisiveis, type PreferenciaListagem } from "@/lib/listagem/telas";
 import { type CategoriaNaArvore, NIVEL_MAXIMO, rotuloCategoria } from "@/lib/categorias";
 import { cn } from "@/lib/cn";
@@ -141,11 +141,11 @@ export function TelaCategorias({ preferencia, linhas, arvore, abas, aba, filtros
         desabilitado: paiInativo,
         dica: paiInativo ? "A categoria pai está inativa. Ative-a para clonar." : undefined,
       },
+      { separador: true },
       {
         rotulo: "Adicionar Filho",
         icone: <Plus className="h-4 w-4" />,
         aoClicar: () => abrirNovo(l.id),
-        separar: true,
         desabilitado: !podeTerFilho,
         dica: podeTerFilho ? undefined : l.ativo ? `As categorias vão até ${NIVEL_MAXIMO} níveis.` : "Ative a categoria antes de adicionar filhos.",
       },
@@ -155,11 +155,11 @@ export function TelaCategorias({ preferencia, linhas, arvore, abas, aba, filtros
       ...(situacaoVisivel
         ? []
         : [{ rotulo: (l.ativo ? "Inativar" : "Ativar") + (l.quantidadeFilhas ? " (com as filhas)" : ""), icone: <Power className="h-4 w-4" />, aoClicar: () => situacao.alternar(l.id, l.ativo) }]),
+      { separador: true },
       {
         rotulo: "Excluir",
         icone: <Trash2 className="h-4 w-4" />,
         aoClicar: () => setExcluindo(l),
-        separar: true,
         perigo: true,
         desabilitado: !!l.motivoNaoExcluir,
         dica: l.motivoNaoExcluir ?? undefined,
@@ -211,6 +211,7 @@ export function TelaCategorias({ preferencia, linhas, arvore, abas, aba, filtros
         vazio="Nenhuma categoria encontrada com esses filtros."
         compacta={preferencia.compactar}
         destacarPares={preferencia.destacarPares}
+        configuracao={{ tela: "categorias", pref: preferencia }}
         colunas={colunasVisiveis("categorias", comComuns<Linha>([
           { chave: "cor", titulo: <span className="sr-only">Cor</span>, render: (l) => <Bolinha cor={l.corEfetiva} /> },
           {

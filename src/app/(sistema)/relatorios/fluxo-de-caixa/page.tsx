@@ -45,7 +45,7 @@ export default async function PaginaFluxoDeCaixa({ searchParams }: { searchParam
   }
 
   await realizarAutomaticos(hoje);
-  const [{ filtros, fluxo }, opcoes] = await Promise.all([calcularFluxoDeCaixa(sp, periodicidade, hoje), carregarOpcoes()]);
+  const [{ filtros, inclusoes, fluxo }, opcoes] = await Promise.all([calcularFluxoDeCaixa(sp, periodicidade, hoje), carregarOpcoes()]);
   const parametros = parametrosDosFiltros(filtros);
   const mantidos = { ...parametros, periodo: periodicidade, categoria: "", forma: "", contato: "", tag: "" };
   const limite = periodicidade === "diario" ? `${LIMITE_DIARIO} dias` : periodicidade === "anual" ? `${LIMITES.ano} anos` : `${LIMITES.mes} meses`;
@@ -64,6 +64,7 @@ export default async function PaginaFluxoDeCaixa({ searchParams }: { searchParam
             granularidade={periodicidade === "diario" ? "dia" : periodicidade === "anual" ? "ano" : "mes"}
             parametros={parametros}
             destinos={opcoes.destinos}
+            inclusoes={inclusoes}
           />
           <TabelaFluxo fluxo={fluxo} />
           <p className="text-xs text-gray-500">

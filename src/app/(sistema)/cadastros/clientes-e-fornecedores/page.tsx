@@ -18,7 +18,7 @@ export default async function PaginaContatos({ searchParams }: { searchParams: P
   const [preferencia, campos] = await Promise.all([lerPreferencia(TELA), camposAvancados(TELA)]);
   const r = await carregarContatos(sp, preferencia);
   const { f, papel, pessoa, cidade, uf } = r;
-  const pagina = paginar(r.linhas, f.pagina, preferencia.porPagina);
+  const pagina = paginar(r.linhas, f.pagina, preferencia.porPagina, preferencia.semPaginacao);
 
   return (
     <MolduraLista

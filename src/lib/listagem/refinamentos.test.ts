@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { codificarFiltros, descreverFiltro, filtrarAvancado, lerFiltrosAvancados, ordenarPor, passaCondicao, type CampoAvancado } from "./avancado";
+import { codificarFiltros, descreverFiltro, filtrarAvancado, lerFiltrosAvancados, ordenarPor, ordenarPorVarios, passaCondicao, type CampoAvancado } from "./avancado";
 import { colunasVisiveis, normalizarPreferencia, preferenciaPadrao } from "./telas";
 import { conferirArvore, moverNo, moverPorSeta, nivelDe, type No } from "@/lib/categorias-organizar";
 import { diaDoMesValido, feriadosSugeridos, pascoa } from "@/lib/parametros/feriados";
@@ -15,6 +15,26 @@ const campos: CampoAvancado[] = [
   { chave: "ativo", rotulo: "Ativo", tipo: "booleano" },
   { chave: "tags", rotulo: "Tag", tipo: "lista", origem: "Tag", opcoes: [{ valor: "Casa", rotulo: "Casa" }] },
 ];
+
+describe("ordenação por vários campos", () => {
+  const linhas = [
+    { a: "x", b: 2, i: 0 },
+    { a: "y", b: 1, i: 1 },
+    { a: "x", b: 1, i: 2 },
+    { a: "", b: 0, i: 3 },
+    { a: "x", b: 1, i: 4 },
+  ];
+  it("desempata pelo segundo campo, respeita a direção de cada um e é estável", () => {
+    const r = ordenarPorVarios(linhas, [
+      { leitor: (l) => l.a, direcao: "asc" },
+      { leitor: (l) => l.b, direcao: "desc" },
+    ]);
+    expect(r.map((l) => l.i)).toEqual([0, 2, 4, 1, 3]);
+  });
+  it("sem critérios válidos mantém a ordem", () => {
+    expect(ordenarPorVarios(linhas, [{ leitor: undefined, direcao: "asc" }])).toBe(linhas);
+  });
+});
 
 describe("Filtro Avançado", () => {
   it("lê e codifica o parâmetro av, descartando o que for inválido", () => {
@@ -72,9 +92,30 @@ describe("Configurações da Listagem", () => {
     expect(p.colunas).toContain("tipo");
     expect(p.colunas).not.toContain("inexistente");
     expect(p.porPagina).toBe(50);
-    expect(p.ordenacao).toBeNull();
+    expect(p.ordenacao).toEqual([]);
     expect(p.compactar).toBe(true);
     expect(normalizarPreferencia("contas-financeiras", { porPagina: 7 }).porPagina).toBe(20);
+  });
+
+  it("aceita ordenação múltipla, o formato antigo e descarta campos inválidos ou repetidos", () => {
+    const o = (ordenacao: unknown) => normalizarPreferencia("contas-financeiras", { ordenacao }).ordenacao;
+    expect(o([{ campo: "banco", direcao: "desc" }, { campo: "tipo" }, { campo: "banco" }, { campo: "nada" }])).toEqual([
+      { campo: "banco", direcao: "desc" },
+      { campo: "tipo", direcao: "asc" },
+    ]);
+    expect(o({ campo: "tipo", direcao: "desc" })).toEqual([{ campo: "tipo", direcao: "desc" }]);
+    expect(o([])).toEqual([]);
+    expect(normalizarPreferencia("categorias", { ordenacao: [{ campo: "nome" }] }).ordenacao).toEqual([]);
+  });
+
+  it("lê Sem Paginação e os destaques, com os três ligados por padrão", () => {
+    const padrao = preferenciaPadrao("contas-financeiras");
+    expect(padrao.semPaginacao).toBe(false);
+    expect(padrao.destaques).toEqual({ hoje: true, vencidos: true, situacao: true });
+    const p = normalizarPreferencia("contas-financeiras", { semPaginacao: true, destaques: { hoje: false, vencidos: "x" } });
+    expect(p.semPaginacao).toBe(true);
+    expect(p.destaques).toEqual({ hoje: false, vencidos: true, situacao: true });
+    expect(normalizarPreferencia("contas-financeiras", { porPagina: 15 }).porPagina).toBe(15);
   });
 
   it("esconde só as colunas configuráveis desligadas", () => {
@@ -211,5 +252,17 @@ describe("Notificações e Auditoria", () => {
     expect(linhas.find((l) => l.valor === "123,45")).toBeTruthy();
     expect(linhas.find((l) => l.antes === "A")).toMatchObject({ valor: "B" });
     expect(linhasDosDados({ antes: 1, depois: 2 })).toEqual([{ campo: "Valor", antes: "1", valor: "2" }]);
+  });
+});
+
+describe("Lançamentos nas Configurações da Listagem", () => {
+  it("tem as colunas de fábrica, a ordenação por data e aceita só os campos de ordenação próprios", () => {
+    const padrao = preferenciaPadrao("lancamentos");
+    expect(padrao.colunas).toEqual(["data", "banco", "contato", "cor", "descricao", "valor", "situacao"]);
+    expect(padrao.ordenacao).toEqual([{ campo: "data", direcao: "asc" }]);
+    const p = normalizarPreferencia("lancamentos", {
+      ordenacao: [{ campo: "valor", direcao: "desc" }, { campo: "situacao", direcao: "asc" }, { campo: "documento" }],
+    });
+    expect(p.ordenacao).toEqual([{ campo: "valor", direcao: "desc" }, { campo: "documento", direcao: "asc" }]);
   });
 });

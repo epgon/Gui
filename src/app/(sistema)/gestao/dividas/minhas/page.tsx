@@ -22,7 +22,7 @@ export default async function PaginaMinhasDividas({ searchParams }: { searchPara
   await realizarAutomaticos(hoje);
   const [dados, abertas, opcoes, categorias, parametros, campos] = await Promise.all([carregarMinhasDividas(sp, hoje), carregarContasEmAberto(hoje), carregarOpcoes(), categoriasDeDividas(), lerParametros(), camposAvancados("dividas")]);
   const f = dados.f;
-  const pagina = paginar(dados.linhas, f.pagina, dados.preferencia.porPagina);
+  const pagina = paginar(dados.linhas, f.pagina, dados.preferencia.porPagina, dados.preferencia.semPaginacao);
   const contas = opcoes.destinos.filter((d) => d.grupo === "Contas" && d.ativo);
   const contaPadrao = contas[0]?.valor.replace("conta:", "") ?? "";
   const abrirDetalhe = /^\d+$/.test(parametro(sp, "detalhar")) ? Number(parametro(sp, "detalhar")) : null;

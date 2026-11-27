@@ -16,7 +16,18 @@ export type TelaListagem = {
   auxiliar?: "contas" | "cartoes" | "categorias" | "contatos" | "formas" | "tags";
   /** A lista tem ordem própria (árvore das categorias): sem a aba Ordenação. */
   semOrdenacao?: boolean;
+  /** Campos oferecidos na aba Ordenação, quando diferem dos do Filtro Avançado (padrão: `campos`). */
+  camposOrdenacao?: { chave: string; rotulo: string }[];
+  /** Ordenação de fábrica (padrão: nenhuma, a ordem que vem do banco). */
+  ordenacaoPadrao?: Ordenacao[];
+  /** A lista pode destacar registros de hoje, vencidos e a situação (aba Outros). */
+  destaques?: boolean;
 };
+
+/** Campos da aba Ordenação da tela. */
+export function camposDeOrdenacao(def: TelaListagem): { chave: string; rotulo: string }[] {
+  return def.camposOrdenacao ?? def.campos;
+}
 
 const SITUACAO: CampoAvancado = { chave: "situacao", rotulo: "Situação", tipo: "lista", opcoes: [{ valor: "Ativo", rotulo: "Ativo" }, { valor: "Inativo", rotulo: "Inativo" }] };
 const comuns = (aux: boolean): CampoAvancado[] => [
@@ -36,6 +47,49 @@ const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "
 const SIM_NAO: CampoAvancado["tipo"] = "booleano";
 
 export const TELAS_LISTAGEM: Record<string, TelaListagem> = {
+  lancamentos: {
+    titulo: "Lançamentos",
+    destaques: true,
+    ordenacaoPadrao: [{ campo: "data", direcao: "asc" }],
+    colunas: [
+      { chave: "codigo", rotulo: "Código", padrao: false },
+      { chave: "data", rotulo: "Data", fixa: true, padrao: true },
+      { chave: "dataCompra", rotulo: "Data de Compra", padrao: false },
+      { chave: "dataReferencia", rotulo: "Data de Referência", padrao: false },
+      { chave: "dataPagamento", rotulo: "Data de Pagamento", padrao: false },
+      { chave: "banco", rotulo: "Logotipo do Banco ou Cartão", padrao: true },
+      { chave: "conta", rotulo: "Conta Financeira ou Cartão", padrao: false },
+      { chave: "contato", rotulo: "Cliente ou Fornecedor", padrao: true },
+      { chave: "cor", rotulo: "Cor da Categoria", padrao: true },
+      { chave: "descricao", rotulo: "Descrição", fixa: true, padrao: true },
+      { chave: "documento", rotulo: "Documento", padrao: false },
+      { chave: "categoria", rotulo: "Categoria", padrao: false },
+      { chave: "forma", rotulo: "Forma de Pagamento", padrao: false },
+      { chave: "tags", rotulo: "Tags", padrao: false },
+      { chave: "observacao", rotulo: "Observação", padrao: false },
+      { chave: "anexos", rotulo: "Anexos", padrao: false },
+      { chave: "valorPago", rotulo: "Valor Pago", padrao: false },
+      { chave: "valor", rotulo: "Valor", fixa: true, padrao: true },
+      { chave: "situacao", rotulo: "Situação", padrao: true },
+      { chave: "saldo", rotulo: "Saldo Acumulado", padrao: false },
+    ],
+    // O Filtro Avançado de Lançamentos tem campos próprios (lib/lancamentos/avancado.ts): aqui só a ordenação.
+    campos: [],
+    camposOrdenacao: [
+      { chave: "codigo", rotulo: "Código" },
+      { chave: "data", rotulo: "Data" },
+      { chave: "dataCompra", rotulo: "Data de Compra" },
+      { chave: "dataReferencia", rotulo: "Data de Referência" },
+      { chave: "dataPagamento", rotulo: "Data de Pagamento" },
+      { chave: "conta", rotulo: "Conta Financeira ou Cartão" },
+      { chave: "contato", rotulo: "Cliente ou Fornecedor" },
+      { chave: "descricao", rotulo: "Descrição" },
+      { chave: "documento", rotulo: "Documento" },
+      { chave: "categoria", rotulo: "Categoria" },
+      { chave: "forma", rotulo: "Forma de Pagamento" },
+      { chave: "valor", rotulo: "Valor" },
+    ],
+  },
   dividas: {
     titulo: "Minhas Dívidas",
     colunas: [
@@ -214,42 +268,75 @@ export const TELAS_LISTAGEM: Record<string, TelaListagem> = {
   },
 };
 
-export const POR_PAGINA_OPCOES = [10, 20, 50, 100] as const;
+export const POR_PAGINA_OPCOES = [10, 15, 20, 30, 50, 100] as const;
 
-export type Ordenacao = { campo: string; direcao: "asc" | "desc" } | null;
+/** Um critério de ordenação; a lista pode ter vários, na ordem de prioridade. */
+export type Ordenacao = { campo: string; direcao: "asc" | "desc" };
+
+export type Destaques = { hoje: boolean; vencidos: boolean; situacao: boolean };
+export const DESTAQUES_PADRAO: Destaques = { hoje: true, vencidos: true, situacao: true };
+
+/** Tela gravada à parte com a aparência que vale para todas as listas. */
+export const TELA_GLOBAL = "*";
 
 export type PreferenciaListagem = {
   /** Colunas visíveis. */
   colunas: string[];
-  ordenacao: Ordenacao;
+  ordenacao: Ordenacao[];
   porPagina: number;
+  /** Mostra todos os registros de uma vez, sem páginas. */
+  semPaginacao: boolean;
+  /** Aparência em todas as listagens. */
   destacarPares: boolean;
   compactar: boolean;
+  destaques: Destaques;
 };
 
 export function preferenciaPadrao(tela: string): PreferenciaListagem {
   const t = TELAS_LISTAGEM[tela];
-  return { colunas: t ? t.colunas.filter((c) => c.padrao || c.fixa).map((c) => c.chave) : [], ordenacao: null, porPagina: 20, destacarPares: true, compactar: false };
+  return {
+    colunas: t ? t.colunas.filter((c) => c.padrao || c.fixa).map((c) => c.chave) : [],
+    ordenacao: t?.ordenacaoPadrao ?? [],
+    porPagina: 20,
+    semPaginacao: false,
+    destacarPares: true,
+    compactar: false,
+    destaques: { ...DESTAQUES_PADRAO },
+  };
 }
 
+type Gravada = Partial<{ colunas: unknown; ordenacao: unknown; porPagina: unknown; semPaginacao: unknown; destacarPares: unknown; compactar: unknown; destaques: unknown }>;
+
 /** Confere o que veio do banco (ou da tela): só colunas e campos que existem, fixas sempre visíveis. */
-export function normalizarPreferencia(tela: string, gravada: Partial<{ colunas: unknown; ordenacao: unknown; porPagina: unknown; destacarPares: unknown; compactar: unknown }> | null | undefined): PreferenciaListagem {
+export function normalizarPreferencia(tela: string, gravada: Gravada | null | undefined): PreferenciaListagem {
   const t = TELAS_LISTAGEM[tela];
   const padrao = preferenciaPadrao(tela);
   if (!t || !gravada) return padrao;
   const existentes = t.colunas.map((c) => c.chave);
   const lista = Array.isArray(gravada.colunas) ? gravada.colunas.filter((c): c is string => typeof c === "string" && existentes.includes(c)) : [];
   const colunas = lista.length ? [...new Set([...t.colunas.filter((c) => c.fixa).map((c) => c.chave), ...lista])] : padrao.colunas;
-  const o = gravada.ordenacao as { campo?: unknown; direcao?: unknown } | null;
-  const ordenacao: Ordenacao =
-    !t.semOrdenacao && o && typeof o.campo === "string" && t.campos.some((c) => c.chave === o.campo) ? { campo: o.campo, direcao: o.direcao === "desc" ? "desc" : "asc" } : null;
+  // Aceita também o formato antigo (um só critério, fora de uma lista).
+  const bruta = gravada.ordenacao === undefined || gravada.ordenacao === null ? null : Array.isArray(gravada.ordenacao) ? gravada.ordenacao : [gravada.ordenacao];
+  const permitidos = camposDeOrdenacao(t).map((c) => c.chave);
+  const ordenacao: Ordenacao[] = t.semOrdenacao
+    ? []
+    : bruta === null
+      ? padrao.ordenacao
+      : bruta
+          .filter((o): o is { campo: string; direcao?: unknown } => !!o && typeof o === "object" && typeof (o as { campo?: unknown }).campo === "string" && permitidos.includes((o as { campo: string }).campo))
+          .map((o) => ({ campo: o.campo, direcao: o.direcao === "desc" ? ("desc" as const) : ("asc" as const) }))
+          .filter((o, i, todos) => todos.findIndex((x) => x.campo === o.campo) === i);
   const porPagina = (POR_PAGINA_OPCOES as readonly number[]).includes(Number(gravada.porPagina)) ? Number(gravada.porPagina) : padrao.porPagina;
+  const d = (gravada.destaques ?? {}) as Partial<Record<keyof Destaques, unknown>>;
+  const destaque = (k: keyof Destaques) => (typeof d[k] === "boolean" ? (d[k] as boolean) : DESTAQUES_PADRAO[k]);
   return {
     colunas,
     ordenacao,
     porPagina,
+    semPaginacao: gravada.semPaginacao === true,
     destacarPares: typeof gravada.destacarPares === "boolean" ? gravada.destacarPares : true,
     compactar: typeof gravada.compactar === "boolean" ? gravada.compactar : false,
+    destaques: { hoje: destaque("hoje"), vencidos: destaque("vencidos"), situacao: destaque("situacao") },
   };
 }
 

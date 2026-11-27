@@ -11,11 +11,13 @@ import { mesDe, situacaoDe, somarDias, valorComSinal, type Situacao } from "./re
 import { valorComSinalSql, valorRealizadoSql } from "./sql";
 import { filtrarAvancado, lerFiltrosAvancados } from "@/lib/listagem/avancado";
 import { CAMPOS_LANCAMENTOS_BASE, LEITORES_LANCAMENTOS } from "./avancado";
-import type { Aba, Filtros, FiltroSituacao, LinhaLista, Opcoes, Resumo } from "./tipos";
+import type { Aba, Filtros, FiltroSituacao, LinhaLista, OperadorFiltro, Opcoes, Resumo } from "./tipos";
 
 const { lancamento: l, contaFinanceira: conta, cartaoCredito: cartao, banco, categoria, contato, formaPagamento: forma, tag, lancamentoTag, lancamentoItem, anexo, fatura, divida } = schema;
 
 export { valorComSinalSql, valorRealizadoSql } from "./sql";
+
+const operador = (sp: ParametrosBusca, nome: string): OperadorFiltro => (parametro(sp, nome) === "dif" ? "dif" : "");
 
 export function lerFiltros(sp: ParametrosBusca, hoje = hojeIso()): Filtros {
   const mes = parametro(sp, "mes");
@@ -25,7 +27,7 @@ export function lerFiltros(sp: ParametrosBusca, hoje = hojeIso()): Filtros {
   const id = (nome: string) => (/^\d+$/.test(parametro(sp, nome)) ? parametro(sp, nome) : "");
   return {
     mes: /^\d{4}-(0[1-9]|1[0-2])$/.test(mes) ? mes : hoje.slice(0, 7),
-    aba: (["receitas", "despesas", "transferencias"].includes(aba) ? aba : "todos") as Aba,
+    aba: (["receitas", "despesas", "transferencias", "recorrentes"].includes(aba) ? aba : "todos") as Aba,
     destino: /^(conta|cartao):\d+$/.test(destino) ? destino : "",
     situacao: (["nao_realizado", "realizado", "a_vencer", "vencido"].includes(situacao) ? situacao : "") as FiltroSituacao,
     busca: parametro(sp, "busca").slice(0, 100),
@@ -34,6 +36,10 @@ export function lerFiltros(sp: ParametrosBusca, hoje = hojeIso()): Filtros {
     forma: id("forma"),
     contato: id("contato"),
     tag: id("tag"),
+    categoriaOp: operador(sp, "categoria_op"),
+    formaOp: operador(sp, "forma_op"),
+    contatoOp: operador(sp, "contato_op"),
+    tagOp: operador(sp, "tag_op"),
     avancado: parametro(sp, "av").slice(0, 2000),
   };
 }
@@ -41,7 +47,9 @@ export function lerFiltros(sp: ParametrosBusca, hoje = hojeIso()): Filtros {
 const passaSituacao = (s: Situacao, filtro: FiltroSituacao) =>
   !filtro || (filtro === "nao_realizado" ? s !== "realizado" : s === filtro);
 
-const passaAba = (aba: Aba, tipo: string, valor: number) => {
+const passaAba = (aba: Aba, x: LinhaLista) => {
+  const { tipo, valorCentavos: valor } = x;
+  if (aba === "recorrentes") return x.recorrenciaId !== null || x.previsto !== null;
   const transferencia = tipo === "transferencia_saida" || tipo === "transferencia_entrada";
   if (aba === "transferencias") return transferencia;
   if (aba === "receitas") return !transferencia && valor > 0;
@@ -72,16 +80,19 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
       or(contemTexto(l.descricao, f.busca), contemTexto(l.documento, f.busca), centavos !== null ? eq(sql`abs(${l.valorCentavos})`, Math.abs(centavos)) : undefined)!,
     );
   }
+  // DIFERENTE exclui o que tem aquele valor (lançamentos sem valor nenhum continuam aparecendo).
   if (f.categoria) {
     const todas = await db.select({ id: categoria.id, categoriaPaiId: categoria.categoriaPaiId }).from(categoria);
     const ids = [Number(f.categoria), ...descendentes(todas, Number(f.categoria))];
-    filtrosConteudo.push(
-      or(inArray(l.categoriaId, ids), sql`exists (select 1 from ${lancamentoItem} where ${lancamentoItem.lancamentoId} = ${l.id} and ${inArray(lancamentoItem.categoriaId, ids)})`)!,
-    );
+    const tem = or(inArray(l.categoriaId, ids), sql`exists (select 1 from ${lancamentoItem} where ${lancamentoItem.lancamentoId} = ${l.id} and ${inArray(lancamentoItem.categoriaId, ids)})`)!;
+    filtrosConteudo.push(f.categoriaOp === "dif" ? sql`not coalesce(${tem}, false)` : tem);
   }
-  if (f.forma) filtrosConteudo.push(eq(l.formaPagamentoId, Number(f.forma)));
-  if (f.contato) filtrosConteudo.push(eq(l.contatoId, Number(f.contato)));
-  if (f.tag) filtrosConteudo.push(sql`exists (select 1 from ${lancamentoTag} where ${lancamentoTag.lancamentoId} = ${l.id} and ${lancamentoTag.tagId} = ${Number(f.tag)})`);
+  if (f.forma) filtrosConteudo.push(f.formaOp === "dif" ? sql`${l.formaPagamentoId} is distinct from ${Number(f.forma)}` : eq(l.formaPagamentoId, Number(f.forma)));
+  if (f.contato) filtrosConteudo.push(f.contatoOp === "dif" ? sql`${l.contatoId} is distinct from ${Number(f.contato)}` : eq(l.contatoId, Number(f.contato)));
+  if (f.tag) {
+    const tem = sql`exists (select 1 from ${lancamentoTag} where ${lancamentoTag.lancamentoId} = ${l.id} and ${lancamentoTag.tagId} = ${Number(f.tag)})`;
+    filtrosConteudo.push(f.tagOp === "dif" ? sql`not ${tem}` : tem);
+  }
   const avancados = lerFiltrosAvancados(f.avancado, CAMPOS_LANCAMENTOS_BASE);
   const agruparFaturas = cartaoFiltro === null && filtrosConteudo.length === 0 && avancados.length === 0;
 
@@ -102,6 +113,9 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
       dataVencimento: l.dataVencimento,
       dataPagamento: l.dataPagamento,
       dataCompra: l.dataCompra,
+      dataReferencia: l.dataReferencia,
+      documento: l.documento,
+      valorPago: l.valorPagoCentavos,
       contaId: l.contaId,
       cartaoId: l.cartaoId,
       faturaId: l.faturaId,
@@ -162,6 +176,9 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
       data: x.dataVencimento,
       dataPagamento: x.dataPagamento,
       dataCompra: x.dataCompra,
+      dataReferencia: x.dataReferencia,
+      documento: x.documento,
+      valorPagoCentavos: x.valorPago === null ? null : Math.abs(Number(x.valorPago)),
       situacao: situacaoDe(x.dataVencimento, x.dataPagamento, hoje),
       contaOuCartao: x.contaNome ?? x.cartaoNome ?? "",
       bancoCodigo: x.bancoCodigo,
@@ -235,6 +252,9 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
         data: fa.dataVencimento,
         dataPagamento,
         dataCompra: null,
+        dataReferencia: null,
+        documento: null,
+        valorPagoCentavos: null,
         situacao: situacaoDe(fa.dataVencimento, dataPagamento, hoje),
         contaOuCartao: c?.nome ?? "",
         eCartao: true,
@@ -272,7 +292,7 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
     }
   }
 
-  linhas = linhas.filter((x) => passaAba(f.aba, x.tipo, x.valorCentavos) && passaSituacao(x.situacao, f.situacao));
+  linhas = linhas.filter((x) => passaAba(f.aba, x) && passaSituacao(x.situacao, f.situacao));
   if (avancados.length) linhas = filtrarAvancado(linhas, avancados, CAMPOS_LANCAMENTOS_BASE, LEITORES_LANCAMENTOS);
 
   const receitas = linhas.filter((x) => x.valorCentavos > 0).reduce((s, x) => s + x.valorCentavos, 0);
@@ -374,6 +394,9 @@ async function linhasPrevistas(
         data: perna.dataVencimento,
         dataPagamento: null,
         dataCompra: perna.dataCompra,
+        dataReferencia: null,
+        documento: null,
+        valorPagoCentavos: null,
         situacao: situacaoDe(perna.dataVencimento, null, o.hoje),
         contaOuCartao: lugar?.nome ?? "",
         bancoCodigo: lugar?.bancoCodigo ?? null,

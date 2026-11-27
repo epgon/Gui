@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, ArrowDown, ArrowLeftRight, ArrowUp, CheckCircle2, Circle, Clock, CreditCard, Landmark, MessageSquareText, Paperclip, Trash2 } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeftRight, ArrowUp, Check, CheckCircle2, Circle, Clock, CreditCard, Landmark, MessageSquareText, Paperclip, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { IconeBanco } from "@/components/cadastros/icone-banco";
 import { useSistema } from "@/components/layout/provedor-sistema";
@@ -14,6 +14,7 @@ import { cn } from "@/lib/cn";
 import { formatarData } from "@/lib/datas";
 import { formatarCentavos, lerValorEmCentavos } from "@/lib/dinheiro";
 import type { LinhaLista } from "@/lib/lancamentos/tipos";
+import { type Destaques, TELAS_LISTAGEM, type PreferenciaListagem } from "@/lib/listagem/telas";
 
 /* Peças da lista de lançamentos, usadas na tela Lançamentos e na Agenda. */
 
@@ -32,18 +33,6 @@ export function ValorOculto({ centavos, ocultar, className }: { centavos: number
   return ocultar ? <span className="font-semibold tracking-widest text-gray-400">•••••</span> : <Valor centavos={centavos} className={className} />;
 }
 
-export function FaixaSaldo({ rotulo, dica, centavos, ocultar, embutida, acao }: { rotulo: string; dica: string; centavos: number; ocultar: boolean; embutida?: boolean; acao?: React.ReactNode }) {
-  return (
-    <div className={cn("flex items-center justify-between gap-3 px-4 py-2.5 text-sm text-amarelo-texto", !embutida && "border-b border-amarelo-borda bg-amarelo")} title={dica}>
-      <span className="font-semibold">{rotulo}</span>
-      <span className="flex items-center gap-2">
-        <ValorOculto centavos={centavos} ocultar={ocultar} className="text-base" />
-        {acao}
-      </span>
-    </div>
-  );
-}
-
 export function IconeTipo({ l }: { l: LinhaLista }) {
   if (l.tipo === "transferencia_saida" || l.tipo === "transferencia_entrada") return <ArrowLeftRight className="h-4 w-4 text-verde" aria-label="Transferência" />;
   if (eFatura(l)) return <CreditCard className="h-4 w-4 text-despesa" aria-label="Fatura" />;
@@ -51,49 +40,52 @@ export function IconeTipo({ l }: { l: LinhaLista }) {
   return l.valorCentavos >= 0 ? <ArrowDown className="h-4 w-4 text-receita" aria-label="Receita" /> : <ArrowUp className="h-4 w-4 text-despesa" aria-label="Despesa" />;
 }
 
-export function EtiquetaSituacao({ l }: { l: LinhaLista }) {
+const SELO = "inline-flex items-center gap-1 whitespace-nowrap rounded border px-2 py-0.5 text-xs";
+const SELO_VERDE = "border-green-200 bg-green-50 text-green-700";
+const SELO_VERMELHO = "border-red-200 bg-red-50 text-red-600";
+const SELO_AZUL = "border-blue-200 bg-blue-50 text-receita";
+const SELO_NEUTRO = "border-gray-200 bg-gray-50 text-gray-600";
+
+/** Etiqueta retangular da situação, com o ícone depois do texto. Sem `colorida`, fica toda cinza. */
+export function EtiquetaSituacao({ l, colorida = true }: { l: LinhaLista; colorida?: boolean }) {
+  const cor = (c: string) => (colorida ? c : SELO_NEUTRO);
   if (eFatura(l)) {
     if (l.situacao === "realizado") {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-pago-fundo px-2 py-0.5 text-xs font-semibold text-pago-texto" title={l.dataPagamento ? `Paga em ${formatarData(l.dataPagamento)}` : undefined}>
-          <CheckCircle2 className="h-3.5 w-3.5" /> Paga
+        <span className={cn(SELO, cor(SELO_VERDE))} title={l.dataPagamento ? `Paga em ${formatarData(l.dataPagamento)}` : undefined}>
+          Paga <Check className="h-3 w-3" />
         </span>
       );
     }
     const fechada = l.faturaSituacao === "fechada";
     return (
       <span
-        className={cn(
-          "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold",
-          l.situacao === "vencido" ? "bg-orange-100 text-despesa" : fechada ? "bg-amber-100 text-amber-800" : "bg-gray-100 text-gray-600",
-        )}
+        className={cn(SELO, cor(l.situacao === "vencido" ? SELO_VERMELHO : fechada ? "border-amber-200 bg-amber-50 text-amber-800" : SELO_NEUTRO))}
         title={fechada ? "Fatura fechada: já pode ser paga" : "Fatura aberta: ainda recebe compras"}
       >
-        <CreditCard className="h-3.5 w-3.5" /> {l.situacao === "vencido" ? "Vencida" : fechada ? "Fechada" : "Aberta"}
+        {l.situacao === "vencido" ? "Vencida" : fechada ? "Fechada" : "Aberta"} <CreditCard className="h-3 w-3" />
       </span>
     );
   }
   if (l.situacao === "realizado") {
     const texto = l.tipo.startsWith("transferencia") ? "Transferido" : l.valorCentavos >= 0 ? "Recebido" : "Pago";
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-pago-fundo px-2 py-0.5 text-xs font-semibold text-pago-texto" title={l.dataPagamento ? `Em ${formatarData(l.dataPagamento)}` : undefined}>
-        <CheckCircle2 className="h-3.5 w-3.5" /> {texto}
+      <span className={cn(SELO, cor(SELO_VERDE))} title={l.dataPagamento ? `Em ${formatarData(l.dataPagamento)}` : undefined}>
+        {texto} <Check className="h-3 w-3" />
       </span>
     );
   }
+  const recorrente = !!l.recorrenciaId || !!l.previsto;
   if (l.situacao === "vencido") {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-despesa">
-        <AlertTriangle className="h-3.5 w-3.5" /> Vencido
+      <span className={cn(SELO, cor(SELO_VERMELHO))}>
+        Vencido {recorrente ? <Clock className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
       </span>
     );
   }
   return (
-    <span
-      className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-receita"
-      title={l.realizarAutomaticamente ? "Será realizado automaticamente no dia do vencimento" : l.recorrenciaId ? "Lançamento recorrente" : undefined}
-    >
-      {l.realizarAutomaticamente || l.recorrenciaId ? <Clock className="h-3.5 w-3.5" /> : <Circle className="h-3.5 w-3.5" />} A Vencer
+    <span className={cn(SELO, cor(SELO_AZUL))} title={l.realizarAutomaticamente ? "Será realizado automaticamente no dia do vencimento" : recorrente ? "Lançamento recorrente" : undefined}>
+      A Vencer {l.realizarAutomaticamente || recorrente ? <Clock className="h-3 w-3" /> : <Circle className="h-3 w-3" />}
     </span>
   );
 }
@@ -103,14 +95,91 @@ function EtiquetaValorDiferente({ atual, original, receita }: { atual: number; o
   const verbo = receita ? "Recebido" : "Pago";
   const texto = atual > original ? "Com juros" : "Parcial";
   return (
-    <span className="rounded bg-gray-100 px-1.5 text-xs text-gray-600" title={`${verbo} R$ ${formatarCentavos(atual)} de R$ ${formatarCentavos(original)}.`}>
+    <span className="rounded bg-gray-100 px-1.5 text-[11px] text-gray-600" title={`${verbo} R$ ${formatarCentavos(atual)} de R$ ${formatarCentavos(original)}.`}>
       {texto}
     </span>
   );
 }
 
-export function LinhaComFilhos({ linha: l, ocultar, marcado, aoMarcar, aoAbrir, menu, expandida, filhos, aoEditarFilho }: {
+/** Colunas da lista na ordem em que aparecem (as mesmas das Configurações da Listagem). */
+/** Colunas sem largura própria (extra vazio) ficam do tamanho do conteúdo; as de texto livre dividem o que sobra. */
+const TITULOS: Record<string, { titulo: string; alinhar?: "direita"; extra?: string }> = {
+  codigo: { titulo: "Código" },
+  data: { titulo: "Data" },
+  dataCompra: { titulo: "Data de Compra" },
+  dataReferencia: { titulo: "Data de Referência" },
+  dataPagamento: { titulo: "Data de Pagamento" },
+  banco: { titulo: "" },
+  conta: { titulo: "Conta ou Cartão" },
+  contato: { titulo: "Cliente ou Fornecedor", extra: "min-w-36" },
+  cor: { titulo: "" },
+  descricao: { titulo: "Descrição", extra: "min-w-48" },
+  documento: { titulo: "Documento" },
+  categoria: { titulo: "Categoria" },
+  forma: { titulo: "Forma de Pagamento" },
+  tags: { titulo: "Tags" },
+  observacao: { titulo: "Obs." },
+  anexos: { titulo: "Anexos" },
+  valorPago: { titulo: "Valor Pago", alinhar: "direita" },
+  valor: { titulo: "Valor", alinhar: "direita" },
+  situacao: { titulo: "" },
+  saldo: { titulo: "Saldo", alinhar: "direita" },
+};
+const ORDEM_COLUNAS = TELAS_LISTAGEM.lancamentos.colunas.map((c) => c.chave);
+
+/** Como a lista é desenhada: colunas visíveis, aparência e destaques (vêm das Configurações da Listagem). */
+export type VisualLinhas = {
+  /** Chaves das colunas visíveis (qualquer ordem; a ordem de exibição é a da tela). */
+  colunas: string[];
+  compacta: boolean;
+  zebra: boolean;
+  destaques: Destaques;
+  hoje: string;
+  /** Saldo Acumulado de cada linha (chave da linha); null = sem saldo (filtrando cartão). */
+  saldos?: Record<string, number | null>;
+};
+
+export function visualDe(pref: PreferenciaListagem, hoje: string, saldos?: VisualLinhas["saldos"]): VisualLinhas {
+  return { colunas: pref.colunas, compacta: pref.compactar, zebra: pref.destacarPares, destaques: pref.destaques, hoje, saldos };
+}
+
+const visiveis = (v: VisualLinhas) => ORDEM_COLUNAS.filter((c) => v.colunas.includes(c) && (c !== "saldo" || !!v.saldos));
+
+/** Cabeçalho da tabela: caixa de marcar, ícone do tipo, as colunas visíveis e a coluna do menu (com a engrenagem). */
+export function CabecalhoLinhas({ visual, marcarTodos, engrenagem, className }: {
+  visual: VisualLinhas;
+  className?: string;
+  marcarTodos?: { marcado: boolean; aoMudar: () => void };
+  engrenagem?: React.ReactNode;
+}) {
+  const p = visual.compacta ? "py-1.5" : "py-2.5";
+  const th = cn("px-3 text-left text-[11px] font-semibold uppercase tracking-wide whitespace-nowrap text-gray-600", p);
+  return (
+    <thead className={cn("border-b border-borda bg-white", className)}>
+      <tr>
+        <th className={cn("w-9 pr-0 pl-4", p)}>
+          {marcarTodos && <input type="checkbox" aria-label="Selecionar todos" checked={marcarTodos.marcado} onChange={marcarTodos.aoMudar} className="h-3.5 w-3.5 accent-verde" />}
+        </th>
+        <th className={cn("w-6 px-1", p)} />
+        {visiveis(visual).map((c) => {
+          const t = TITULOS[c];
+          return (
+            <th key={c} className={cn(th, t.alinhar === "direita" && "text-right", t.extra ?? "w-px")}>
+              {t.titulo || <span className="sr-only">{c === "banco" ? "Banco ou cartão" : c === "cor" ? "Cor da categoria" : "Situação"}</span>}
+            </th>
+          );
+        })}
+        <th className={cn("w-10 px-3 text-right", p)}>{engrenagem ?? <span className="sr-only">Opções</span>}</th>
+      </tr>
+    </thead>
+  );
+}
+
+const SELO_PEQUENO = "rounded bg-gray-100 px-1.5 text-[11px] text-gray-600";
+
+export function LinhaComFilhos({ linha: l, visual, ocultar, marcado, aoMarcar, aoAbrir, menu, expandida, filhos, aoEditarFilho }: {
   linha: LinhaLista;
+  visual: VisualLinhas;
   ocultar: boolean;
   marcado: boolean;
   aoMarcar?: () => void;
@@ -120,107 +189,174 @@ export function LinhaComFilhos({ linha: l, ocultar, marcado, aoMarcar, aoAbrir, 
   filhos: LinhaLista[];
   aoEditarFilho: (id: number) => void;
 }) {
+  const colunas = visiveis(visual);
   const fatura = eFatura(l);
+  const p = visual.compacta ? "py-0.5" : "py-2";
+  const td = cn("px-3 align-middle whitespace-nowrap text-gray-700", p);
+  const sinal = l.valorCentavos < 0 ? -1 : 1;
+  const d = visual.destaques;
+  // Vencidos em creme, o que vence hoje em verde bem claro (a marcação manual vence os dois).
+  const fundo = marcado
+    ? "bg-verde-claro/60"
+    : d.vencidos && l.situacao === "vencido"
+      ? "bg-orange-50/70"
+      : d.hoje && l.data === visual.hoje
+        ? "bg-verde-claro/50"
+        : visual.zebra && "even:bg-gray-50/70";
+  const valor = (centavos: number, extra?: string) => <ValorOculto centavos={centavos} ocultar={ocultar} className={cn("font-normal!", extra)} />;
+
+  const celula = (c: string): React.ReactNode => {
+    switch (c) {
+      case "codigo":
+        return l.id ?? "";
+      case "data":
+        return formatarData(l.data);
+      case "dataCompra":
+        return formatarData(l.dataCompra);
+      case "dataReferencia":
+        return formatarData(l.dataReferencia);
+      case "dataPagamento":
+        return formatarData(l.dataPagamento);
+      case "banco":
+        return <IconeBanco codigo={l.bancoCodigo} nome={l.bancoNome ?? "Outro"} className="h-6! w-6! text-[9px]!" />;
+      case "conta":
+        return l.contaOuCartao;
+      case "contato":
+        return l.contato ?? "";
+      case "cor":
+        return l.categoriaCor ? <span className="block h-2 w-2 rounded-full" style={{ background: l.categoriaCor }} title={l.categoria ?? undefined} /> : null;
+      case "descricao":
+        return (
+          <span className="flex flex-wrap items-center gap-1.5">
+            <button type="button" onClick={aoAbrir} className="text-left text-receita hover:underline">
+              {l.descricao}
+            </button>
+            {(l.parcelamentoId || l.parcela || l.recorrenciaId) && (
+              <span className="text-despesa" title={l.recorrenciaId ? "Recorrente" : "Parcelado"}>
+                *
+              </span>
+            )}
+            {fatura && <span className={SELO_PEQUENO}>{l.compras.length} {l.compras.length === 1 ? "compra" : "compras"}</span>}
+            {l.previsto && (
+              <span className={SELO_PEQUENO} title="Calculado a partir do recorrente. É gravado quando você paga, recebe ou edita.">
+                Previsto
+              </span>
+            )}
+            {l.parcela && !l.descricao.includes(l.parcela) && <span className={SELO_PEQUENO}>{l.parcela}</span>}
+            {l.formato === "detalhado" && <span className="rounded bg-verde-claro px-1.5 text-[11px] text-verde">Detalhado</span>}
+            {l.dividaId && l.dividaNome && (
+              <Link href={`/gestao/dividas/minhas?detalhar=${l.dividaId}`} className="rounded bg-red-50 px-1.5 text-[11px] text-despesa hover:underline" title={`Parte da dívida ${l.dividaNome}. Clique para abrir.`}>
+                Dívida
+              </Link>
+            )}
+            {l.restante && (
+              <span className="rounded bg-amarelo px-1.5 text-[11px] text-amarelo-texto" title="O que faltou pagar ou receber de um pagamento parcial.">
+                Restante
+              </span>
+            )}
+            {l.valorOriginalCentavos != null && <EtiquetaValorDiferente atual={Math.abs(l.valorCentavos)} original={l.valorOriginalCentavos} receita={l.valorCentavos >= 0} />}
+            {l.observacao && !colunas.includes("observacao") && <MessageSquareText className="h-3.5 w-3.5 text-amarelo-texto" aria-label="Tem observação" />}
+            {l.anexos > 0 && !colunas.includes("anexos") && <Paperclip className="h-3.5 w-3.5 text-gray-500" aria-label={`${l.anexos} anexo(s)`} />}
+            {!colunas.includes("tags") &&
+              l.tags.map((t) => (
+                <span key={t} className="rounded-full bg-verde-claro px-2 text-[11px] text-verde">
+                  {t}
+                </span>
+              ))}
+          </span>
+        );
+      case "documento":
+        return l.documento ?? "";
+      case "categoria":
+        return l.categoria ?? (l.itens.length ? "Detalhado" : "");
+      case "forma":
+        return l.forma ?? "";
+      case "tags":
+        return l.tags.length ? (
+          <span className="flex gap-1">
+            {l.tags.map((t) => (
+              <span key={t} className="rounded-full bg-verde-claro px-2 text-[11px] text-verde">
+                {t}
+              </span>
+            ))}
+          </span>
+        ) : null;
+      case "observacao":
+        return l.observacao ? <MessageSquareText className="h-3.5 w-3.5 text-amarelo-texto" aria-label="Tem observação" /> : null;
+      case "anexos":
+        return l.anexos > 0 ? (
+          <span className="inline-flex items-center gap-1">
+            <Paperclip className="h-3.5 w-3.5 text-gray-500" /> {l.anexos}
+          </span>
+        ) : null;
+      case "valorPago":
+        return l.valorPagoCentavos !== null ? valor(sinal * l.valorPagoCentavos) : null;
+      case "valor":
+        return valor(l.valorCentavos);
+      case "situacao":
+        return <EtiquetaSituacao l={l} colorida={d.situacao} />;
+      case "saldo": {
+        const saldo = visual.saldos?.[l.chave];
+        return saldo === undefined || saldo === null ? <span className="text-gray-400">—</span> : valor(saldo);
+      }
+    }
+    return null;
+  };
+  const alinhaDireita = (c: string) => TITULOS[c].alinhar === "direita";
+  // Linhas de baixo (itens do detalhado e compras da fatura): a descrição e o valor ficam nas colunas deles.
+  const linhaFilha = (chave: string, data: string, descricao: React.ReactNode, centavos: number) => (
+    <tr key={chave} className="border-b border-borda bg-subcabecalho/60 text-xs">
+      <td colSpan={2} />
+      {colunas.map((c) => (
+        <td key={c} className={cn("px-3 py-1.5", alinhaDireita(c) && "text-right")}>
+          {c === "data" ? <span className="text-gray-500">{data}</span> : c === "descricao" ? descricao : c === "valor" ? <ValorOculto centavos={centavos} ocultar={ocultar} className="font-normal!" /> : null}
+        </td>
+      ))}
+      <td />
+    </tr>
+  );
   return (
     <>
-      <tr className={cn("border-b border-borda last:border-0 even:bg-gray-50/70 hover:bg-verde-claro/50", marcado && "bg-verde-claro/60")}>
-        <td className="px-3 py-2.5 text-center">
-          {aoMarcar && <input type="checkbox" aria-label={`Selecionar ${l.descricao}`} checked={marcado} onChange={aoMarcar} className="h-4 w-4 accent-verde" />}
+      <tr className={cn("border-b border-borda text-[13px] last:border-0 hover:bg-verde-claro/50", fundo)}>
+        <td className={cn("pr-0 pl-4", p)}>
+          {aoMarcar && <input type="checkbox" aria-label={`Selecionar ${l.descricao}`} checked={marcado} onChange={aoMarcar} className="h-3.5 w-3.5 accent-verde" />}
         </td>
-        <td className="px-1 py-2.5">
+        <td className={cn("px-1", p)}>
           <IconeTipo l={l} />
         </td>
-        <td className="px-3 py-2.5 whitespace-nowrap text-gray-700">
-          {formatarData(l.data).slice(0, 5)}
-          {l.dataCompra && l.dataCompra !== l.data && <span className="block text-xs text-gray-400">compra {formatarData(l.dataCompra).slice(0, 5)}</span>}
-        </td>
-        <td className="px-3 py-2.5">
-          <button type="button" onClick={aoAbrir} className="flex w-full items-center gap-3 text-left">
-            <IconeBanco codigo={l.bancoCodigo} nome={l.bancoNome ?? "Outro"} className="h-7 w-7 shrink-0 text-[10px]" />
-            <span className="min-w-0">
-              <span className="flex flex-wrap items-center gap-1.5">
-                <span className="font-medium text-gray-900">{l.descricao}</span>
-                {(l.parcelamentoId || l.parcela || l.recorrenciaId) && (
-                  <span className="text-despesa" title={l.recorrenciaId ? "Recorrente" : "Parcelado"}>
-                    *
-                  </span>
-                )}
-                {l.previsto && (
-                  <span className="rounded bg-gray-100 px-1.5 text-xs text-gray-500" title="Calculado a partir do recorrente. É gravado quando você paga, recebe ou edita.">
-                    Previsto
-                  </span>
-                )}
-                {l.parcela && !l.descricao.includes(l.parcela) && <span className="rounded bg-gray-100 px-1.5 text-xs text-gray-600">{l.parcela}</span>}
-                {l.formato === "detalhado" && <span className="rounded bg-verde-claro px-1.5 text-xs text-verde">Detalhado</span>}
-                {l.dividaId && l.dividaNome && (
-                  <Link href={`/gestao/dividas/minhas?detalhar=${l.dividaId}`} onClick={(e) => e.stopPropagation()} className="rounded bg-red-50 px-1.5 text-xs text-despesa hover:underline" title={`Parte da dívida ${l.dividaNome}. Clique para abrir.`}>
-                    Dívida
-                  </Link>
-                )}
-                {l.restante && (
-                  <span className="rounded bg-amarelo px-1.5 text-xs text-amarelo-texto" title="O que faltou pagar ou receber de um pagamento parcial.">
-                    Restante
-                  </span>
-                )}
-                {l.valorOriginalCentavos != null && <EtiquetaValorDiferente atual={Math.abs(l.valorCentavos)} original={l.valorOriginalCentavos} receita={l.valorCentavos >= 0} />}
-                {l.observacao && <MessageSquareText className="h-3.5 w-3.5 text-amarelo-texto" aria-label="Tem observação" />}
-                {l.anexos > 0 && <Paperclip className="h-3.5 w-3.5 text-gray-500" aria-label={`${l.anexos} anexo(s)`} />}
-                {l.tags.map((t) => (
-                  <span key={t} className="rounded-full bg-verde-claro px-2 text-xs text-verde">
-                    {t}
-                  </span>
-                ))}
-              </span>
-              <span className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
-                {l.categoriaCor && <span className="h-2 w-2 rounded-full" style={{ background: l.categoriaCor }} />}
-                {[fatura ? `${l.compras.length} ${l.compras.length === 1 ? "compra" : "compras"}` : l.categoria, l.contaOuCartao, l.contato, l.forma].filter(Boolean).join(" · ")}
-              </span>
-            </span>
-          </button>
-        </td>
-        <td className="px-3 py-2.5 text-right whitespace-nowrap">
-          <ValorOculto centavos={l.valorCentavos} ocultar={ocultar} />
-        </td>
-        <td className="px-3 py-2.5 text-center">
-          <EtiquetaSituacao l={l} />
-        </td>
-        <td className="px-3 py-2.5 text-right">{menu}</td>
+        {colunas.map((c) => (
+          <td key={c} className={cn(td, alinhaDireita(c) && "text-right", c === "descricao" && "whitespace-normal")}>
+            {celula(c)}
+          </td>
+        ))}
+        <td className={cn("px-3 text-right", p)}>{menu}</td>
       </tr>
       {expandida &&
-        l.itens.map((i) => (
-          <tr key={`i${i.id}`} className="border-b border-borda bg-subcabecalho/60 text-xs">
-            <td colSpan={3} />
-            <td className="py-1.5 pr-3 pl-13">
-              <span className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ background: i.categoriaCor }} />
-                <span className="text-gray-800">{i.descricao}</span>
-                <span className="text-gray-500">· {i.categoria}</span>
-              </span>
-            </td>
-            <td className="px-3 py-1.5 text-right">
-              <ValorOculto centavos={i.valorCentavos} ocultar={ocultar} />
-            </td>
-            <td colSpan={2} />
-          </tr>
-        ))}
+        l.itens.map((i) =>
+          linhaFilha(
+            `i${i.id}`,
+            "",
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full" style={{ background: i.categoriaCor }} />
+              <span className="text-gray-800">{i.descricao}</span>
+              <span className="text-gray-500">· {i.categoria}</span>
+            </span>,
+            i.valorCentavos,
+          ),
+        )}
       {expandida &&
-        filhos.map((c) => (
-          <tr key={c.chave} className="border-b border-borda bg-subcabecalho/60 text-xs">
-            <td colSpan={2} />
-            <td className="px-3 py-1.5 text-gray-500">{c.dataCompra ? formatarData(c.dataCompra).slice(0, 5) : ""}</td>
-            <td className="py-1.5 pr-3 pl-13">
-              <button type="button" onClick={() => aoEditarFilho(c.id!)} className="flex items-center gap-1.5 text-left hover:underline">
-                {c.categoriaCor && <span className="h-2 w-2 rounded-full" style={{ background: c.categoriaCor }} />}
-                <span className="text-gray-800">{c.descricao}</span>
-                <span className="text-gray-500">· {c.categoria}</span>
-              </button>
-            </td>
-            <td className="px-3 py-1.5 text-right">
-              <ValorOculto centavos={c.valorCentavos} ocultar={ocultar} />
-            </td>
-            <td colSpan={2} />
-          </tr>
-        ))}
+        filhos.map((f) =>
+          linhaFilha(
+            f.chave,
+            f.dataCompra ? formatarData(f.dataCompra) : "",
+            <button type="button" onClick={() => aoEditarFilho(f.id!)} className="flex items-center gap-1.5 text-left hover:underline">
+              {f.categoriaCor && <span className="h-2 w-2 rounded-full" style={{ background: f.categoriaCor }} />}
+              <span className="text-gray-800">{f.descricao}</span>
+              <span className="text-gray-500">· {f.categoria}</span>
+            </button>,
+            f.valorCentavos,
+          ),
+        )}
     </>
   );
 }

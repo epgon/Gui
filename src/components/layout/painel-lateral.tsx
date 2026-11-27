@@ -3,6 +3,8 @@
 import { CircleHelp, Funnel, Headset, Pin, PinOff, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { CentralAjudaPainel } from "@/components/ajuda/central-ajuda-painel";
+import { usePainel } from "@/components/layout/provedor-painel";
+import { PainelConfiguracao } from "@/components/listagem/painel-configuracao";
 import { cn } from "@/lib/cn";
 
 type Aba = "filtros" | "ajuda";
@@ -62,6 +64,7 @@ function BotaoBarra({ icone: Icone, rotulo, dica, ativo, desativado, aoClicar, a
  * "Central de Ajuda". O alfinete fixa o painel; solto, ele vira uma faixa estreita e abre por cima da tela.
  */
 export function PainelLateral({ filtros, inicial }: { filtros?: React.ReactNode; inicial?: Aba }) {
+  const { configuracao, fecharConfiguracao, pedidosDeFiltros, registrarPainel, larga } = usePainel();
   const [aba, setAba] = useState<Aba>(inicial ?? (filtros ? "filtros" : "ajuda"));
   const [fixado, setFixado] = useState(true);
   const [aberto, setAberto] = useState(false);
@@ -80,15 +83,36 @@ export function PainelLateral({ filtros, inicial }: { filtros?: React.ReactNode;
     if (new URLSearchParams(window.location.search).has("ajuda")) setAba("ajuda");
   }, []);
 
+  // Avisa o provedor que há painel nesta tela (senão a configuração da listagem abre numa gaveta fixa).
+  useEffect(() => registrarPainel(), [registrarPainel]);
+
+  // O botão de funil da barra de ferramentas pede os Filtros: o painel troca para eles e, se solto, abre.
+  const [pedidosVistos, setPedidosVistos] = useState(pedidosDeFiltros);
+  if (pedidosDeFiltros !== pedidosVistos) {
+    setPedidosVistos(pedidosDeFiltros);
+    if (filtros) {
+      setAba("filtros");
+      setAberto(true);
+      fecharConfiguracao();
+    }
+  }
+
+  // Com a configuração da listagem aberta, ela ocupa o corpo do painel (no lugar de Filtros ou Ajuda).
+  const mostrandoConfiguracao = !!configuracao && larga;
   // Solto, o painel aberto fecha com Esc ou clicando fora dele.
-  const sobreposto = !fixado && aberto;
+  const sobreposto = !fixado && (aberto || mostrandoConfiguracao);
   useEffect(() => {
     if (!sobreposto) return;
+    const fecha = () => {
+      setAberto(false);
+      fecharConfiguracao();
+    };
     const fora = (e: MouseEvent) => {
-      if (raiz.current && !raiz.current.contains(e.target as Node)) setAberto(false);
+      // A engrenagem da tabela (data-ignorar-painel) abre e fecha a configuração sozinha.
+      if (raiz.current && !raiz.current.contains(e.target as Node) && !(e.target as Element).closest("[data-ignorar-painel]")) fecha();
     };
     const tecla = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setAberto(false);
+      if (e.key === "Escape") fecha();
     };
     document.addEventListener("mousedown", fora);
     document.addEventListener("keydown", tecla);
@@ -96,7 +120,7 @@ export function PainelLateral({ filtros, inicial }: { filtros?: React.ReactNode;
       document.removeEventListener("mousedown", fora);
       document.removeEventListener("keydown", tecla);
     };
-  }, [sobreposto]);
+  }, [sobreposto, fecharConfiguracao]);
 
   const alternarFixado = () => {
     const novo = !fixado;
@@ -110,13 +134,15 @@ export function PainelLateral({ filtros, inicial }: { filtros?: React.ReactNode;
   };
 
   const escolher = (a: Aba) => {
+    const eraConfiguracao = mostrandoConfiguracao;
+    fecharConfiguracao();
     if (fixado) return setAba(a);
-    if (aberto && aba === a) return setAberto(false);
+    if (aberto && aba === a && !eraConfiguracao) return setAberto(false);
     setAba(a);
     setAberto(true);
   };
 
-  const faixa = !fixado && !aberto;
+  const faixa = !fixado && !aberto && !mostrandoConfiguracao;
 
   return (
     <aside ref={raiz} className={cn("hidden shrink-0 border-l border-borda-painel bg-painel xl:flex", !fixado && "w-12")} aria-label="Painel lateral">
@@ -130,8 +156,9 @@ export function PainelLateral({ filtros, inicial }: { filtros?: React.ReactNode;
         )}
       >
         <div className={cn("flex-1 overflow-y-auto p-4", faixa && "hidden")}>
-          {filtros && <div className={cn(aba !== "filtros" && "hidden")}>{filtros}</div>}
-          <div className={cn(aba !== "ajuda" && "hidden")}>
+          {mostrandoConfiguracao && <PainelConfiguracao key={configuracao.tela} tela={configuracao.tela} pref={configuracao.pref} aoFechar={fecharConfiguracao} />}
+          {filtros && <div className={cn((aba !== "filtros" || mostrandoConfiguracao) && "hidden")}>{filtros}</div>}
+          <div className={cn((aba !== "ajuda" || mostrandoConfiguracao) && "hidden")}>
             <CentralAjudaPainel />
           </div>
         </div>
@@ -150,12 +177,12 @@ export function PainelLateral({ filtros, inicial }: { filtros?: React.ReactNode;
               icone={Funnel}
               rotulo="Filtros"
               dica={filtros ? "Filtros" : "Esta tela não tem filtros"}
-              ativo={aba === "filtros" && !faixa}
+              ativo={aba === "filtros" && !faixa && !mostrandoConfiguracao}
               desativado={!filtros}
               alinhar={faixa ? "lado" : "right"}
               aoClicar={() => escolher("filtros")}
             />
-            <BotaoBarra icone={CircleHelp} rotulo="Central de Ajuda" dica="Central de Ajuda" alinhar={faixa ? "lado" : "right"} ativo={aba === "ajuda" && !faixa} aoClicar={() => escolher("ajuda")} />
+            <BotaoBarra icone={CircleHelp} rotulo="Central de Ajuda" dica="Central de Ajuda" alinhar={faixa ? "lado" : "right"} ativo={aba === "ajuda" && !faixa && !mostrandoConfiguracao} aoClicar={() => escolher("ajuda")} />
             <BotaoBarra icone={Headset} rotulo="Atendimento (em breve)" dica="Atendimento (em breve)" desativado alternavel={false} alinhar={faixa ? "lado" : "right"} />
           </div>
         </div>
