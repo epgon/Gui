@@ -5,11 +5,13 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 import { getDb, schema } from "@/db";
 import { diferencas, registrarAuditoria } from "@/lib/auditoria";
+import { motivoParaNaoExcluirCartao, SEM_USO_CARTAO } from "@/lib/cartoes/exclusao";
+import { usoDosCartoes } from "@/lib/cartoes/uso";
 import { falha, idValido, obrigatorio, primeiroErro, type Resultado, ERRO_AUXILIAR, lerCampoAuxiliar } from "@/lib/cadastros/resultado";
 import { lerValorEmCentavos } from "@/lib/dinheiro";
 import { exigirLogin } from "@/lib/sessao";
 
-const { cartaoCredito: cartao, contaFinanceira: conta, banco } = schema;
+const { cartaoCredito: cartao, contaFinanceira: conta, banco, mapeamentoCsv, importacao } = schema;
 const TELA = "Cartões de Crédito";
 const ENTIDADE = "Cartão de Crédito";
 /** O limite é guardado num inteiro: até R$ 20 milhões. */
@@ -111,4 +113,37 @@ export async function alterarSituacaoCartao(id: number, ativo: boolean): Promise
     refresh();
     return { ok: true } as const;
   });
+}
+
+/**
+ * Exclui de vez um cartão que nunca foi usado: sem lançamentos, sem faturas,
+ * sem recorrentes, regras ou importações em rascunho. Os que já foram usados devem ser inativados.
+ * Saem junto os vínculos de CSV memorizados para ele; importações já concluídas ou canceladas
+ * ficam no histórico, sem o cartão.
+ */
+export async function excluirCartao(id: number): Promise<Resultado> {
+  await exigirLogin();
+  if (!idValido.safeParse(id).success) return falha("Cadastro não encontrado.");
+  try {
+    return await getDb().transaction(async (tx) => {
+      const [alvo] = await tx.select().from(cartao).where(eq(cartao.id, id)).for("update");
+      if (!alvo) return falha("Este cartão não existe mais.");
+      const uso = (await usoDosCartoes(tx, id)).get(id) ?? SEM_USO_CARTAO;
+      const motivo = motivoParaNaoExcluirCartao(uso);
+      if (motivo) return falha(`Não é possível excluir o cartão de crédito **${alvo.descricao}**. ${motivo}`);
+
+      await tx.delete(mapeamentoCsv).where(eq(mapeamentoCsv.cartaoId, id));
+      await tx.update(importacao).set({ cartaoId: null }).where(and(eq(importacao.cartaoId, id), ne(importacao.situacao, "rascunho")));
+      await tx.delete(cartao).where(eq(cartao.id, id));
+      await registrarAuditoria(tx, { tela: TELA, entidade: ENTIDADE, entidadeId: id, acao: "excluiu", descricao: `o Cartão de Crédito ${alvo.descricao}`, dados: alvo });
+      refresh();
+      return { ok: true } as const;
+    });
+  } catch (e) {
+    // O cartão passou a ser usado no mesmo instante (chave estrangeira; o drizzle guarda o erro do banco em cause).
+    if ((e as { cause?: { code?: string } })?.cause?.code === "23503") {
+      return falha("Este cartão acabou de ser usado e não pode mais ser excluído. Recarregue a página para ver onde.");
+    }
+    throw e;
+  }
 }

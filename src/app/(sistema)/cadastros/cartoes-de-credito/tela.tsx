@@ -1,8 +1,8 @@
 "use client";
 
-import { Copy, CreditCard, Eye, FileText, ListOrdered, Pencil, Power } from "lucide-react";
+import { Copy, CreditCard, Eye, FileText, ListOrdered, Pencil, Power, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { AsteriscoPadrao } from "@/components/cadastros/asterisco";
 import { BarraLista } from "@/components/cadastros/barra-lista";
 import { ChaveSituacao } from "@/components/cadastros/chave-situacao";
@@ -12,8 +12,10 @@ import { ModalCadastro, useFormularioCadastro } from "@/components/cadastros/mod
 import { Paginacao } from "@/components/cadastros/paginacao";
 import { useSituacao } from "@/components/cadastros/use-situacao";
 import { CampoSelecao, CampoTexto, CampoValor, TextoComDestaque } from "@/components/ui/campo";
+import { Botao } from "@/components/ui/botao";
 import { Chave } from "@/components/ui/chave";
 import { FaixaErro } from "@/components/ui/faixa-erro";
+import { Modal } from "@/components/ui/modal";
 import { Tabela } from "@/components/ui/tabela";
 import { CampoAuxiliarFormulario } from "@/components/listagem/campo-auxiliar";
 import { comComuns, MarcaNovo } from "@/components/listagem/colunas-comuns";
@@ -25,7 +27,7 @@ import type { limiteDoCartao } from "@/lib/cartoes/regras";
 import type { Situacao } from "@/lib/cadastros/filtros";
 import { type BancoOpcao, DIAS_MES } from "@/lib/cadastros/opcoes";
 import { formatarCentavos, lerValorEmCentavos } from "@/lib/dinheiro";
-import { alterarSituacaoCartao, salvarCartao, type DadosCartao } from "./acoes";
+import { alterarSituacaoCartao, excluirCartao, salvarCartao, type DadosCartao } from "./acoes";
 
 type LinhaBase = {
   id: number;
@@ -42,6 +44,8 @@ type LinhaBase = {
   ativo: boolean;
   padraoSistema: boolean;
   limite: ReturnType<typeof limiteDoCartao>;
+  /** Por que o cartão não pode ser excluído (null = pode). */
+  motivoNaoExcluir: string | null;
 };
 type Linha = LinhaBase & { campoAuxiliar: string | null; criadoEm: Date; atualizadoEm: Date };
 type ContaOpcao = { id: number; descricao: string; ativo: boolean };
@@ -66,6 +70,20 @@ export function TelaCartoes({ preferencia, linhas, total, filtros, caminho, banc
   );
   const form = useFormularioCadastro(vazio);
   const situacao = useSituacao(alterarSituacaoCartao);
+  const [excluindo, setExcluindo] = useState<Linha | null>(null);
+  const [ocupadoExcluir, iniciarExclusao] = useTransition();
+  const confirmarExclusao = (l: Linha) =>
+    iniciarExclusao(async () => {
+      situacao.setAviso("");
+      try {
+        const r = await excluirCartao(l.id);
+        if (!r.ok) situacao.setAviso(r.erro);
+      } catch {
+        situacao.setAviso("Não foi possível excluir o cartão de crédito agora. Tente de novo.");
+      } finally {
+        setExcluindo(null);
+      }
+    });
   const parametros = {
     busca: filtros.busca,
     fechamento: filtros.fechamento,
@@ -202,6 +220,13 @@ export function TelaCartoes({ preferencia, linhas, total, filtros, caminho, banc
                   { rotulo: "Faturas", icone: <CreditCard className="h-4 w-4" />, aoClicar: () => setDetalhe({ id: l.id, aba: "faturas" }) },
                   { rotulo: "Lançamentos", icone: <ListOrdered className="h-4 w-4" />, aoClicar: () => router.push(`/financeiro/lancamentos?destino=cartao:${l.id}`) },
                   { rotulo: l.ativo ? "Inativar" : "Ativar", icone: <Power className="h-4 w-4" />, aoClicar: () => situacao.alternar(l.id, l.ativo) },
+                  {
+                    rotulo: "Excluir",
+                    icone: <Trash2 className="h-4 w-4" />,
+                    aoClicar: () => setExcluindo(l),
+                    desabilitado: !!l.motivoNaoExcluir,
+                    dica: l.motivoNaoExcluir ?? undefined,
+                  },
                 ]}
               />
             ),
@@ -210,6 +235,27 @@ export function TelaCartoes({ preferencia, linhas, total, filtros, caminho, banc
       />
       <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={preferencia.porPagina} total={total} />
       {detalhe && <DetalhandoCartao key={`${detalhe.id}-${detalhe.aba}`} cartaoId={detalhe.id} abaInicial={detalhe.aba} aoFechar={() => setDetalhe(null)} />}
+
+      <Modal
+        aberto={!!excluindo}
+        aoFechar={() => !ocupadoExcluir && setExcluindo(null)}
+        titulo="Excluir Cartão de Crédito"
+        resumo={excluindo ? [excluindo.descricao, excluindo.bancoNome ?? "Outro"].join(" · ") : undefined}
+        rodape={
+          <>
+            <Botao variante="fantasma" onClick={() => setExcluindo(null)} disabled={ocupadoExcluir}>
+              Voltar
+            </Botao>
+            <Botao variante="perigo" carregando={ocupadoExcluir} icone={<Trash2 className="h-4 w-4" />} onClick={() => excluindo && confirmarExclusao(excluindo)}>
+              Excluir
+            </Botao>
+          </>
+        }
+      >
+        <p className="text-sm text-gray-700">
+          O cartão <strong>{excluindo?.descricao}</strong> será excluído de vez. Ele não tem lançamentos nem faturas. Esta ação não pode ser desfeita.
+        </p>
+      </Modal>
 
       <ModalCadastro
         formulario={form}

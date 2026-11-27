@@ -8,6 +8,8 @@ import { rotuloTipoConta } from "@/lib/cadastros/opcoes";
 import { alturaAbaixo, montarArvore, motivoParaNaoExcluir } from "@/lib/categorias";
 import { usoDasCategorias } from "@/lib/categorias-uso";
 import { limiteDoCartao } from "@/lib/cartoes/regras";
+import { motivoParaNaoExcluirCartao } from "@/lib/cartoes/exclusao";
+import { usoDosCartoes } from "@/lib/cartoes/uso";
 import { motivoParaNaoExcluirConta } from "@/lib/contas/exclusao";
 import { usoDasContas } from "@/lib/contas/uso";
 import { usoDosLimites } from "@/lib/cartoes/servidor";
@@ -83,7 +85,7 @@ export async function carregarContas(sp: ParametrosBusca, pref?: PreferenciaList
 export async function carregarCartoes(sp: ParametrosBusca, pref?: PreferenciaListagem) {
   const { f, fechamento, vencimento, onde } = filtrosCartoes(sp);
   const contaPg = alias(conta, "conta_pagamento");
-  const [linhasDb, usos] = await Promise.all([
+  const [linhasDb, usos, usoCartoes] = await Promise.all([
     getDb()
       .select({
         id: cartao.id,
@@ -109,8 +111,10 @@ export async function carregarCartoes(sp: ParametrosBusca, pref?: PreferenciaLis
       .where(onde)
       .orderBy(desc(cartao.ativo), asc(cartao.ordem), asc(sql`lower(${cartao.descricao})`)),
     usoDosLimites(),
+    usoDosCartoes(getDb()),
   ]);
-  const linhas = linhasDb.map((c) => ({ ...c, limite: limiteDoCartao(c, usos.get(c.id) ?? 0) }));
+  // motivoNaoExcluir: null quando o cartão pode ser excluído (ver motivoParaNaoExcluirCartao).
+  const linhas = linhasDb.map((c) => ({ ...c, limite: limiteDoCartao(c, usos.get(c.id) ?? 0), motivoNaoExcluir: motivoParaNaoExcluirCartao(usoCartoes.get(c.id)) }));
   type Linha = (typeof linhas)[number];
   const leitores: Leitores<Linha> = {
     ...leitoresComuns<Linha>(),
