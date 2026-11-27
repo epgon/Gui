@@ -1,5 +1,6 @@
 "use client";
 
+import { AvisoAntesDeConfirmar } from "./aviso-confirmar";
 import { useMemo, useState } from "react";
 import { type DadosDivida, salvarDivida } from "@/app/(sistema)/gestao/dividas/acoes";
 import { ModalCadastro, useFormularioCadastro } from "@/components/cadastros/modal-cadastro";
@@ -66,7 +67,8 @@ export function dadosDaDivida(d: LinhaDivida, hoje: string, padroes: PadroesDivi
 
 type Formulario = ReturnType<typeof useFormularioCadastro<DadosDivida>>;
 
-export function ModalDivida({ formulario: form, opcoes, multaPadrao, moraPadrao }: { formulario: Formulario; opcoes: Opcoes; multaPadrao: number; moraPadrao: number }) {
+export function ModalDivida({ formulario: form, opcoes, multaPadrao, moraPadrao, limiteTaxaAltaPct }: { formulario: Formulario; opcoes: Opcoes; multaPadrao: number; moraPadrao: number; limiteTaxaAltaPct?: number }) {
+  const [avisoTaxa, setAvisoTaxa] = useState(false);
   const { recursos } = useSistema();
   const [novoCredor, setNovoCredor] = useState(false);
   const [credoresNovos, setCredoresNovos] = useState<{ id: number; rotulo: string; ativo: boolean }[]>([]);
@@ -91,6 +93,8 @@ export function ModalDivida({ formulario: form, opcoes, multaPadrao, moraPadrao 
   const taxaInformada = Number(d.taxa.replace(",", "."));
   const taxaConvertida = d.taxa && Number.isFinite(taxaInformada) && d.taxaTipo === "anual" ? taxaAnualParaMensal(taxaInformada) : null;
   const fixa = d.forma === "parcelas_fixas";
+  const taxaMensalPct = d.taxa && Number.isFinite(taxaInformada) ? (taxaConvertida ?? taxaInformada) : null;
+  const taxaAlta = !edicao && limiteTaxaAltaPct !== undefined && taxaMensalPct !== null && taxaMensalPct > limiteTaxaAltaPct;
 
   return (
     <>
@@ -99,7 +103,7 @@ export function ModalDivida({ formulario: form, opcoes, multaPadrao, moraPadrao 
         largura="larga"
         titulo={form.novo ? "Nova Dívida" : "Editando Dívida"}
         resumo={[d.descricao || "Descrição", TIPOS_DIVIDA.find((t) => t.valor === d.tipo)?.rotulo].join(" · ")}
-        aoSalvar={() => form.salvar(salvarDivida)}
+        aoSalvar={() => (taxaAlta ? setAvisoTaxa(true) : form.salvar(salvarDivida))}
       >
         <CampoTexto rotulo="Descrição" obrigatorio autoFocus maxLength={120} ajuda="Como você reconhece esta dívida. Ex.: Empréstimo pessoal Banco X." valor={d.descricao} aoMudar={(v) => form.mudar("descricao", v)} />
         <div className="grid gap-4 sm:grid-cols-2">
@@ -177,6 +181,16 @@ export function ModalDivida({ formulario: form, opcoes, multaPadrao, moraPadrao 
           <Chave ligada={d.registrarEntrada} aoMudar={(v) => form.mudar("registrarEntrada", v)} rotulo="Registrar a entrada do dinheiro na conta (empréstimo novo)" />
         )}
       </ModalCadastro>
+      <AvisoAntesDeConfirmar
+        aberto={avisoTaxa}
+        titulo="Taxa de juros alta"
+        motivos={[`A taxa informada equivale a ${String(taxaMensalPct).replace(".", ",")}% ao mês, acima do limite de ${String(limiteTaxaAltaPct).replace(".", ",")}% ao mês definido em Parâmetros. Confira se digitou ao mês ou ao ano corretamente.`]}
+        aoVoltar={() => setAvisoTaxa(false)}
+        aoContinuar={() => {
+          setAvisoTaxa(false);
+          form.salvar(salvarDivida);
+        }}
+      />
       {novoCredor && (
         <ModalNovoContato
           tipo="despesa"

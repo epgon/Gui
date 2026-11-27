@@ -15,13 +15,14 @@ import { ProvedorOcultar, ValorOcultavel } from "@/components/ui/ocultar-valores
 import { Tabela } from "@/components/ui/tabela";
 import { formatarData } from "@/lib/datas";
 import { negociacaoAberta, rotuloCanal } from "@/lib/dividas/negociacao";
+import { estaAtiva } from "@/lib/dividas/regras";
 import type { FiltrosNegociacoes, LinhaDivida, LinhaNegociacao, PropostaLinha } from "@/lib/dividas/tipos";
 import type { Opcoes } from "@/lib/lancamentos/tipos";
 import { desistirNegociacao, excluirNegociacao, recusarNegociacao } from "./acoes";
 
 type Edicao = { id: number | null; dados: ReturnType<typeof dadosVaziosNegociacao> };
 
-export function TelaNegociacoes({ linhas, total, filtros, caminho, dividas, opcoes, hoje, padroes, sobraCalculadaCentavos, abrirNova, abrirDetalhe, porPagina }: {
+export function TelaNegociacoes({ linhas, total, filtros, caminho, dividas, opcoes, hoje, padroes, sobraCalculadaCentavos, abrirNova, dividaInicial, abrirDetalhe, porPagina }: {
   linhas: LinhaNegociacao[];
   total: number;
   filtros: FiltrosNegociacoes;
@@ -33,6 +34,8 @@ export function TelaNegociacoes({ linhas, total, filtros, caminho, dividas, opco
   /** Sobra mensal calculada pelo Simulador (sugestão para o campo Sobra Mensal). */
   sobraCalculadaCentavos?: number | null;
   abrirNova: boolean;
+  /** Vindo de um alerta do Consultor Gui: a nova negociação já abre com esta dívida marcada. */
+  dividaInicial?: number | null;
   abrirDetalhe: number | null;
   porPagina: number;
 }) {
@@ -51,9 +54,11 @@ export function TelaNegociacoes({ linhas, total, filtros, caminho, dividas, opco
   useEffect(() => {
     if (abrirNova && !aberto.current) {
       aberto.current = true;
-      setEdicao({ id: null, dados: dadosVaziosNegociacao(hoje) });
+      const vazia = dadosVaziosNegociacao(hoje);
+      const d = dividaInicial ? dividas.find((x) => x.id === dividaInicial && estaAtiva(x.situacao)) : undefined;
+      setEdicao({ id: null, dados: d ? { ...vazia, contatoId: String(d.contatoId), dividaIds: [d.id] } : vazia });
     }
-  }, [abrirNova, hoje]);
+  }, [abrirNova, hoje, dividaInicial, dividas]);
 
   const mudou = () => {
     setVersao((v) => v + 1);

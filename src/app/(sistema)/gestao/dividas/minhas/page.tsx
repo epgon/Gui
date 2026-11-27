@@ -26,6 +26,8 @@ export default async function PaginaMinhasDividas({ searchParams }: { searchPara
   const contas = opcoes.destinos.filter((d) => d.grupo === "Contas" && d.ativo);
   const contaPadrao = contas[0]?.valor.replace("conta:", "") ?? "";
   const abrirDetalhe = /^\d+$/.test(parametro(sp, "detalhar")) ? Number(parametro(sp, "detalhar")) : null;
+  const acaoPedida = parametro(sp, "acao");
+  const acaoInicial = abrirDetalhe !== null && ["saldo", "pagar", "amortizar", "quitar", "encargo", "renegociar"].includes(acaoPedida) ? acaoPedida : null;
 
   return (
     <>
@@ -45,9 +47,11 @@ export default async function PaginaMinhasDividas({ searchParams }: { searchPara
             recorrentes={abertas.recorrentes}
             padroes={{ contaId: contaPadrao, categoriaId: categorias.parcelas ? String(categorias.parcelas) : "" }}
             multaPadrao={parametros.dividas.multaPadraoPct}
+            limiteTaxaAltaPct={parametros.dividas.limiteTaxaAltaPct}
             moraPadrao={parametros.dividas.moraMensalPct}
             abrirNova={parametro(sp, "nova") === "1"}
             abrirDetalhe={abrirDetalhe}
+            acaoInicial={acaoInicial}
             porPagina={dados.preferencia.porPagina}
             preferencia={dados.preferencia}
           />

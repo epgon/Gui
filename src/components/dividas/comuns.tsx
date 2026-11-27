@@ -5,6 +5,7 @@ import { cn } from "@/lib/cn";
 import { formatarData } from "@/lib/datas";
 import { rotuloSituacaoNegociacao, type SituacaoNegociacao } from "@/lib/dividas/negociacao";
 import { ROTULO_SITUACAO_DIVIDA, type ResumoSaldo, type SituacaoDivida } from "@/lib/dividas/regras";
+import { formatarReais } from "@/lib/dividas/simulador";
 import { ABAS_DIVIDAS } from "@/lib/menu";
 
 /** Abas do módulo, no estilo das abas de Lançamentos. Cada uma tem endereço próprio. */
@@ -79,11 +80,37 @@ export function NotaSaldo({ saldo }: { saldo: ResumoSaldo }) {
   return null;
 }
 
-/** Barra de progresso no estilo dos Orçamentos. */
-export function BarraProgresso({ percentual, className }: { percentual: number; className?: string }) {
+const COR_BARRA = { verde: "bg-verde-vivo", amarelo: "bg-dourado", laranja: "bg-despesa" } as const;
+
+/** Barra de progresso no estilo dos Orçamentos (verde por padrão; amarela e laranja para os alertas de limite). */
+export function BarraProgresso({ percentual, className, cor = "verde", rotulo = "Quanto já foi pago" }: { percentual: number; className?: string; cor?: keyof typeof COR_BARRA; rotulo?: string }) {
+  const largura = Math.min(100, Math.max(percentual > 0 ? 3 : 0, percentual));
   return (
-    <div className={cn("h-2 w-full overflow-hidden rounded-full bg-gray-100", className)} role="progressbar" aria-valuenow={percentual} aria-valuemin={0} aria-valuemax={100} aria-label="Quanto já foi pago">
-      <div className="h-full rounded-full bg-verde-vivo" style={{ width: `${Math.max(percentual > 0 ? 3 : 0, percentual)}%` }} />
+    <div className={cn("h-2 w-full overflow-hidden rounded-full bg-gray-100", className)} role="progressbar" aria-valuenow={Math.min(100, percentual)} aria-valuemin={0} aria-valuemax={100} aria-label={rotulo}>
+      <div className={cn("h-full rounded-full", COR_BARRA[cor])} style={{ width: `${largura}%` }} />
     </div>
+  );
+}
+
+/** Mini gráfico de linha da evolução do total devido, nos últimos meses (no mesmo estilo do mini gráfico do saldo). */
+export function MiniEvolucao({ serie, ocultar }: { serie: { mes: string; totalCentavos: number }[]; ocultar?: boolean }) {
+  if (serie.length < 2) return null;
+  const largura = 300;
+  const altura = 48;
+  const valores = serie.map((p) => p.totalCentavos);
+  const min = Math.min(...valores);
+  const max = Math.max(...valores);
+  const faixa = max - min || 1;
+  const x = (i: number) => (i / (serie.length - 1)) * largura;
+  const y = (v: number) => (max === min ? altura / 2 : altura - 4 - ((v - min) / faixa) * (altura - 8));
+  const pontos = serie.map((p, i) => `${x(i).toFixed(1)},${y(p.totalCentavos).toFixed(1)}`).join(" ");
+  const rotuloMes = (ym: string) => `${ym.slice(5, 7)}/${ym.slice(0, 4)}`;
+  const titulo = ocultar ? "Evolução do total devido nos últimos meses" : `De ${formatarReais(serie[0].totalCentavos)} em ${rotuloMes(serie[0].mes)} para ${formatarReais(serie.at(-1)!.totalCentavos)} agora`;
+  return (
+    <svg viewBox={`0 0 ${largura} ${altura}`} preserveAspectRatio="none" className="h-12 w-full" role="img" aria-label={titulo}>
+      <title>{titulo}</title>
+      <polygon points={`0,${altura} ${pontos} ${largura},${altura}`} className="fill-verde/10" />
+      <polyline points={pontos} fill="none" className="stroke-verde" strokeWidth={2} vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+    </svg>
   );
 }

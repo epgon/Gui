@@ -14,6 +14,7 @@ import { ListaOrdenavel } from "@/components/ui/lista-ordenavel";
 import { SECOES, type Secao } from "./secoes";
 import { Modal } from "@/components/ui/modal";
 import type { Resultado } from "@/lib/cadastros/resultado";
+import { REGRAS_CONSULTOR } from "@/lib/dividas/consultor/regras";
 import { cn } from "@/lib/cn";
 import { CADASTROS_AUXILIARES, OPCOES_NOVO_ATUALIZADO, OPCOES_PREVISAO, type Parametros } from "@/lib/parametros/tipos";
 import {
@@ -210,7 +211,14 @@ function Dividas({ p, contas }: { p: Parametros; contas: Item[] }) {
     cenarioConservador: fmt(c.cenarios.conservador),
     cenarioIntermediario: fmt(c.cenarios.intermediario),
     cenarioAcelerado: fmt(c.cenarios.acelerado),
+    limiteRendaAtencaoPct: fmt(c.limiteRendaAtencaoPct),
+    limiteRendaAltaPct: fmt(c.limiteRendaAltaPct),
+    limiteTaxaAltaPct: fmt(c.limiteTaxaAltaPct),
+    rendimentoReservaPct: fmt(c.rendimentoReservaPct),
+    diasParaNegociar: String(c.diasParaNegociar),
   });
+  const [desligados, setDesligados] = useState<string[]>(c.alertasDesligados);
+  const [cartao, setCartao] = useState(c.cartaoVisaoGeral);
   const [reserva, setReserva] = useState<number[]>(c.contasReserva);
   const s = useSalvar();
   const mudar = (k: keyof typeof d) => (v: string) => {
@@ -219,6 +227,10 @@ function Dividas({ p, contas }: { p: Parametros; contas: Item[] }) {
   };
   const alternar = (id: number) => {
     setReserva((r) => (r.includes(id) ? r.filter((x) => x !== id) : [...r, id]));
+    s.marcarMudanca();
+  };
+  const alternarRegra = (id: string) => {
+    setDesligados((r) => (r.includes(id) ? r.filter((x) => x !== id) : [...r, id]));
     s.marcarMudanca();
   };
   return (
@@ -252,7 +264,42 @@ function Dividas({ p, contas }: { p: Parametros; contas: Item[] }) {
         </div>
         <p className="mt-2 text-xs text-gray-500">{reserva.length === 0 ? "Nenhuma marcada: o Simulador usa as contas dos tipos Poupança e Investimento." : `${reserva.length} ${reserva.length === 1 ? "conta marcada" : "contas marcadas"}.`}</p>
       </div>
-      <Rodape s={s} aoSalvar={() => s.executar(() => salvarParametrosDividas({ ...d, contasReserva: reserva }))} />
+
+      <p className="mt-6 mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Consultor Gui (alertas e recomendações)</p>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <CampoTexto rotulo="Parcelas acima de (% da renda): atenção" valor={d.limiteRendaAtencaoPct} aoMudar={mudar("limiteRendaAtencaoPct")} maxLength={6} ajuda="Acima deste percentual da renda média, as parcelas do mês geram um alerta de atenção e a barra da Visão Geral fica amarela." />
+        <CampoTexto rotulo="Parcelas acima de (% da renda): alta" valor={d.limiteRendaAltaPct} aoMudar={mudar("limiteRendaAltaPct")} maxLength={6} ajuda="Acima deste percentual o alerta é alto e a barra fica laranja." />
+        <CampoTexto rotulo="Taxa muito alta (% ao mês)" valor={d.limiteTaxaAltaPct} aoMudar={mudar("limiteTaxaAltaPct")} maxLength={6} ajuda="Dívidas com taxa acima disto (como cheque especial e rotativo) recebem um alerta alto." />
+        <CampoTexto rotulo="Rendimento da reserva (% ao mês)" valor={d.rendimentoReservaPct} aoMudar={mudar("rendimentoReservaPct")} maxLength={6} ajuda="Quanto você estima que a reserva rende por mês. O Consultor compara com a taxa das dívidas antes de sugerir usar a reserva." />
+        <CampoTexto rotulo="Atraso que sugere negociar (dias)" valor={d.diasParaNegociar} aoMudar={mudar("diasParaNegociar")} maxLength={4} inputMode="numeric" ajuda="Dívida atrasada há mais que isto recebe a sugestão de abrir uma negociação." />
+      </div>
+      <div className="mt-4">
+        <p className="mb-1 text-sm font-medium text-gray-700">Alertas ligados</p>
+        <div className="grid gap-1 sm:grid-cols-2">
+          {REGRAS_CONSULTOR.map((r) => (
+            <label key={r.id} className="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={!desligados.includes(r.id)} onChange={() => alternarRegra(r.id)} className="h-4 w-4 accent-verde" />
+              <span>
+                <span className="font-semibold">{r.id}</span> · {r.titulo}
+              </span>
+            </label>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-gray-500">Desligar um alerta só o esconde: nada é apagado. As regras R9 e R10 chegam com o Plano de Quitação.</p>
+      </div>
+      <label className="mt-4 flex items-center gap-2 text-sm text-gray-700">
+        <input
+          type="checkbox"
+          checked={cartao}
+          onChange={() => {
+            setCartao((v) => !v);
+            s.marcarMudanca();
+          }}
+          className="h-4 w-4 accent-verde"
+        />
+        Mostrar o cartão Dívidas na Visão Geral (quando há dívida ativa)
+      </label>
+      <Rodape s={s} aoSalvar={() => s.executar(() => salvarParametrosDividas({ ...d, contasReserva: reserva, alertasDesligados: desligados, cartaoVisaoGeral: cartao }))} />
     </Cartao>
   );
 }

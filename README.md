@@ -141,6 +141,13 @@ Fases prontas:
   **Simular** na proposta de negociação e no menu e no detalhe da dívida; a negociação ganhou "Usar a sobra calculada". Em Parâmetros
   há reserva mínima, contas da reserva, meses da média e percentuais dos cenários. Pequenos itens deixados pela D2: **Filtro Avançado e
   Configurações da Listagem** em Minhas Dívidas e **Lembrar todo mês** (cria um recorrente ligado à dívida sem parcelas).
+- **Fase D4 (Gestão de Dívidas: Visão Geral e Consultor Gui)**: a aba **Visão Geral** traz os indicadores (total devido com mini-gráfico,
+  em atraso, vence em 30 dias, parcelas do mês e % da renda, juros estimados por mês, previsão de quitação, progresso e rosca por credor
+  ou tipo) e a lista **Análises e recomendações** (cada alerta com "Por quê?", Dispensar e Lembrar em 7 dias). A nova aba **Consultor Gui**
+  responde por **regras, sem IA**: perguntas prontas (quanto devo, quanto sobra, qual pagar primeiro, cabe esta parcela, extra, reserva,
+  proposta, compra) e texto livre simples, em conversas organizadas por assunto. Alertas altos aparecem no sino e há um cartão **Dívidas**
+  na Visão Geral do sistema (escondível). Limites e regras ligam/desligam em **Configurações > Parâmetros > Consultor Gui**. Avisos antes
+  de confirmar: taxa alta no cadastro, renegociação mais cara ou que não cabe na sobra, e uso da reserva acima do recomendado.
 
 Todas as telas dos menus estão prontas.
 
@@ -189,6 +196,13 @@ Todas as telas dos menus estão prontas.
   ou a fatura, nem ser excluída: para isso, desfaça antes o pagamento da fatura.
 - Se entrar uma compra nova numa fatura já paga (ex.: você pagou antes de fechar), a fatura volta a mostrar o que falta
   pagar e pode ser paga de novo só com a diferença.
+
+### Como o Consultor Gui funciona
+
+- Cada resposta mostra a **conclusão**, os **números**, o **critério** usado e "Como calculei". O Consultor **nunca** paga, lança ou altera
+  nada: os botões só abrem as janelas normais (Pagar, Renegociar, Simulador), onde você confirma.
+- Os alertas vêm de regras fixas (atraso, parcelas pesando na renda, taxa alta, reserva baixa, vencimento próximo, entre outras) com limites
+  editáveis em Parâmetros. O tom é técnico, didático e prudente; nada é recomendação financeira personalizada.
 
 ### Como a Gestão de Dívidas funciona
 

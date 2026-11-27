@@ -231,6 +231,13 @@ function montarLinha(base: Base, d: Base["dividas"][number]): { linha: LinhaDivi
   };
 }
 
+/** Uma dívida (linha e obrigações) no formato do Simulador: o que falta pagar, com a estimativa de atraso no mês atual. */
+function montarSim(linha: LinhaDivida, contas: ReturnType<typeof obrigacoesDe>["contas"], inicioYm: string): DividaSim {
+  const comum = { id: `d${linha.id}`, nome: linha.descricao, credor: linha.credor, taxaMensalPct: linha.taxaMensal ?? 0, atrasoDias: linha.diasAtraso, comGarantia: linha.garantia !== "nenhuma" };
+  const abertas = contas.filter((c) => !c.o.dataPagamento).map((c) => ({ vencimento: c.o.vencimento, valorCentavos: c.o.valorCentavos, acrescimoCentavos: c.linha.acrescimoCentavos }));
+  return linha.forma === "parcelas_fixas" && abertas.length > 0 ? montarDividaComParcelas({ ...comum, abertas, inicioYm }) : montarDividaSemParcelas({ ...comum, saldoCentavos: linha.saldo.exibido });
+}
+
 /**
  * As dívidas ativas no formato do Simulador (só leitura): o que falta pagar de cada uma, com a estimativa de atraso no mês atual.
  * Devolve também a linha da dívida, para a tela mostrar saldo, taxa e situação.
@@ -242,15 +249,41 @@ export async function carregarDividasParaSimular(hoje = hojeIso()): Promise<{ li
   for (const d of base.dividas) {
     const { linha, contas } = montarLinha(base, d);
     if (!estaAtiva(linha.situacao)) continue;
-    const comum = { id: `d${d.d.id}`, nome: d.d.descricao, credor: d.credor, taxaMensalPct: linha.taxaMensal ?? 0, atrasoDias: linha.diasAtraso, comGarantia: linha.garantia !== "nenhuma" };
-    const abertas = contas.filter((c) => !c.o.dataPagamento).map((c) => ({ vencimento: c.o.vencimento, valorCentavos: c.o.valorCentavos, acrescimoCentavos: c.linha.acrescimoCentavos }));
-    const sim =
-      linha.forma === "parcelas_fixas" && abertas.length > 0
-        ? montarDividaComParcelas({ ...comum, abertas, inicioYm })
-        : montarDividaSemParcelas({ ...comum, saldoCentavos: linha.saldo.exibido });
+    const sim = montarSim(linha, contas, inicioYm);
     if (sim.saldoCentavos > 0) resultado.push({ linha, sim });
   }
   return resultado;
+}
+
+/** Tudo de cada dívida de que o Consultor Gui e a Visão Geral precisam, lido do banco de uma vez (só leitura). */
+export type DividaCompleta = {
+  linha: LinhaDivida;
+  /** As obrigações (parcelas, restantes, encargos e faturas acompanhadas), no formato da tela. */
+  obrigacoes: LinhaObrigacao[];
+  /** Pagamentos extras e quitações registrados no histórico. */
+  extras: { data: string; valorCentavos: number }[];
+  quitadaEm: string | null;
+  /** Desde quando a dívida existe no Gui (contratação ou cadastro). */
+  desde: string;
+  /** A dívida no formato do Simulador (null se estiver encerrada ou sem saldo). */
+  sim: DividaSim | null;
+};
+
+export async function carregarDividasCompletas(hoje = hojeIso()): Promise<DividaCompleta[]> {
+  const base = await lerBase(null, hoje);
+  const inicioYm = mesDe(hoje);
+  return base.dividas.map((d) => {
+    const { linha, contas } = montarLinha(base, d);
+    const sim = estaAtiva(linha.situacao) ? montarSim(linha, contas, inicioYm) : null;
+    return {
+      linha,
+      obrigacoes: contas.map((c) => c.linha),
+      extras: base.eventos.filter((e) => e.dividaId === d.d.id && (e.tipo === "amortizacao" || e.tipo === "quitacao") && e.valorCentavos !== null).map((e) => ({ data: e.data, valorCentavos: Number(e.valorCentavos) })),
+      quitadaEm: d.d.quitadaEm,
+      desde: d.d.dataContratacao ?? d.d.criadoEm.toISOString().slice(0, 10),
+      sim: sim && sim.saldoCentavos > 0 ? sim : null,
+    };
+  });
 }
 
 /** Todas as dívidas com saldo e situação calculados na hora. */

@@ -13,6 +13,7 @@ import { CampoSelecao, CampoTexto, CampoValor, TextoComDestaque } from "@/compon
 import { EstadoVazio } from "@/components/ui/estado-vazio";
 import { FaixaErro } from "@/components/ui/faixa-erro";
 import { ListaOrdenavel } from "@/components/ui/lista-ordenavel";
+import { AvisoAntesDeConfirmar } from "@/components/dividas/aviso-confirmar";
 import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/cn";
 import { formatarData } from "@/lib/datas";
@@ -137,6 +138,8 @@ export function TelaSimulador({ dados, inicio }: { dados: DadosSimulador; inicio
   const { recursos } = useSistema();
   const [estado, setEstado] = useState<Estado>(() => estadoInicial(dados, inicio));
   const [cenarioAberto, setCenarioAberto] = useState<Cenario>("intermediario");
+  const [avisoReserva, setAvisoReserva] = useState(false);
+  const [avisadaReserva, setAvisadaReserva] = useState(0);
   const [guardando, setGuardando] = useState(false);
   const [nome, setNome] = useState("");
   const [erro, setErro] = useState("");
@@ -286,6 +289,16 @@ export function TelaSimulador({ dados, inicio }: { dados: DadosSimulador; inicio
 
   return (
     <>
+      <AvisoAntesDeConfirmar
+        aberto={avisoReserva}
+        titulo="Uso da reserva acima do recomendado"
+        motivos={[`Você informou ${reais(reservaUsada)}, mas o que passa da reserva mínima é ${reais(usavel)} (reserva ${reais(situacao.reservaCentavos)}, mínima ${reais(situacao.reservaMinimaCentavos)}). Usar mais deixa a reserva abaixo do mínimo e reduz sua proteção contra imprevistos.`]}
+        aoVoltar={() => {
+          setAvisoReserva(false);
+          mudar("reservaUsada", usavel > 0 ? texto(usavel) : "");
+        }}
+        aoContinuar={() => setAvisoReserva(false)}
+      />
       <AbasDividas ativa="/gestao/dividas/simulador" />
       <FaixaSimulacao />
 
@@ -370,7 +383,7 @@ export function TelaSimulador({ dados, inicio }: { dados: DadosSimulador; inicio
                   <CampoTexto rotulo="No mês" type="month" valor={estado.extraMes} min={inicioYm} aoMudar={(v) => mudar("extraMes", v)} />
                 </div>
                 <div>
-                  <CampoValor rotulo="Usar da reserva agora" valor={estado.reservaUsada} aoMudar={(v) => mudar("reservaUsada", v)} ajuda="Dinheiro da sua reserva usado como pagamento extra no primeiro mês." />
+                  <CampoValor rotulo="Usar da reserva agora" valor={estado.reservaUsada} aoMudar={(v) => mudar("reservaUsada", v)} aoSair={() => { if (reservaUsada > usavel && reservaUsada !== avisadaReserva) { setAvisadaReserva(reservaUsada); setAvisoReserva(true); } }} ajuda="Dinheiro da sua reserva usado como pagamento extra no primeiro mês." />
                   <p className="mt-1 text-xs text-gray-500">
                     Reserva: {reais(situacao.reservaCentavos)} · mínima: {reais(situacao.reservaMinimaCentavos)}.
                     {usavel > 0 && (

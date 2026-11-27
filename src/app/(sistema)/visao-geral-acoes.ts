@@ -26,3 +26,11 @@ export async function salvarOpcoesVisaoGeral(mudancas: Partial<OpcoesVisaoGeral>
   refresh();
   return { ok: true };
 }
+
+/** Esconde o cartão Dívidas da Visão Geral (volta pelo Parâmetro "Mostrar o cartão Dívidas na Visão Geral"). */
+export async function esconderCartaoDividas(): Promise<Resultado> {
+  await exigirLogin();
+  await getDb().transaction((tx) => gravarConfiguracao(tx, "dividas.cartao_visao_geral", false, { tela: "Visão Geral", descricao: "o Cartão Dívidas da Visão Geral para escondido" }));
+  refresh();
+  return { ok: true };
+}
