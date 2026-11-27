@@ -3,7 +3,7 @@
 import { Plus, Save, Trash2 } from "lucide-react";
 import { useId, useState, useTransition } from "react";
 import { Botao } from "@/components/ui/botao";
-import { CampoTexto, Rotulo, TextoComDestaque } from "@/components/ui/campo";
+import { CampoTexto, EntradaValor, Rotulo, TextoComDestaque } from "@/components/ui/campo";
 import { FaixaErro } from "@/components/ui/faixa-erro";
 import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/cn";
@@ -158,15 +158,18 @@ export function ModalRegra({ aberto, aoFechar, regraId, inicial, opcoes, importa
                       <option value="receita">Receita (entrada)</option>
                     </select>
                   ) : (
-                    <input
-                      aria-label={`Valor da condição ${i + 1}`}
-                      value={c.valor}
-                      maxLength={120}
-                      inputMode={c.campo === "valor" ? "decimal" : undefined}
-                      placeholder={c.campo === "valor" ? "0,00" : "Ex.: supermercado"}
-                      onChange={(e) => mudarCondicao(i, { valor: e.target.value })}
-                      className={estilo}
-                    />
+                    c.campo === "valor" ? (
+                      <EntradaValor aria-label={`Valor da condição ${i + 1}`} valor={c.valor} aoMudar={(v) => mudarCondicao(i, { valor: v })} className={estilo} />
+                    ) : (
+                      <input
+                        aria-label={`Valor da condição ${i + 1}`}
+                        value={c.valor}
+                        maxLength={120}
+                        placeholder="Ex.: supermercado"
+                        onChange={(e) => mudarCondicao(i, { valor: e.target.value })}
+                        className={estilo}
+                      />
+                    )
                   )}
                   <button
                     type="button"
