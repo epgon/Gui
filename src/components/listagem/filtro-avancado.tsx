@@ -2,6 +2,7 @@
 
 import { Plus, X } from "lucide-react";
 import { useMemo, useState } from "react";
+import { EntradaValor } from "@/components/ui/campo";
 import {
   codificarFiltros,
   CONDICOES_POR_TIPO,
@@ -132,15 +133,18 @@ export function FiltroAvancado({ campos, valor }: { campos: CampoAvancado[]; val
               <option value="nao">Não</option>
             </select>
           ) : (
+            def?.tipo === "dinheiro" ? (
+              <EntradaValor className={estilo} disabled={!def} valor={texto} aoMudar={setTexto} permitirNegativo />
+            ) : (
             <input
               className={estilo}
               disabled={!def}
               type={def?.tipo === "data" ? "date" : "text"}
-              inputMode={def?.tipo === "dinheiro" || def?.tipo === "numero" ? "decimal" : undefined}
-              placeholder={def?.tipo === "dinheiro" ? "0,00" : undefined}
+              inputMode={def?.tipo === "numero" ? "decimal" : undefined}
               value={texto}
               onChange={(e) => setTexto(e.target.value)}
             />
+            )
           )}
         </label>
       )}

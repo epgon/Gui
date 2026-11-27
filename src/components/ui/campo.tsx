@@ -1,7 +1,8 @@
 "use client";
 
 import { CircleHelp } from "lucide-react";
-import { useId } from "react";
+import { useId, useLayoutEffect, useRef } from "react";
+import { mascararValor, normalizarValor } from "@/lib/dinheiro";
 import { cn } from "@/lib/cn";
 
 const estiloEntrada =
@@ -82,7 +83,50 @@ export function CampoSelecao({ rotulo, obrigatorio, ajuda, className, desabilita
   );
 }
 
-/** Campo de dinheiro: aceita "1.500,00", "1500" ou "-250,5". */
+/** Input de dinheiro sem rótulo: mostra 10.000,00 ao digitar e ao sair do campo. */
+export function EntradaValor({ valor, aoMudar, aoSair, permitirNegativo, className, ...resto }: Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "onBlur"> & {
+  valor: string;
+  aoMudar: (v: string) => void;
+  aoSair?: () => void;
+  permitirNegativo?: boolean;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const cursor = useRef<number | null>(null);
+  // Valores já salvos chegam crus ("10000"): exibe formatado também fora de foco.
+  const exibido = mascararValor(valor, permitirNegativo);
+  useLayoutEffect(() => {
+    if (cursor.current !== null && ref.current && document.activeElement === ref.current) ref.current.setSelectionRange(cursor.current, cursor.current);
+    cursor.current = null;
+  });
+  return (
+    <input
+      {...resto}
+      ref={ref}
+      inputMode="decimal"
+      value={exibido}
+      placeholder={resto.placeholder ?? "0,00"}
+      onChange={(e) => {
+        const bruto = e.target.value;
+        const pos = e.target.selectionStart ?? bruto.length;
+        const digitosAntes = bruto.slice(0, pos).replace(/[^\d,]/g, "").length;
+        const novo = mascararValor(bruto, permitirNegativo);
+        let n = 0;
+        let nova = 0;
+        while (nova < novo.length && n < digitosAntes) if (/[\d,]/.test(novo[nova++])) n++;
+        cursor.current = nova;
+        aoMudar(novo);
+      }}
+      onBlur={() => {
+        const completo = normalizarValor(exibido);
+        if (completo !== valor) aoMudar(completo);
+        aoSair?.();
+      }}
+      className={className}
+    />
+  );
+}
+
+/** Campo de dinheiro: formata como 10.000,00; aceita "1.500,00", "1500" ou "-250,5". */
 export function CampoValor({ rotulo, obrigatorio, ajuda, className, desabilitado, valor, aoMudar, aoSair, permitirNegativo }: Comum & {
   valor: string;
   aoMudar: (v: string) => void;
@@ -91,20 +135,18 @@ export function CampoValor({ rotulo, obrigatorio, ajuda, className, desabilitado
   permitirNegativo?: boolean;
 }) {
   const id = useId();
-  const filtrar = (texto: string) => texto.replace(permitirNegativo ? /[^\d.,-]/g : /[^\d.,]/g, "");
   return (
     <div className={className}>
       <Rotulo texto={rotulo} obrigatorio={obrigatorio} ajuda={ajuda} htmlFor={id} />
       <div className="relative">
         <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-gray-400">R$</span>
-        <input
+        <EntradaValor
           id={id}
-          inputMode="decimal"
           disabled={desabilitado}
-          value={valor}
-          placeholder="0,00"
-          onChange={(e) => aoMudar(filtrar(e.target.value))}
-          onBlur={aoSair}
+          valor={valor}
+          aoMudar={aoMudar}
+          aoSair={aoSair}
+          permitirNegativo={permitirNegativo}
           className={cn(estiloEntrada, "pl-9 text-right tabular-nums")}
         />
       </div>

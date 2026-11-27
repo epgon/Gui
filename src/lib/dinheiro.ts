@@ -17,3 +17,24 @@ export function lerValorEmCentavos(texto: string): number | null {
   const centavos = Number(inteiro) * 100 + Number(decimal.padEnd(2, "0"));
   return limpo.startsWith("-") ? -centavos : centavos;
 }
+
+/**
+ * Máscara de digitação: "10000" -> "10.000", "1500,5" -> "1.500,5".
+ * Mantém só dígitos, uma vírgula (até 2 casas) e, se permitido, o "-" inicial.
+ */
+export function mascararValor(texto: string, permitirNegativo = false): string {
+  const negativo = permitirNegativo && texto.trim().startsWith("-");
+  const limpo = texto.replace(/[^\d,]/g, "");
+  const i = limpo.indexOf(",");
+  const inteiroBruto = (i === -1 ? limpo : limpo.slice(0, i)).replace(/^0+(?=\d)/, "");
+  const decimal = i === -1 ? null : limpo.slice(i + 1).replace(/,/g, "").slice(0, 2);
+  const inteiro = inteiroBruto.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  if (!inteiro && decimal === null) return negativo ? "-" : "";
+  return `${negativo ? "-" : ""}${inteiro || "0"}${decimal === null ? "" : `,${decimal}`}`;
+}
+
+/** Ao sair do campo: "10000" -> "10.000,00"; texto inválido ou vazio fica como está. */
+export function normalizarValor(texto: string): string {
+  const centavos = lerValorEmCentavos(texto);
+  return centavos === null ? texto : formatarCentavos(centavos);
+}

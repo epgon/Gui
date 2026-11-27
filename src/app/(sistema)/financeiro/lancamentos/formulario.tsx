@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useSistema } from "@/components/layout/provedor-sistema";
 import { Botao } from "@/components/ui/botao";
-import { CampoSelecao, CampoTexto, CampoValor, Rotulo, TextoComDestaque } from "@/components/ui/campo";
+import { CampoSelecao, CampoTexto, CampoValor, EntradaValor, Rotulo, TextoComDestaque } from "@/components/ui/campo";
 import { Chave } from "@/components/ui/chave";
 import { FaixaErro } from "@/components/ui/faixa-erro";
 import { Modal } from "@/components/ui/modal";
@@ -857,11 +857,10 @@ function ModalParcelas({ inicial, incluir, descricaoBase, quantidade, aoFechar, 
                   <input aria-label={`Vencimento da parcela ${p.numero}`} type="date" value={p.data} onChange={(e) => mudar(p.numero, "data", e.target.value)} className="h-8 w-full rounded border border-borda px-2" />
                 </td>
                 <td className="px-2 py-1">
-                  <input
+                  <EntradaValor
                     aria-label={`Valor da parcela ${p.numero}`}
-                    inputMode="decimal"
-                    value={p.valor}
-                    onChange={(e) => mudar(p.numero, "valor", e.target.value.replace(/[^\d.,]/g, ""))}
+                    valor={p.valor}
+                    aoMudar={(v) => mudar(p.numero, "valor", v)}
                     className="h-8 w-full rounded border border-borda px-2 text-right tabular-nums"
                   />
                 </td>
