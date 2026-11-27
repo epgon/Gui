@@ -9,6 +9,7 @@ export type ItemComum = {
   aoClicar: () => void;
   desabilitado?: boolean;
   /** Por que está desabilitado (aparece embaixo do item). */ dica?: string;
+  /** Item destrutivo (Excluir): ícone em vermelho. */ perigo?: boolean;
 };
 /** Linha divisória entre grupos de itens. */
 export type SeparadorMenu = { separador: true };
@@ -91,11 +92,11 @@ export function MenuLinha({
                   }}
                   className="flex w-full items-center gap-3 whitespace-nowrap px-4 py-2 text-left text-gray-700 hover:bg-verde-claro disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
                 >
-                  {item.icone && <span className="text-verde">{item.icone}</span>}
+                  {item.icone && <span className={item.perigo ? "text-despesa" : "text-verde"}>{item.icone}</span>}
                   {item.dica ? (
                     <span className="flex flex-col text-left">
                       {item.rotulo}
-                      <span className="max-w-56 text-xs text-gray-500">
+                      <span className="max-w-40 whitespace-normal text-xs text-gray-500">
                         {item.dica}
                       </span>
                     </span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown, ArrowUp, Lock, RotateCcw, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Info, Lock, RotateCcw, X } from "lucide-react";
 import { useState } from "react";
 import { salvarAparenciaListagens, salvarPreferenciaListagem } from "@/app/(sistema)/listagem-acoes";
 import { useSistema } from "@/components/layout/provedor-sistema";
@@ -65,7 +65,7 @@ export function PainelConfiguracao({ tela, pref, aoFechar }: { tela: string; pre
 
   const abas: { chave: Aba; rotulo: string }[] = [
     { chave: "colunas", rotulo: "Colunas" },
-    ...(def.semOrdenacao ? [] : [{ chave: "ordenacao" as const, rotulo: "Ordenação" }]),
+    { chave: "ordenacao", rotulo: "Ordenação" },
     { chave: "outros", rotulo: "Outros" },
   ];
   const padrao = preferenciaPadrao(tela);
@@ -134,7 +134,8 @@ export function PainelConfiguracao({ tela, pref, aoFechar }: { tela: string; pre
         </div>
       )}
 
-      {aba === "ordenacao" && (
+      {aba === "ordenacao" && def.semOrdenacao && <NaoSeAplica o="Ordenação" />}
+      {aba === "ordenacao" && !def.semOrdenacao && (
         <div>
           <p className={cn(subtitulo, "mb-3")}>Ordenando por</p>
           {ativas.length === 0 ? (
@@ -177,6 +178,10 @@ export function PainelConfiguracao({ tela, pref, aoFechar }: { tela: string; pre
 
       {aba === "outros" && (
         <div className="space-y-6">
+          {/* Lista em árvore (Categorias): ordem própria e sem paginação. */}
+          {def.semOrdenacao ? (
+            <NaoSeAplica o="Paginação" />
+          ) : (
           <div>
             <p className={cn(subtitulo, "mb-2")}>Registros por Página</p>
             <div className="inline-flex overflow-hidden rounded border border-borda bg-white shadow-sm" role="group" aria-label="Registros por Página">
@@ -196,6 +201,7 @@ export function PainelConfiguracao({ tela, pref, aoFechar }: { tela: string; pre
               <Chave tamanho="p" ligada={d.semPaginacao} aoMudar={(v) => mudar({ semPaginacao: v })} rotulo="Sem Paginação" />
             </div>
           </div>
+          )}
 
           <div>
             <p className={cn(subtitulo, "mb-2")}>Aparência em Todas as Listagens</p>
@@ -230,5 +236,19 @@ export function PainelConfiguracao({ tela, pref, aoFechar }: { tela: string; pre
         </p>
       )}
     </div>
+  );
+}
+
+/** Aviso das abas que não valem para a tela (ex.: Ordenação em Categorias, que segue a árvore). */
+function NaoSeAplica({ o }: { o: string }) {
+  return (
+    <p className="flex items-start gap-2 text-xs text-gray-600">
+      <Info className="h-5 w-5 shrink-0 text-receita" />
+      <span>
+        As configurações de <strong>{o}</strong>
+        <br />
+        não se aplicam nesta tela.
+      </span>
+    </p>
   );
 }
