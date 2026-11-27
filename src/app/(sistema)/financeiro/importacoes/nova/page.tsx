@@ -1,6 +1,5 @@
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { PainelAjuda } from "@/components/layout/painel-ajuda";
-import { ARTIGOS_IMPORTACAO } from "../artigos";
 import { EnvioArquivo } from "./envio";
 import { RecursoDesativado } from "@/components/layout/recurso-desativado";
 import { recursoAtivo } from "@/lib/parametros/servidor";
@@ -17,7 +16,7 @@ export default async function PaginaNovaImportacao() {
           <EnvioArquivo />
         </div>
       </main>
-      <PainelAjuda artigos={ARTIGOS_IMPORTACAO} />
+      <PainelAjuda />
     </>
   );
 }

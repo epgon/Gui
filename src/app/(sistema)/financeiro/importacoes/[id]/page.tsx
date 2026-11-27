@@ -3,7 +3,6 @@ import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
 import { PainelAjuda } from "@/components/layout/painel-ajuda";
 import { carregarImportacao } from "@/lib/importacao/consultas";
 import { carregarOpcoes } from "@/lib/lancamentos/consultas";
-import { ARTIGOS_IMPORTACAO } from "../artigos";
 import { Assistente } from "./assistente";
 import { RecursoDesativado } from "@/components/layout/recurso-desativado";
 import { recursoAtivo } from "@/lib/parametros/servidor";
@@ -24,7 +23,7 @@ export default async function PaginaImportacao({ params }: { params: Promise<{ i
           <Assistente imp={imp} opcoes={opcoes} />
         </div>
       </main>
-      {!larga && <PainelAjuda artigos={ARTIGOS_IMPORTACAO} />}
+      {!larga && <PainelAjuda />}
     </>
   );
 }
