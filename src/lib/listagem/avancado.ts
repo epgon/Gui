@@ -185,24 +185,41 @@ export function descreverFiltro(f: FiltroAvancado, campos: CampoAvancado[]): str
   return `${nome} ${ROTULO_CONDICAO[f.condicao].toLowerCase()} ${valor}`;
 }
 
-/** Ordena pela coluna escolhida (texto sem diferenciar acento; vazios sempre no fim). */
-export function ordenarPor<T>(linhas: T[], leitor: ((l: T) => ValorCampo) | undefined, direcao: "asc" | "desc"): T[] {
-  if (!leitor) return linhas;
-  const fator = direcao === "desc" ? -1 : 1;
+/** Um critério de ordenação já ligado ao leitor do campo. */
+export type CriterioOrdem<T> = { leitor: ((l: T) => ValorCampo) | undefined; direcao: "asc" | "desc" };
+
+/**
+ * Ordena por vários campos, na ordem de prioridade (texto sem diferenciar acento; vazios sempre no fim).
+ * A ordenação é estável: o empate final mantém a ordem original.
+ */
+export function ordenarPorVarios<T>(linhas: T[], criterios: CriterioOrdem<T>[]): T[] {
+  const validos = criterios.filter((c): c is { leitor: (l: T) => ValorCampo; direcao: "asc" | "desc" } => !!c.leitor);
+  if (!validos.length) return linhas;
   const chave = (v: ValorCampo) => (Array.isArray(v) ? v.join(", ") : v);
   return linhas
-    .map((l, i) => ({ l, i, v: chave(leitor(l)) }))
+    .map((l, i) => ({ l, i, v: validos.map((c) => chave(c.leitor(l))) }))
     .sort((a, b) => {
-      const av = a.v;
-      const bv = b.v;
-      const aVazio = av === null || av === undefined || av === "";
-      const bVazio = bv === null || bv === undefined || bv === "";
-      if (aVazio || bVazio) return aVazio === bVazio ? a.i - b.i : aVazio ? 1 : -1;
-      let r: number;
-      if (typeof av === "number" && typeof bv === "number") r = av - bv;
-      else if (typeof av === "boolean" && typeof bv === "boolean") r = Number(av) - Number(bv);
-      else r = String(av).localeCompare(String(bv), "pt-BR", { sensitivity: "base", numeric: true });
-      return r * fator || a.i - b.i;
+      for (const [k, c] of validos.entries()) {
+        const av = a.v[k];
+        const bv = b.v[k];
+        const aVazio = av === null || av === undefined || av === "";
+        const bVazio = bv === null || bv === undefined || bv === "";
+        if (aVazio || bVazio) {
+          if (aVazio === bVazio) continue;
+          return aVazio ? 1 : -1;
+        }
+        let r: number;
+        if (typeof av === "number" && typeof bv === "number") r = av - bv;
+        else if (typeof av === "boolean" && typeof bv === "boolean") r = Number(av) - Number(bv);
+        else r = String(av).localeCompare(String(bv), "pt-BR", { sensitivity: "base", numeric: true });
+        if (r !== 0) return r * (c.direcao === "desc" ? -1 : 1);
+      }
+      return a.i - b.i;
     })
     .map((x) => x.l);
+}
+
+/** Ordena pela coluna escolhida (um só critério). */
+export function ordenarPor<T>(linhas: T[], leitor: ((l: T) => ValorCampo) | undefined, direcao: "asc" | "desc"): T[] {
+  return ordenarPorVarios(linhas, [{ leitor, direcao }]);
 }

@@ -127,6 +127,13 @@
       "when": 1795811779543,
       "tag": "0017_categoria_tecnologia",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795814874004,
+      "tag": "0018_destaques_listagem",
+      "breakpoints": true
     }
   ]
 }

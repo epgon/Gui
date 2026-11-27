@@ -19,7 +19,7 @@ import { nomeArquivo, type ColunaTabela, type LinhaTabela, type Tabela } from ".
 
 const ROTULO_SITUACAO = { realizado: "Realizado", a_vencer: "A Vencer", vencido: "Vencido" } as const;
 const SITUACOES_LISTA: Record<string, string> = { nao_realizado: "Não Realizado", realizado: "Realizado", a_vencer: "A Vencer", vencido: "Vencido" };
-const ABAS: Record<string, string> = { receitas: "Receitas", despesas: "Despesas", transferencias: "Transferências" };
+const ABAS: Record<string, string> = { receitas: "Receitas", despesas: "Despesas", transferencias: "Transferências", recorrentes: "Recorrentes" };
 const situacaoCadastro = (s: string, fem = true) => (s === "ativos" ? `Situação: ${fem ? "Ativas" : "Ativos"}` : s === "inativos" ? `Situação: ${fem ? "Inativas" : "Inativos"}` : null);
 const sn = (v: boolean) => (v ? "Sim" : "Não");
 

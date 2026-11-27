@@ -65,3 +65,19 @@ export const LEITORES_LANCAMENTOS: Leitores<LinhaLista> = {
   tag: (l) => l.tags,
   divida: (l) => l.dividaNome ?? null,
 };
+
+/** Campos da Ordenação das Configurações da Listagem (telas.ts, "lancamentos"). */
+export const LEITORES_ORDENACAO_LANCAMENTOS: Leitores<LinhaLista> = {
+  codigo: (l) => l.id,
+  data: (l) => l.data,
+  dataCompra: (l) => l.dataCompra,
+  dataReferencia: (l) => l.dataReferencia,
+  dataPagamento: (l) => l.dataPagamento,
+  conta: (l) => l.contaOuCartao,
+  contato: (l) => l.contato,
+  descricao: (l) => l.descricao,
+  documento: (l) => l.documento,
+  categoria: (l) => l.categoria,
+  forma: (l) => l.forma,
+  valor: (l) => l.valorCentavos,
+};

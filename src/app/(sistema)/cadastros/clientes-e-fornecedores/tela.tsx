@@ -15,7 +15,7 @@ import { FaixaErro } from "@/components/ui/faixa-erro";
 import { Tabela } from "@/components/ui/tabela";
 import { CampoAuxiliarFormulario } from "@/components/listagem/campo-auxiliar";
 import { comComuns, MarcaNovo } from "@/components/listagem/colunas-comuns";
-import { useRotuloAuxiliar } from "@/components/listagem/configurar-listagem";
+import { useRotuloAuxiliar } from "@/components/listagem/use-rotulo-auxiliar";
 import { colunasVisiveis, type PreferenciaListagem } from "@/lib/listagem/telas";
 import { cn } from "@/lib/cn";
 import { formatarCep, formatarDocumento, formatarTelefone } from "@/lib/cadastros/documentos";
@@ -162,6 +162,7 @@ export function TelaContatos({ preferencia, linhas, total, filtros, caminho }: {
         }
         compacta={preferencia.compactar}
         destacarPares={preferencia.destacarPares}
+        configuracao={{ tela: "clientes-e-fornecedores", pref: preferencia }}
         colunas={colunasVisiveis("clientes-e-fornecedores", comComuns<Linha>([
           {
             chave: "nome",
@@ -223,7 +224,7 @@ export function TelaContatos({ preferencia, linhas, total, filtros, caminho }: {
           },
         ], rotuloAux), preferencia)}
       />
-      <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={preferencia.porPagina} total={total} />
+      <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={preferencia.porPagina} semPaginacao={preferencia.semPaginacao} total={total} />
 
       <ModalCadastro
         formulario={form}

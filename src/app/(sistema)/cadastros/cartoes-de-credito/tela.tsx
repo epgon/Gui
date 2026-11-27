@@ -19,7 +19,7 @@ import { Modal } from "@/components/ui/modal";
 import { Tabela } from "@/components/ui/tabela";
 import { CampoAuxiliarFormulario } from "@/components/listagem/campo-auxiliar";
 import { comComuns, MarcaNovo } from "@/components/listagem/colunas-comuns";
-import { useRotuloAuxiliar } from "@/components/listagem/configurar-listagem";
+import { useRotuloAuxiliar } from "@/components/listagem/use-rotulo-auxiliar";
 import { colunasVisiveis, type PreferenciaListagem } from "@/lib/listagem/telas";
 import { Valor } from "@/components/ui/valor";
 import { DetalhandoCartao, type AbaCartao } from "@/components/cartoes/detalhando-cartao";
@@ -129,6 +129,7 @@ export function TelaCartoes({ preferencia, linhas, total, filtros, caminho, banc
         }
         compacta={preferencia.compactar}
         destacarPares={preferencia.destacarPares}
+        configuracao={{ tela: "cartoes-de-credito", pref: preferencia }}
         colunas={colunasVisiveis("cartoes-de-credito", comComuns<Linha>([
           {
             chave: "cartao",
@@ -233,7 +234,7 @@ export function TelaCartoes({ preferencia, linhas, total, filtros, caminho, banc
           },
         ], rotuloAux), preferencia)}
       />
-      <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={preferencia.porPagina} total={total} />
+      <Paginacao caminho={caminho} parametros={parametros} pagina={filtros.pagina} porPagina={preferencia.porPagina} semPaginacao={preferencia.semPaginacao} total={total} />
       {detalhe && <DetalhandoCartao key={`${detalhe.id}-${detalhe.aba}`} cartaoId={detalhe.id} abaInicial={detalhe.aba} aoFechar={() => setDetalhe(null)} />}
 
       <Modal

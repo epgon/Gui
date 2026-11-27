@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth, signOut } from "@/auth";
 import { BarraFavoritos } from "@/components/layout/barra-favoritos";
 import { BarraSuperior } from "@/components/layout/barra-superior";
+import { ProvedorPainel } from "@/components/layout/provedor-painel";
 import { ProvedorSistema } from "@/components/layout/provedor-sistema";
 import { CHAVE_FAVORITOS, lerFavoritosDe } from "@/lib/favoritos";
 import { calcularNotificacoes } from "@/lib/notificacoes/servidor";
@@ -31,20 +32,22 @@ export default async function LayoutSistema({ children }: { children: React.Reac
 
   return (
     <ProvedorSistema valor={{ parametros, recursos, favoritos }}>
-      <div className="flex min-h-full flex-col">
-        <BarraSuperior
-          nomeUsuario={sessao.user.name ?? "Usuário"}
-          emailUsuario={sessao.user.email ?? ""}
-          sair={sair}
-          titulo={parametros.titulo}
-          ocultas={ocultas}
-          notificacoes={notificacoes.lista.filter((n) => !notificacoes.lidas.includes(n.id))}
-        />
-        <div className="flex flex-1">
-          <BarraFavoritos favoritos={favoritos.filter((f) => !ocultas.includes(f))} />
-          <div className="flex min-w-0 flex-1">{children}</div>
+      <ProvedorPainel>
+        <div className="flex min-h-full flex-col">
+          <BarraSuperior
+            nomeUsuario={sessao.user.name ?? "Usuário"}
+            emailUsuario={sessao.user.email ?? ""}
+            sair={sair}
+            titulo={parametros.titulo}
+            ocultas={ocultas}
+            notificacoes={notificacoes.lista.filter((n) => !notificacoes.lidas.includes(n.id))}
+          />
+          <div className="flex flex-1">
+            <BarraFavoritos favoritos={favoritos.filter((f) => !ocultas.includes(f))} />
+            <div className="flex min-w-0 flex-1">{children}</div>
+          </div>
         </div>
-      </div>
+      </ProvedorPainel>
     </ProvedorSistema>
   );
 }

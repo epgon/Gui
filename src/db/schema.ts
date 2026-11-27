@@ -116,6 +116,8 @@ export const preferenciaListagem = pgTable("preferencia_listagem", {
   semPaginacao: boolean("sem_paginacao").notNull().default(false),
   destacarPares: boolean("destacar_pares").notNull().default(true),
   compactar: boolean("compactar").notNull().default(false),
+  /** Destaques da lista (hoje, vencidos e situação); só as telas com `destaques` usam. */
+  destaques: jsonb("destaques").notNull().default(sql`'{"hoje":true,"vencidos":true,"situacao":true}'::jsonb`),
 });
 
 /** Feriados (usados no "Apenas dia útil"). Ano vazio = repete todo ano. */
