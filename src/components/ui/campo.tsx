@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleHelp } from "lucide-react";
+import { DicaAjuda } from "./dica-ajuda";
 import { useId, useLayoutEffect, useRef } from "react";
 import { mascararValor, normalizarValor } from "@/lib/dinheiro";
 import { cn } from "@/lib/cn";
@@ -16,11 +16,7 @@ export function Rotulo({ texto, obrigatorio, ajuda, htmlFor }: { texto: string; 
         {texto}
         {obrigatorio && <span className="text-despesa"> *</span>}
       </label>
-      {ajuda && (
-        <span title={ajuda} className="cursor-help text-gray-400">
-          <CircleHelp className="h-3.5 w-3.5" />
-        </span>
-      )}
+      {ajuda && <DicaAjuda texto={ajuda} />}
     </span>
   );
 }
