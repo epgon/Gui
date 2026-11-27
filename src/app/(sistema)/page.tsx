@@ -10,6 +10,8 @@ import { getDb, schema } from "@/db";
 import { cn } from "@/lib/cn";
 import { realizarAutomaticos } from "@/lib/recorrentes/servidor";
 import { hojeIso } from "@/lib/datas";
+import { carregarPainelDividas } from "@/lib/dividas/consultor/servidor";
+import { recursoAtivo } from "@/lib/parametros/servidor";
 import { carregarPainel } from "@/lib/visao-geral/servidor";
 import { CabecalhoVisaoGeral, TelaVisaoGeral } from "@/components/visao-geral/tela";
 
@@ -68,6 +70,16 @@ export default async function VisaoGeral() {
   await realizarAutomaticos(hoje).catch(() => 0);
   const [passos, painel] = await Promise.all([primeirosPassos(), carregarPainel(hoje)]);
   const feitos = passos.filter((p) => p.feito).length;
+  // Cartão Dívidas: só com o recurso ligado, dívida ativa e o cartão não escondido. Se o cálculo falhar, a Visão Geral segue sem ele.
+  const dividas = (await recursoAtivo("dividas"))
+    ? await carregarPainelDividas(hoje)
+        .then((d) =>
+          d.cartaoNaVisaoGeral && d.resumo.dividasAtivas > 0
+            ? { totalDevidoCentavos: d.resumo.totalDevidoCentavos, atrasoCentavos: d.resumo.atrasoCentavos, atrasoParcelas: d.resumo.atrasoParcelas, parcelasMesCentavos: d.parcelasMesCentavos, percentualRenda: d.percentualRenda, alertasAltos: d.visiveis.filter((a) => a.gravidade === "alta").length }
+            : null,
+        )
+        .catch(() => null)
+    : null;
 
   return (
     <>
@@ -125,7 +137,7 @@ export default async function VisaoGeral() {
             </Cartao>
           )}
 
-          <TelaVisaoGeral painel={painel} hoje={hoje} />
+          <TelaVisaoGeral painel={painel} hoje={hoje} dividas={dividas} />
         </div>
       </main>
       <PainelAjuda artigos={["Como navegar pela interface", "Visão Geral: o que cada cartão mostra", "Configurações iniciais e primeiro lançamento"]} />

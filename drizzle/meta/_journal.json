@@ -92,6 +92,13 @@
       "when": 1795736380677,
       "tag": "0012_simulacoes",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795737201310,
+      "tag": "0013_consultor",
+      "breakpoints": true
     }
   ]
 }

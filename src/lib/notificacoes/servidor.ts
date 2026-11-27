@@ -5,6 +5,7 @@ import { getDb, schema } from "@/db";
 import { faturasAtuais } from "@/lib/cartoes/servidor";
 import { formatarData, hojeIso } from "@/lib/datas";
 import { formatarCentavos } from "@/lib/dinheiro";
+import { carregarPainelDividas } from "@/lib/dividas/consultor/servidor";
 import { carregarOrcamento } from "@/lib/orcamentos/servidor";
 import { lerConfiguracoes, lerRecursos } from "@/lib/parametros/servidor";
 import { somarDias } from "@/lib/lancamentos/regras";
@@ -98,6 +99,22 @@ export const calcularNotificacoes = cache(async (hoje = hojeIso()): Promise<{ li
         texto: `Gasto de R$ ${formatarCentavos(c.realizado)} para um limite de R$ ${formatarCentavos(c.orcamento)} neste mês.`,
         href: `/gestao/orcamentos?mes=${mes}`,
         rotuloLink: "Ver orçamentos",
+      });
+    }
+  }
+
+  if (recursos.dividas) {
+    // Os alertas graves do Consultor Gui (regras R1, R2, R3, R4 e R13 com gravidade Alta), calculados na hora.
+    // Dispensados e adiados não aparecem. Se o cálculo falhar, o sino segue sem eles.
+    const painel = await carregarPainelDividas(hoje).catch(() => null);
+    for (const a of (painel?.visiveis ?? []).filter((x) => x.gravidade === "alta").slice(0, 5)) {
+      lista.push({
+        id: `divida:${a.id}:${hoje}`,
+        tipo: "alerta",
+        titulo: a.titulo,
+        texto: a.texto.length > 220 ? `${a.texto.slice(0, 217)}...` : a.texto,
+        href: a.acao?.href ?? "/gestao/dividas",
+        rotuloLink: a.acao?.rotulo ?? "Ver dívidas",
       });
     }
   }

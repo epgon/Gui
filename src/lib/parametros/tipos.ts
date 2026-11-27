@@ -48,6 +48,20 @@ export type Parametros = {
     sobraMeses: number;
     /** Percentual da sobra livre que cada cenário usa. */
     cenarios: { conservador: number; intermediario: number; acelerado: number };
+    /** Consultor Gui: parcelas do mês acima deste % da renda dão um alerta de atenção. */
+    limiteRendaAtencaoPct: number;
+    /** Consultor Gui: acima deste % da renda o alerta é alto. */
+    limiteRendaAltaPct: number;
+    /** Consultor Gui: dívida com taxa ao mês acima deste valor é "taxa muito alta". */
+    limiteTaxaAltaPct: number;
+    /** Consultor Gui: rendimento estimado da reserva (% ao mês), para comparar com a taxa das dívidas. */
+    rendimentoReservaPct: number;
+    /** Consultor Gui: dívida atrasada há mais de N dias sugere abrir negociação. */
+    diasParaNegociar: number;
+    /** Regras do Consultor desligadas (R1, R2...). */
+    alertasDesligados: string[];
+    /** Mostra o cartão Dívidas na Visão Geral principal (quando há dívida ativa). */
+    cartaoVisaoGeral: boolean;
   };
 };
 
@@ -112,6 +126,13 @@ export function lerParametrosDe(c: Record<string, unknown>): Parametros {
         intermediario: percentual(c["dividas.cenario_intermediario"], 50),
         acelerado: percentual(c["dividas.cenario_acelerado"], 100),
       },
+      limiteRendaAtencaoPct: percentual(c["dividas.limite_renda_atencao"], 30),
+      limiteRendaAltaPct: percentual(c["dividas.limite_renda_alta"], 50),
+      limiteTaxaAltaPct: percentual(c["dividas.limite_taxa_alta"], 6),
+      rendimentoReservaPct: percentual(c["dividas.rendimento_reserva"], 0.8),
+      diasParaNegociar: inteiroEntre(c["dividas.dias_negociar"], 1, 3650, 90),
+      alertasDesligados: Array.isArray(c["dividas.alertas_desligados"]) ? (c["dividas.alertas_desligados"] as unknown[]).filter((x): x is string => typeof x === "string" && /^R\d{1,2}$/.test(x)) : [],
+      cartaoVisaoGeral: bool(c["dividas.cartao_visao_geral"], true),
     },
   };
 }

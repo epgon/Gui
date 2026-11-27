@@ -45,6 +45,7 @@ export default async function PaginaNegociacoes({ searchParams }: { searchParams
             padroes={{ contaId: contas[0]?.valor.replace("conta:", "") ?? "", categoriaId: categorias.parcelas ? String(categorias.parcelas) : "" }}
             sobraCalculadaCentavos={financeiro.situacao.sobraMensalCentavos}
             abrirNova={parametro(sp, "nova") === "1"}
+            dividaInicial={/^\d+$/.test(parametro(sp, "divida")) ? Number(parametro(sp, "divida")) : null}
             abrirDetalhe={abrirDetalhe}
             porPagina={POR_PAGINA}
           />

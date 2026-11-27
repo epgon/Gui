@@ -904,6 +904,46 @@ export const simulacao = pgTable("simulacao", {
     .$onUpdate(() => new Date()),
 });
 
+// ---------------------------------------------------------------------------
+// Gestão de Dívidas (fase D4): Consultor Gui (assuntos e mensagens)
+// ---------------------------------------------------------------------------
+
+/** Uma conversa do Consultor Gui, organizada por assunto. Só guarda texto e números: o Consultor nunca grava dívida nem lançamento. */
+export const consultorAssunto = pgTable(
+  "consultor_assunto",
+  {
+    id: serial("id").primaryKey(),
+    titulo: varchar("titulo", { length: 80 }).notNull(),
+    /** aberto ou arquivado. */
+    situacao: varchar("situacao", { length: 12 }).notNull().default("aberto"),
+    /** Assunto sobre uma dívida em particular (opcional). */
+    dividaId: integer("divida_id").references(() => divida.id, { onDelete: "set null" }),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [index("consultor_assunto_situacao_idx").on(t.situacao, t.atualizadoEm)],
+);
+
+export const consultorMensagem = pgTable(
+  "consultor_mensagem",
+  {
+    id: serial("id").primaryKey(),
+    assuntoId: integer("assunto_id")
+      .notNull()
+      .references(() => consultorAssunto.id, { onDelete: "cascade" }),
+    /** pessoa, gui (cálculo do Gui) ou gui_ia (fase D6). */
+    autor: varchar("autor", { length: 10 }).notNull(),
+    texto: text("texto").notNull(),
+    /** Números usados, critério, "Como calculei" e ações sugeridas (só links). */
+    dados: jsonb("dados"),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("consultor_mensagem_assunto_idx").on(t.assuntoId, t.criadoEm)],
+);
+
 export const acaoAuditoriaEnum = pgEnum("acao_auditoria", [
   "cadastrou",
   "alterou",

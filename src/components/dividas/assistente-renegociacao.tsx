@@ -14,6 +14,7 @@ import { formatarCentavos, lerValorEmCentavos } from "@/lib/dinheiro";
 import { analisarProposta, planejarRenegociacao, validarRenegociacao, type CondicoesRenegociacao } from "@/lib/dividas/negociacao";
 import { estaAtiva } from "@/lib/dividas/regras";
 import type { DividaParaRenegociar, LinhaDivida, LinhaNegociacao, PropostaLinha } from "@/lib/dividas/tipos";
+import { AvisoAntesDeConfirmar } from "./aviso-confirmar";
 import { PERIODICIDADES, type Periodicidade } from "@/lib/lancamentos/regras";
 import type { Opcoes } from "@/lib/lancamentos/tipos";
 
@@ -45,6 +46,7 @@ export function AssistenteRenegociacao({ dividas, opcoes, hoje, inicio, padroes,
   const { negociacao, proposta } = inicio;
   const ativas = useMemo(() => dividas.filter((d) => estaAtiva(d.situacao)), [dividas]);
   const primeira = ativas.find((d) => inicio.dividaIds.includes(d.id));
+  const [aviso, setAviso] = useState(false);
   const [etapa, setEtapa] = useState<1 | 2 | 3>(1);
   const [credorId, setCredorId] = useState<string>(negociacao ? String(negociacao.contatoId) : primeira ? String(primeira.contatoId) : "");
   const [marcadas, setMarcadas] = useState<number[]>(inicio.dividaIds);
@@ -132,6 +134,12 @@ export function AssistenteRenegociacao({ dividas, opcoes, hoje, inicio, padroes,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preparadas, etapa]);
 
+  const motivosAviso = [
+    ...(analise.maisCaro ? [`O acordo soma ${reais(analise.totalCentavos)}, ${reais(analise.acrescimoCentavos)} a mais que o saldo atual das dívidas (${reais(analise.saldoCentavos)}).`] : []),
+    ...(analise.cabeNaSobra === false ? ["A parcela do acordo não cabe na sobra mensal informada na negociação."] : []),
+  ];
+  const tentarConfirmar = () => (motivosAviso.length ? setAviso(true) : confirmar());
+
   const confirmar = () =>
     iniciar(async () => {
       setErro("");
@@ -174,11 +182,12 @@ export function AssistenteRenegociacao({ dividas, opcoes, hoje, inicio, padroes,
     ) : (
       <>
         <Botao variante="secundario" type="button" icone={<ArrowLeft className="h-4 w-4" />} onClick={() => setEtapa(2)} disabled={ocupado}>Condições</Botao>
-        <Botao type="button" carregando={ocupado} icone={<CheckCircle2 className="h-4 w-4" />} onClick={confirmar}>Confirmar renegociação</Botao>
+        <Botao type="button" carregando={ocupado} icone={<CheckCircle2 className="h-4 w-4" />} onClick={tentarConfirmar}>Confirmar renegociação</Botao>
       </>
     );
 
   return (
+    <>
     <Modal
       aberto
       aoFechar={aoFechar}
@@ -242,6 +251,17 @@ export function AssistenteRenegociacao({ dividas, opcoes, hoje, inicio, padroes,
         <FaixaErro>{erro && <TextoComDestaque texto={erro} />}</FaixaErro>
       </div>
     </Modal>
+    <AvisoAntesDeConfirmar
+      aberto={aviso}
+      titulo="Confira antes de renegociar"
+      motivos={motivosAviso}
+      aoVoltar={() => setAviso(false)}
+      aoContinuar={() => {
+        setAviso(false);
+        confirmar();
+      }}
+    />
+    </>
   );
 }
 

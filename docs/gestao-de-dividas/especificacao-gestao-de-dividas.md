@@ -480,3 +480,12 @@ A pessoa pediu que as fases fossem construídas sem esperar (26/11/2026). Para c
 - A ordem das estratégias é fixada pelo saldo inicial. A dívida hipotética não recebe extra; o dinheiro do empréstimo pode entrar como extra no primeiro mês.
 - Contas da reserva: se nenhuma for marcada, valem as contas de Poupança e Investimento ativas.
 - "Lembrar todo mês" só existe no cadastro de dívida sem parcelas e exige o recurso Lançamentos Recorrentes ligado.
+
+### Decisões tomadas na construção da D4 (27/11/2026)
+
+- O Consultor é **só regras** (sem IA): perguntas prontas e texto livre por palavras-chave (valor e parcelas lidos do texto). Quando não entende, diz isso e oferece as perguntas prontas.
+- Conversas ficam em `consultor_assunto` e `consultor_mensagem`; "Alertas" é um assunto virtual. Dispensar e "Lembrar em 7 dias" ficam na configuração `dividas.alertas_estado`.
+- Limites padrão: parcelas acima de 30% da renda = atenção, 50% = alta, taxa acima de 6% ao mês = alta, rendimento da reserva 0,8% ao mês, 90 dias para negociar. Todos editáveis em Parâmetros, assim como ligar/desligar cada regra.
+- A **previsão de quitação** paga só as parcelas (plano ativo chega na D5); com dívida sem parcelas a data é marcada como aproximada.
+- A sobra mensal da D3 não foi alterada nesta fase.
+- Avisos antes de confirmar (7.6) nunca bloqueiam: Voltar ou "Continuar mesmo assim".

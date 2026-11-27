@@ -83,9 +83,11 @@ export function CampoSelecao({ rotulo, obrigatorio, ajuda, className, desabilita
 }
 
 /** Campo de dinheiro: aceita "1.500,00", "1500" ou "-250,5". */
-export function CampoValor({ rotulo, obrigatorio, ajuda, className, desabilitado, valor, aoMudar, permitirNegativo }: Comum & {
+export function CampoValor({ rotulo, obrigatorio, ajuda, className, desabilitado, valor, aoMudar, aoSair, permitirNegativo }: Comum & {
   valor: string;
   aoMudar: (v: string) => void;
+  /** Chamado ao sair do campo (blur). */
+  aoSair?: () => void;
   permitirNegativo?: boolean;
 }) {
   const id = useId();
@@ -102,6 +104,7 @@ export function CampoValor({ rotulo, obrigatorio, ajuda, className, desabilitado
           value={valor}
           placeholder="0,00"
           onChange={(e) => aoMudar(filtrar(e.target.value))}
+          onBlur={aoSair}
           className={cn(estiloEntrada, "pl-9 text-right tabular-nums")}
         />
       </div>

@@ -5,7 +5,7 @@ import { AlertTriangle, ArrowDown, ArrowLeftRight, ArrowUp, CalendarCheck, Calen
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { salvarOpcoesVisaoGeral } from "@/app/(sistema)/visao-geral-acoes";
+import { esconderCartaoDividas, salvarOpcoesVisaoGeral } from "@/app/(sistema)/visao-geral-acoes";
 import { IconeBanco } from "@/components/cadastros/icone-banco";
 import { MenuLinha } from "@/components/cadastros/menu-linha";
 import { DetalhandoCartao } from "@/components/cartoes/detalhando-cartao";
@@ -24,6 +24,9 @@ import type { carregarPainel } from "@/lib/visao-geral/servidor";
 import { GraficoRosca, MiniGrafico } from "./graficos";
 
 export type Painel = Awaited<ReturnType<typeof carregarPainel>>;
+
+/** Os números do cartão Dívidas (só quando o recurso está ligado, há dívida ativa e a pessoa não escondeu o cartão). */
+export type ResumoDividasCartao = { totalDevidoCentavos: number; atrasoCentavos: number; atrasoParcelas: number; parcelasMesCentavos: number; percentualRenda: number | null; alertasAltos: number };
 type QualOpcao = "vencidos" | "futuro" | "contas" | "categorias" | "faturas";
 type QualPrazo = "vencidos" | "vencendo" | "futuro";
 
@@ -64,7 +67,7 @@ function AtalhoNovo({ href, rotulo, icone }: { href: string; rotulo: string; ico
 }
 
 /** Cartões do painel. */
-export function TelaVisaoGeral({ painel, hoje }: { painel: Painel; hoje: string }) {
+export function TelaVisaoGeral({ painel, hoje, dividas }: { painel: Painel; hoje: string; dividas?: ResumoDividasCartao | null }) {
   const [opcaoAberta, setOpcaoAberta] = useState<QualOpcao | null>(null);
   const [prazoAberto, setPrazoAberto] = useState<QualPrazo | null>(null);
   const [contaAberta, setContaAberta] = useState<number | null>(null);
@@ -149,6 +152,8 @@ export function TelaVisaoGeral({ painel, hoje }: { painel: Painel; hoje: string 
           aoOpcoes={() => setOpcaoAberta("futuro")}
         />
       </div>
+
+      {dividas && <CartaoDividas resumo={dividas} />}
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Saldo das Contas */}
@@ -313,6 +318,46 @@ export function TelaVisaoGeral({ painel, hoje }: { painel: Painel; hoje: string 
       {contaAberta !== null && <DetalhandoConta key={contaAberta} contaId={contaAberta} aoFechar={() => setContaAberta(null)} />}
       {cartaoAberto !== null && <DetalhandoCartao key={cartaoAberto} cartaoId={cartaoAberto} aoFechar={() => { setCartaoAberto(null); router.refresh(); }} />}
     </ProvedorOcultar>
+  );
+}
+
+/** Cartão Dívidas: Total devido, Em atraso e Parcelas do mês, com um atalho para a Gestão de Dívidas. */
+function CartaoDividas({ resumo }: { resumo: ResumoDividasCartao }) {
+  const router = useRouter();
+  const [, iniciar] = useTransition();
+  return (
+    <CartaoPainel
+      titulo="Dívidas"
+      menu={[
+        { rotulo: "Abrir Gestão de Dívidas", aoClicar: () => router.push("/gestao/dividas") },
+        { rotulo: "Esconder este cartão", aoClicar: () => iniciar(async () => void (await esconderCartaoDividas())) },
+      ]}
+    >
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Link href="/gestao/dividas/minhas" className="group" title="Ver as dívidas">
+          <p className="text-sm font-medium text-gray-600 group-hover:text-verde">Total devido</p>
+          <ValorOcultavel centavos={-resumo.totalDevidoCentavos || 0} className="text-2xl" />
+        </Link>
+        <Link href="/gestao/dividas/minhas?situacao=em_atraso" className="group" title="Ver as parcelas em atraso">
+          <p className="text-sm font-medium text-gray-600 group-hover:text-verde">Em atraso</p>
+          <ValorOcultavel centavos={-resumo.atrasoCentavos || 0} className="text-2xl" />
+          <p className="mt-0.5 text-xs text-gray-500">{resumo.atrasoParcelas === 0 ? "Nenhuma parcela vencida" : `${resumo.atrasoParcelas} ${resumo.atrasoParcelas === 1 ? "parcela" : "parcelas"}`}</p>
+        </Link>
+        <Link href="/gestao/dividas" className="group" title="Ver a Visão Geral das dívidas">
+          <p className="text-sm font-medium text-gray-600 group-hover:text-verde">Parcelas do mês</p>
+          <ValorOcultavel centavos={-resumo.parcelasMesCentavos || 0} className="text-2xl" />
+          <p className="mt-0.5 text-xs text-gray-500">{resumo.percentualRenda === null ? "Sem renda média para comparar" : `${resumo.percentualRenda.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% da renda média`}</p>
+        </Link>
+      </div>
+      {resumo.alertasAltos > 0 && (
+        <p className="mt-3 flex items-center gap-1.5 text-sm font-medium text-despesa">
+          <AlertTriangle className="h-4 w-4" />
+          <Link href="/gestao/dividas#analises" className="hover:underline">
+            {resumo.alertasAltos} {resumo.alertasAltos === 1 ? "alerta alto" : "alertas altos"} do Consultor Gui
+          </Link>
+        </p>
+      )}
+    </CartaoPainel>
   );
 }
 

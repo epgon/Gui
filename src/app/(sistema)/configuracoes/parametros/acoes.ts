@@ -78,6 +78,13 @@ export type DadosDividas = {
   cenarioConservador: string;
   cenarioIntermediario: string;
   cenarioAcelerado: string;
+  limiteRendaAtencaoPct: string;
+  limiteRendaAltaPct: string;
+  limiteTaxaAltaPct: string;
+  rendimentoReservaPct: string;
+  diasParaNegociar: string;
+  alertasDesligados: string[];
+  cartaoVisaoGeral: boolean;
 };
 
 const pct = (rotulo: string) =>
@@ -103,9 +110,16 @@ const dividas = z.object({
   cenarioConservador: pct("Cenário Conservador"),
   cenarioIntermediario: pct("Cenário Intermediário"),
   cenarioAcelerado: pct("Cenário Acelerado"),
+  limiteRendaAtencaoPct: pct("Parcelas acima de (atenção)"),
+  limiteRendaAltaPct: pct("Parcelas acima de (alta)"),
+  limiteTaxaAltaPct: pct("Taxa muito alta"),
+  rendimentoReservaPct: pct("Rendimento da reserva"),
+  diasParaNegociar: inteiro("Atraso para sugerir negociação (dias)", 1, 3650),
+  alertasDesligados: z.array(z.string().regex(/^R\d{1,2}$/)).max(30),
+  cartaoVisaoGeral: z.boolean(),
 });
 
-/** Gestão de Dívidas: multa e mora da estimativa de atraso, e as contas do Simulador (reserva, sobra e cenários). */
+/** Gestão de Dívidas: multa e mora da estimativa de atraso, as contas do Simulador (reserva, sobra e cenários) e os limites do Consultor Gui. */
 export async function salvarParametrosDividas(entrada: DadosDividas): Promise<Resultado> {
   await exigirLogin();
   const v = dividas.safeParse(entrada);
@@ -113,6 +127,8 @@ export async function salvarParametrosDividas(entrada: DadosDividas): Promise<Re
   const d = v.data;
   const fmt = (n: number) => String(n).replace(".", ",");
   const contas = [...new Set(d.contasReserva)];
+  const alertas = [...new Set(d.alertasDesligados)].sort();
+  if (d.limiteRendaAltaPct < d.limiteRendaAtencaoPct) return falha("O limite **alto** das parcelas precisa ser maior ou igual ao de **atenção**.");
   await getDb().transaction(async (tx) => {
     const aud = (descricao: string) => ({ tela: TELA, descricao });
     await gravarConfiguracao(tx, "dividas.multa_padrao", d.multaPadraoPct, aud(`a Multa padrão das dívidas para ${fmt(d.multaPadraoPct)}%`));
@@ -123,6 +139,13 @@ export async function salvarParametrosDividas(entrada: DadosDividas): Promise<Re
     await gravarConfiguracao(tx, "dividas.cenario_conservador", d.cenarioConservador, aud(`o Cenário Conservador para ${fmt(d.cenarioConservador)}% da sobra`));
     await gravarConfiguracao(tx, "dividas.cenario_intermediario", d.cenarioIntermediario, aud(`o Cenário Intermediário para ${fmt(d.cenarioIntermediario)}% da sobra`));
     await gravarConfiguracao(tx, "dividas.cenario_acelerado", d.cenarioAcelerado, aud(`o Cenário Acelerado para ${fmt(d.cenarioAcelerado)}% da sobra`));
+    await gravarConfiguracao(tx, "dividas.limite_renda_atencao", d.limiteRendaAtencaoPct, aud(`o Limite de atenção das parcelas das dívidas para ${fmt(d.limiteRendaAtencaoPct)}% da renda`));
+    await gravarConfiguracao(tx, "dividas.limite_renda_alta", d.limiteRendaAltaPct, aud(`o Limite alto das parcelas das dívidas para ${fmt(d.limiteRendaAltaPct)}% da renda`));
+    await gravarConfiguracao(tx, "dividas.limite_taxa_alta", d.limiteTaxaAltaPct, aud(`o Limite de taxa muito alta das dívidas para ${fmt(d.limiteTaxaAltaPct)}% ao mês`));
+    await gravarConfiguracao(tx, "dividas.rendimento_reserva", d.rendimentoReservaPct, aud(`o Rendimento estimado da reserva para ${fmt(d.rendimentoReservaPct)}% ao mês`));
+    await gravarConfiguracao(tx, "dividas.dias_negociar", d.diasParaNegociar, aud(`o Atraso que sugere negociação para ${d.diasParaNegociar} dias`));
+    await gravarConfiguracao(tx, "dividas.alertas_desligados", alertas, aud(alertas.length ? `os Alertas do Consultor desligados (${alertas.join(", ")})` : "os Alertas do Consultor (todos ligados)"));
+    await gravarConfiguracao(tx, "dividas.cartao_visao_geral", d.cartaoVisaoGeral, aud(d.cartaoVisaoGeral ? "o Cartão Dívidas da Visão Geral para visível" : "o Cartão Dívidas da Visão Geral para escondido"));
   });
   refresh();
   return { ok: true };

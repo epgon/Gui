@@ -31,7 +31,7 @@ import { desfazerRenegociacao } from "../negociacoes/acoes";
 type Janela = { acao: AcaoDivida | "cancelar"; divida: LinhaDivida };
 type Parcela = { id: number; descricao: string; valorCentavos: number; vencimento: string; dividaId: number };
 
-export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoje, totalDevido, todas, contasEmAberto, recorrentes, padroes, multaPadrao, moraPadrao, abrirNova, abrirDetalhe, porPagina, preferencia }: {
+export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoje, totalDevido, todas, contasEmAberto, recorrentes, padroes, multaPadrao, limiteTaxaAltaPct, moraPadrao, abrirNova, abrirDetalhe, acaoInicial, porPagina, preferencia }: {
   linhas: LinhaDivida[];
   total: number;
   filtros: FiltrosDividas;
@@ -44,16 +44,19 @@ export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoj
   recorrentes: ContaEmAberto[];
   padroes: PadroesDivida;
   multaPadrao: number;
+  limiteTaxaAltaPct: number;
   moraPadrao: number;
   abrirNova: boolean;
   abrirDetalhe: number | null;
+  /** Vindo de um botão do Consultor Gui ou de um alerta: abre a janela normal da ação (que só grava no Confirmar dela). */
+  acaoInicial: string | null;
   porPagina: number;
   preferencia: PreferenciaListagem;
 }) {
   const router = useRouter();
   const vazio = dadosVaziosDivida(padroes, hoje);
   const form = useFormularioCadastro(vazio);
-  const [detalhando, setDetalhando] = useState<number | null>(abrirDetalhe);
+  const [detalhando, setDetalhando] = useState<number | null>(acaoInicial ? null : abrirDetalhe);
   const [versao, setVersao] = useState(0);
   const [janela, setJanela] = useState<Janela | null>(null);
   const [parcela, setParcela] = useState<Parcela | null>(null);
@@ -72,6 +75,8 @@ export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoj
       abrirNovoForm();
     }
   }, [abrirNova, abrirNovoForm]);
+
+  const acaoAberta = useRef(false);
 
   const mudou = () => {
     setVersao((v) => v + 1);
@@ -134,6 +139,15 @@ export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoj
     if (acao === "pagar" && d.forma === "parcelas_fixas") return pagarProxima(d);
     setJanela({ acao, divida: d });
   };
+
+  useEffect(() => {
+    if (!acaoInicial || abrirDetalhe === null || acaoAberta.current) return;
+    acaoAberta.current = true;
+    const d = todas.find((x) => x.id === abrirDetalhe);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (d && estaAtiva(d.situacao)) abrirAcao(acaoInicial as AcaoDivida, d);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const editar = (d: LinhaDivida) => form.abrirEdicao(d.id, dadosDaDivida(d, hoje, padroes));
   const clonar = (d: LinhaDivida) => form.abrirNovo({ ...dadosDaDivida(d, hoje, padroes), descricao: `${d.descricao} (cópia)` });
@@ -224,7 +238,7 @@ export function TelaMinhasDividas({ linhas, total, filtros, caminho, opcoes, hoj
 
       <ContasEmAberto contas={contasEmAberto} recorrentes={recorrentes} dividas={todas} contatos={opcoes.contatos} hoje={hoje} />
 
-      <ModalDivida formulario={form} opcoes={opcoes} multaPadrao={multaPadrao} moraPadrao={moraPadrao} />
+      <ModalDivida formulario={form} opcoes={opcoes} multaPadrao={multaPadrao} moraPadrao={moraPadrao} limiteTaxaAltaPct={limiteTaxaAltaPct} />
 
       {detalhando !== null && (
         <DetalhandoDivida
