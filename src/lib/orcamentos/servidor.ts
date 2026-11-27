@@ -47,6 +47,7 @@ export async function carregarOrcamento(f: FiltrosOrcamento, hoje = hojeIso()) {
     tag: "",
     incluirAcerto: false,
     incluirTransferencia: false,
+    incluirZeradas: false,
   };
   const arvore = await carregarArvore();
   const [escolhidas, limites, movimentos] = await Promise.all([

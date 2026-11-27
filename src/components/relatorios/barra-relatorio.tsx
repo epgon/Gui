@@ -3,23 +3,25 @@
 import { Search, Settings, Wallet } from "lucide-react";
 import Form from "next/form";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { salvarInclusoesRelatorio } from "@/app/(sistema)/relatorios/acoes";
 import { IconeBanco } from "@/components/cadastros/icone-banco";
 import { BotaoImprimir } from "@/components/exportacao/botao-imprimir";
 import { Chave } from "@/components/ui/chave";
 import type { OpcaoDestino } from "@/lib/lancamentos/tipos";
-import { DATAS_CONSIDERADAS, SITUACOES_RELATORIO, type Granularidade } from "@/lib/relatorios/regras";
+import { DATAS_CONSIDERADAS, SITUACOES_RELATORIO, type Granularidade, type InclusoesRelatorio, type TelaComInclusoes } from "@/lib/relatorios/regras";
 
 const campo = "h-9 rounded-md border border-borda bg-white px-2 text-sm outline-none focus:border-verde";
 
 /**
  * Barra comum aos relatórios: tipo (troca sem voltar), intervalo "de ... a ..." com a lupa,
  * Imprimir, engrenagem "Incluir as categorias" e os filtros rápidos (Conta ou Cartão, Situação e Considerar: Data).
+ * A engrenagem fica gravada (vale também para a impressão e para as próximas vezes).
  */
-export function BarraRelatorio({ caminho, tela, nomeTipo, tipos, tipoAtual, granularidade, parametros, destinos }: {
+export function BarraRelatorio({ caminho, tela, nomeTipo, tipos, tipoAtual, granularidade, parametros, destinos, inclusoes, temZeradas = true }: {
   caminho: string;
-  /** Nome usado na impressão (/api/exportar/...). */
-  tela: string;
+  /** Nome usado na impressão (/api/exportar/...) e na gravação da engrenagem. */
+  tela: TelaComInclusoes;
   /** Nome do parâmetro do tipo na URL ("periodo" ou "relatorio"). */
   nomeTipo: string;
   tipos: { valor: string; rotulo: string }[];
@@ -28,9 +30,34 @@ export function BarraRelatorio({ caminho, tela, nomeTipo, tipos, tipoAtual, gran
   /** Todos os parâmetros da URL atual (filtros). */
   parametros: Record<string, string>;
   destinos: OpcaoDestino[];
+  /** Como a engrenagem "Incluir as categorias" está gravada. */
+  inclusoes: InclusoesRelatorio;
+  /** Mostra a chave "Categorias Zeradas" (no Saldo Detalhado, só por Categorias). */
+  temZeradas?: boolean;
 }) {
   const router = useRouter();
   const [engrenagem, setEngrenagem] = useState(false);
+  // A chave muda na hora; a tela recarrega quando a gravação termina.
+  const [marcadas, setMarcadas] = useState(inclusoes);
+  const [gravando, iniciar] = useTransition();
+  const [erro, setErro] = useState("");
+  const [vistas, setVistas] = useState(inclusoes);
+  if (vistas !== inclusoes) {
+    setVistas(inclusoes);
+    setMarcadas(inclusoes);
+  }
+  const mudarInclusao = (qual: keyof InclusoesRelatorio, valor: boolean) => {
+    const novas = { ...marcadas, [qual]: valor };
+    setMarcadas(novas);
+    setErro("");
+    iniciar(async () => {
+      const r = await salvarInclusoesRelatorio(tela, novas);
+      if (!r.ok) {
+        setMarcadas(inclusoes);
+        setErro(r.erro);
+      }
+    });
+  };
   const ref = useRef<HTMLDivElement>(null);
   const todos = { ...parametros, [nomeTipo]: tipoAtual };
   const link = (mudancas: Record<string, string>) => {
@@ -102,11 +129,16 @@ export function BarraRelatorio({ caminho, tela, nomeTipo, tipos, tipoAtual, gran
               <Settings className="h-4 w-4" />
             </button>
             {engrenagem && (
-              <div className="absolute right-0 z-40 mt-1 w-64 space-y-3 rounded-lg border border-borda bg-white p-3 text-sm shadow-lg">
+              <div className="absolute right-0 z-40 mt-1 w-64 space-y-3 rounded-lg border border-borda bg-white p-3 text-sm shadow-lg" aria-busy={gravando}>
                 <p className="font-semibold text-gray-800">Incluir as categorias</p>
-                <Chave ligada={parametros.acerto === "1"} aoMudar={(v) => ir({ acerto: v ? "1" : "" })} rotulo="Acerto de Saldo" />
-                <Chave ligada={parametros.transferencia === "1"} aoMudar={(v) => ir({ transferencia: v ? "1" : "" })} rotulo="Transferência" />
-                <p className="text-xs text-gray-500">Desligadas, o Saldo Inicial, os acertos e as transferências entre contas não entram nos totais.</p>
+                {temZeradas && <Chave ligada={marcadas.zeradas} aoMudar={(v) => mudarInclusao("zeradas", v)} rotulo="Categorias Zeradas" />}
+                <Chave ligada={marcadas.acerto} aoMudar={(v) => mudarInclusao("acerto", v)} rotulo="Acerto de Saldo" />
+                <Chave ligada={marcadas.transferencia} aoMudar={(v) => mudarInclusao("transferencia", v)} rotulo="Transferência" />
+                <p className="text-xs text-gray-500">
+                  {temZeradas && "Ligada, Categorias Zeradas mostra também as categorias sem valor no período. "}
+                  Desligadas, o Saldo Inicial, os acertos e as transferências entre contas não entram nos totais. Fica salvo para as próximas vezes.
+                </p>
+                {erro && <p className="text-xs text-despesa">{erro}</p>}
               </div>
             )}
           </div>

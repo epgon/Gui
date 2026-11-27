@@ -46,7 +46,7 @@ export default async function PaginaSaldoDetalhado({ searchParams }: { searchPar
   }
 
   await realizarAutomaticos(hoje);
-  const [{ filtros, saldo }, opcoes] = await Promise.all([calcularSaldoDetalhado(sp, agrupamento, hoje), carregarOpcoes()]);
+  const [{ filtros, inclusoes, saldo }, opcoes] = await Promise.all([calcularSaldoDetalhado(sp, agrupamento, hoje), carregarOpcoes()]);
   const parametros = parametrosDosFiltros(filtros);
   const mantidos = { ...parametros, relatorio: agrupamento, categoria: "", forma: "", contato: "", tag: "" };
   const info = AGRUPAMENTOS.find((a) => a.valor === agrupamento)!;
@@ -65,6 +65,8 @@ export default async function PaginaSaldoDetalhado({ searchParams }: { searchPar
             granularidade={granularidadeDe(agrupamento)}
             parametros={parametros}
             destinos={opcoes.destinos}
+            inclusoes={inclusoes}
+            temZeradas={agrupamento === "categoria"}
           />
           <TabelaSaldo saldo={saldo} coluna={info.coluna} aviso={saldo.total ? undefined : AVISO_TAGS} />
           <p className="text-xs text-gray-500">

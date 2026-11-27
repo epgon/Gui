@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { montarArvore } from "@/lib/categorias";
 import { gerarCsv, nomeArquivo, type Tabela } from "@/lib/exportacao/tabela";
-import { chaveDoPeriodo, colunasDoPeriodo, lerFiltrosRelatorio, lerIntervalo, montarFluxoDeCaixa, montarSaldoDetalhado, type Movimento, type Nomes } from "./regras";
+import { categoriasZeradas, chaveDoPeriodo, colunasDoPeriodo, lerFiltrosRelatorio, lerInclusoes, lerIntervalo, montarFluxoDeCaixa, montarSaldoDetalhado, type Movimento, type Nomes } from "./regras";
 
 const cat = (id: number, nome: string, pai: number | null, ordem: number, extra: Partial<{ cor: string; natureza: "receita" | "despesa"; especial: "acerto_saldo" | "transferencia" }> = {}) => ({
   id,
@@ -69,7 +69,10 @@ describe("intervalo", () => {
   });
   it("lê os filtros da URL", () => {
     const f = lerFiltrosRelatorio({ destino: "conta:3", situacao: "vencido", considerar: "compra", categoria: "4", acerto: "1", tag: "x" }, "mensal", hoje);
-    expect(f).toMatchObject({ destino: "conta:3", situacao: "vencido", considerar: "compra", categoria: "4", tag: "", incluirAcerto: true, incluirTransferencia: false });
+    // A engrenagem não vem mais da URL: fica gravada.
+    expect(f).toMatchObject({ destino: "conta:3", situacao: "vencido", considerar: "compra", categoria: "4", tag: "", incluirAcerto: false, incluirTransferencia: false, incluirZeradas: false });
+    const g = lerFiltrosRelatorio({}, "mensal", hoje, { zeradas: true, acerto: true, transferencia: false });
+    expect(g).toMatchObject({ incluirZeradas: true, incluirAcerto: true, incluirTransferencia: false });
     expect(lerFiltrosRelatorio({ considerar: "outra", situacao: "x" }, "mensal", hoje)).toMatchObject({ considerar: "vencimento", situacao: "" });
   });
 });
@@ -120,6 +123,20 @@ describe("Fluxo de Caixa", () => {
     expect(f.saldo.total).toBe(0);
     expect(f.receitas.filhos[0].rotulo).toBe("Transferência");
   });
+  it("Categorias Zeradas: mostra as categorias sem valor, cada uma do lado da sua natureza", () => {
+    const colunas = colunasDoPeriodo("mensal", "2026-11-01", "2026-12-31");
+    const f = montarFluxoDeCaixa([mov({ valorCentavos: -5000, categoriaId: 4 })], "mensal", colunas, arvore, categoriasZeradas(arvore));
+    expect(f.receitas.total).toBe(0);
+    expect(f.receitas.filhos.map((n) => [n.rotulo, n.total, n.filhos.map((x) => x.rotulo)])).toEqual([["1. Receita", 0, ["1.1. Salário"]]]);
+    expect(f.despesas.filhos.map((n) => [n.rotulo, n.total])).toEqual([["2. Moradia", -5000]]);
+    expect(f.despesas.filhos[0].filhos[0]).toMatchObject({ rotulo: "2.1. Aluguel", valores: [-5000, 0], total: -5000 });
+  });
+  it("Categorias Zeradas: sem as especiais e as inativas; com filtro, só a categoria e as filhas", () => {
+    expect(categoriasZeradas(arvore).map((c) => c.id)).toEqual([1, 2, 3, 4]);
+    expect(categoriasZeradas(arvore, "3").map((c) => c.id)).toEqual([3, 4]);
+    const comInativa = new Map(montarArvore([cat(1, "Receita", null, 1, { natureza: "receita" }), { ...cat(2, "Velha", null, 2), ativo: false }]).map((c) => [c.id, c]));
+    expect(categoriasZeradas(comInativa).map((c) => c.id)).toEqual([1]);
+  });
   it("ignora o que cai fora das colunas", () => {
     const colunas = colunasDoPeriodo("mensal", "2026-11-01", "2026-11-30");
     expect(montarFluxoDeCaixa(exemplo, "mensal", colunas, arvore).receitas.total).toBe(8337);
@@ -145,6 +162,16 @@ describe("Saldo Detalhado", () => {
     expect(s.linhas.map((l) => l.rotulo)).toEqual(["1.1. Salário", "2.1. Aluguel"]);
     expect(s.total).toEqual({ receitas: 8337, despesas: -120000, resultado: -111663 });
   });
+  it("por categoria, com Categorias Zeradas, lista também as sem valor", () => {
+    const s = montarSaldoDetalhado(exemplo, "categoria", nomes, nov, categoriasZeradas(arvore));
+    expect(s.linhas.map((l) => [l.rotulo, l.resultado])).toEqual([
+      ["1. Receita", 0],
+      ["1.1. Salário", 8337],
+      ["2. Moradia", 0],
+      ["2.1. Aluguel", -120000],
+    ]);
+    expect(s.total).toEqual({ receitas: 8337, despesas: -120000, resultado: -111663 });
+  });
   it("por mês mostra todos os meses do intervalo, mesmo zerados", () => {
     const s = montarSaldoDetalhado(exemplo, "mes", nomes, { inicio: "2026-10-01", fim: "2026-12-31" });
     expect(s.linhas.map((l) => [l.rotulo, l.resultado])).toEqual([
@@ -165,6 +192,13 @@ describe("Saldo Detalhado", () => {
       ["Casa", -1000],
       ["Teste", -1000],
     ]);
+  });
+});
+
+describe("engrenagem Incluir as categorias", () => {
+  it("tudo desligado por padrão e só aceita verdadeiro/falso", () => {
+    expect(lerInclusoes(undefined)).toEqual({ zeradas: false, acerto: false, transferencia: false });
+    expect(lerInclusoes({ zeradas: true, acerto: "1", transferencia: true, outra: true })).toEqual({ zeradas: true, acerto: false, transferencia: true });
   });
 });
 

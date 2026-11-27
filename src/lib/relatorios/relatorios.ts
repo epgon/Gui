@@ -5,6 +5,7 @@ import { hojeIso } from "@/lib/datas";
 import { nomeArquivo, type LinhaTabela, type Tabela } from "@/lib/exportacao/tabela";
 import {
   AGRUPAMENTOS,
+  categoriasZeradas,
   colunasDoPeriodo,
   DATAS_CONSIDERADAS,
   lerFiltrosRelatorio,
@@ -19,10 +20,11 @@ import {
   type Nomes,
   type Periodicidade,
 } from "./regras";
+import { lerInclusoesSalvas } from "./inclusoes";
 import { carregarArvore, carregarMovimentos, carregarNomes } from "./servidor";
 
 /** Os filtros em palavras, para a faixa "Filtros Utilizados" do PDF e da planilha. */
-export function descreverFiltros(f: FiltrosRelatorio, nomes: Nomes, tipo: string): string[] {
+export function descreverFiltros(f: FiltrosRelatorio, nomes: Nomes, tipo: string, temZeradas = true): string[] {
   const linhas = [`${tipo} · Período: ${rotuloIntervalo(f)}`, `Considerar: ${DATAS_CONSIDERADAS.find((d) => d.valor === f.considerar)?.rotulo}`];
   if (f.destino) {
     const [qual, id] = f.destino.split(":");
@@ -39,26 +41,30 @@ export function descreverFiltros(f: FiltrosRelatorio, nomes: Nomes, tipo: string
   if (f.tag) linhas.push(`Tag: ${nomes.tags.get(Number(f.tag)) ?? "?"}`);
   const incluidas = [f.incluirAcerto && "Acerto de Saldo", f.incluirTransferencia && "Transferência"].filter(Boolean);
   linhas.push(incluidas.length ? `Incluindo as categorias: ${incluidas.join(" e ")}` : "Sem Acerto de Saldo e Transferência");
+  if (temZeradas && f.incluirZeradas) linhas.push("Com as categorias zeradas");
   return linhas;
 }
 
 export async function calcularFluxoDeCaixa(sp: ParametrosBusca, periodicidade: Periodicidade, hoje = hojeIso()) {
-  const filtros = lerFiltrosRelatorio(sp, periodicidade, hoje);
-  const arvore = await carregarArvore();
+  const [inclusoes, arvore] = await Promise.all([lerInclusoesSalvas("fluxo-de-caixa"), carregarArvore()]);
+  const filtros = lerFiltrosRelatorio(sp, periodicidade, hoje, inclusoes);
   const [movimentos, nomes] = await Promise.all([carregarMovimentos(filtros, arvore, hoje), carregarNomes(arvore)]);
   const colunas = colunasDoPeriodo(periodicidade, filtros.inicio, filtros.fim);
-  const fluxo = montarFluxoDeCaixa(movimentos, periodicidade, colunas, arvore);
+  const zeradas = filtros.incluirZeradas ? categoriasZeradas(arvore, filtros.categoria) : [];
+  const fluxo = montarFluxoDeCaixa(movimentos, periodicidade, colunas, arvore, zeradas);
   const rotulo = PERIODICIDADES.find((p) => p.valor === periodicidade)!.rotulo;
-  return { filtros, fluxo, nomes, descricao: descreverFiltros(filtros, nomes, rotulo) };
+  return { filtros, inclusoes, fluxo, nomes, descricao: descreverFiltros(filtros, nomes, rotulo) };
 }
 
 export async function calcularSaldoDetalhado(sp: ParametrosBusca, agrupamento: Agrupamento, hoje = hojeIso()) {
-  const filtros = lerFiltrosRelatorio(sp, agrupamento, hoje);
-  const arvore = await carregarArvore();
+  const [inclusoes, arvore] = await Promise.all([lerInclusoesSalvas("saldo-detalhado"), carregarArvore()]);
+  const filtros = lerFiltrosRelatorio(sp, agrupamento, hoje, inclusoes);
   const [movimentos, nomes] = await Promise.all([carregarMovimentos(filtros, arvore, hoje), carregarNomes(arvore)]);
-  const saldo = montarSaldoDetalhado(movimentos, agrupamento, nomes, filtros);
+  // Categorias Zeradas só muda o relatório por Categorias (nos outros, as linhas não são categorias).
+  const zeradas = filtros.incluirZeradas && agrupamento === "categoria" ? categoriasZeradas(arvore, filtros.categoria) : [];
+  const saldo = montarSaldoDetalhado(movimentos, agrupamento, nomes, filtros, zeradas);
   const rotulo = AGRUPAMENTOS.find((a) => a.valor === agrupamento)!.rotulo;
-  return { filtros, saldo, nomes, descricao: descreverFiltros(filtros, nomes, rotulo) };
+  return { filtros, inclusoes, saldo, nomes, descricao: descreverFiltros(filtros, nomes, rotulo, agrupamento === "categoria") };
 }
 
 export const AVISO_TAGS = "Não é possível calcular o Total do Período para Tags, pois o mesmo lançamento pode conter várias tags.";
