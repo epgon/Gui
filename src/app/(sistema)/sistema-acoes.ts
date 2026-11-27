@@ -47,10 +47,12 @@ export async function alternarFavorito(href: string): Promise<Resultado> {
 }
 
 /** Configurações > Recursos: liga ou desliga um módulo. */
-export async function alterarRecurso(chave: Recurso, ligado: boolean): Promise<Resultado> {
+export async function alterarRecurso(chave: Recurso, ligado: boolean, ciente = false): Promise<Resultado> {
   await exigirLogin();
   const recurso = RECURSOS.find((r) => r.chave === chave);
   if (!recurso || typeof ligado !== "boolean") return falha("Recurso não encontrado.");
+  // O Consultor com IA só liga depois da pessoa confirmar que leu o aviso de privacidade.
+  if (chave === "consultor_ia" && ligado && ciente !== true) return falha("Para ligar o **Consultor com IA**, leia o aviso de privacidade e confirme.");
   await getDb().transaction((tx) =>
     gravarConfiguracao(tx, `recursos.${chave}`, ligado, { tela: "Recursos", descricao: `o recurso ${recurso.rotulo} (${ligado ? "ativado" : "desativado"})` }),
   );

@@ -14,6 +14,7 @@ import { ListaOrdenavel } from "@/components/ui/lista-ordenavel";
 import { SECOES, type Secao } from "./secoes";
 import { Modal } from "@/components/ui/modal";
 import type { Resultado } from "@/lib/cadastros/resultado";
+import { AVISO_PRIVACIDADE_IA } from "@/lib/dividas/consultor/ia/textos";
 import { REGRAS_CONSULTOR } from "@/lib/dividas/consultor/regras";
 import { cn } from "@/lib/cn";
 import { CADASTROS_AUXILIARES, OPCOES_NOVO_ATUALIZADO, OPCOES_PREVISAO, type Parametros } from "@/lib/parametros/tipos";
@@ -26,6 +27,7 @@ import {
   salvarOrdemContasCartoes,
   salvarParametrosGerais,
   salvarParametrosDividas,
+  salvarParametrosIA,
   salvarParametrosLancamentos,
   type DadosFeriado,
 } from "./acoes";
@@ -90,7 +92,10 @@ function LinhaChave({ titulo, texto, ligada, aoMudar }: { titulo: string; texto:
   );
 }
 
-export function TelaParametros({ secao, parametros, feriados, contas, cartoes, anoAtual }: {
+export type StatusIA = { chaveCadastrada: boolean; usadasHoje: number; ligado: boolean; provedores: { id: string; rotulo: string; modeloPadrao: string; precisaChave: boolean }[] };
+
+export function TelaParametros({ secao, parametros, feriados, contas, cartoes, anoAtual, ia }: {
+  ia: StatusIA;
   secao: Secao;
   parametros: Parametros;
   feriados: Feriado[];
@@ -121,6 +126,7 @@ export function TelaParametros({ secao, parametros, feriados, contas, cartoes, a
         {secao === "contas" && <ContasCartoes contas={contas} cartoes={cartoes} />}
         {secao === "auxiliares" && <Auxiliares p={parametros} />}
         {secao === "dividas" && <Dividas p={parametros} contas={contas} />}
+        {secao === "ia" && <ConsultorIA p={parametros} status={ia} />}
         {secao === "feriados" && <Feriados feriados={feriados} anoAtual={anoAtual} />}
       </div>
     </div>
@@ -300,6 +306,44 @@ function Dividas({ p, contas }: { p: Parametros; contas: Item[] }) {
         Mostrar o cartão Dívidas na Visão Geral (quando há dívida ativa)
       </label>
       <Rodape s={s} aoSalvar={() => s.executar(() => salvarParametrosDividas({ ...d, contasReserva: reserva, alertasDesligados: desligados, cartaoVisaoGeral: cartao }))} />
+    </Cartao>
+  );
+}
+
+function ConsultorIA({ p, status }: { p: Parametros; status: StatusIA }) {
+  const [d, setD] = useState({ provedor: p.ia.provedor, modelo: p.ia.modelo, limiteDiario: String(p.ia.limiteDiario) });
+  const s = useSalvar();
+  const provedor = status.provedores.find((x) => x.id === d.provedor);
+  const mudar = (k: keyof typeof d) => (v: string) => {
+    setD((x) => ({ ...x, [k]: v }));
+    s.marcarMudanca();
+  };
+  const trocarProvedor = (id: string) => {
+    const novo = status.provedores.find((x) => x.id === id);
+    setD((x) => ({ ...x, provedor: id, modelo: novo?.modeloPadrao ?? x.modelo }));
+    s.marcarMudanca();
+  };
+  return (
+    <Cartao titulo="Consultor com IA">
+      <div className={cn("rounded-lg border px-3 py-2 text-sm", status.ligado ? "border-verde bg-verde-claro text-verde" : "border-borda bg-subcabecalho text-gray-700")}>
+        {status.ligado ? "Ligado em Configurações > Recursos." : "Desligado (padrão). Para usar, ligue o recurso Consultor com IA em Configurações > Recursos. O Gui funciona inteiro sem ele."}
+        <span className="mt-1 block text-xs text-gray-600">
+          {provedor?.precisaChave === false ? "Este provedor é de teste: não usa chave nem envia nada para fora." : status.chaveCadastrada ? "Chave cadastrada na variável de ambiente GUI_IA_CHAVE." : "Chave ainda não cadastrada: sem ela nada é enviado. Veja o passo a passo no README (Consultor com IA)."}{" "}
+          Perguntas à IA hoje: {status.usadasHoje} de {d.limiteDiario || p.ia.limiteDiario}.
+        </span>
+      </div>
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <CampoSelecao rotulo="Provedor" valor={d.provedor} aoMudar={trocarProvedor} opcoes={status.provedores.map((x) => ({ valor: x.id, rotulo: x.rotulo }))} ajuda="Sugestão: Google Gemini no plano gratuito (chave criada no Google AI Studio). A chave nunca é salva no banco nem aparece nesta tela." />
+        <CampoTexto rotulo="Modelo" valor={d.modelo} aoMudar={mudar("modelo")} maxLength={80} ajuda="Nome do modelo do provedor. Se o Google trocar ou aposentar o modelo, troque aqui sem mexer no código." />
+        <CampoTexto rotulo="Limite de perguntas por dia" valor={d.limiteDiario} aoMudar={mudar("limiteDiario")} maxLength={3} inputMode="numeric" ajuda="Só as perguntas que não são das prontas vão para a IA. Passou do limite, o Consultor avisa e volta às perguntas prontas. Mantenha abaixo do limite do plano gratuito do provedor." />
+      </div>
+      <p className="mt-6 mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Privacidade</p>
+      <ul className="list-disc space-y-1.5 pl-5 text-xs text-gray-600">
+        {AVISO_PRIVACIDADE_IA.map((t) => (
+          <li key={t}>{t}</li>
+        ))}
+      </ul>
+      <Rodape s={s} aoSalvar={() => s.executar(() => salvarParametrosIA(d))} />
     </Cartao>
   );
 }

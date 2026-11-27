@@ -6,5 +6,6 @@ export const SECOES = [
   { chave: "auxiliares", titulo: "Campos Auxiliares" },
   { chave: "feriados", titulo: "Feriados" },
   { chave: "dividas", titulo: "Gestão de Dívidas" },
+  { chave: "ia", titulo: "Consultor com IA" },
 ] as const;
 export type Secao = (typeof SECOES)[number]["chave"];

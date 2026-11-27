@@ -63,6 +63,8 @@ export type Parametros = {
     /** Mostra o cartão Dívidas na Visão Geral principal (quando há dívida ativa). */
     cartaoVisaoGeral: boolean;
   };
+  /** Consultor com IA (fase D6): provedor, modelo e limite de perguntas por dia. A chave NÃO fica aqui: vem de GUI_IA_CHAVE. */
+  ia: { provedor: string; modelo: string; limiteDiario: number };
 };
 
 /** Recursos que podem ser desligados. Desligado, some dos menus e a tela avisa que está desativado. */
@@ -75,11 +77,14 @@ export const RECURSOS = [
   { chave: "tags", rotulo: "Tags", descricao: "Etiquetas livres nos lançamentos.", telas: ["/cadastros/tags"] },
   { chave: "orcamentos", rotulo: "Orçamentos", descricao: "Limites de gasto por categoria.", telas: ["/gestao/orcamentos"] },
   { chave: "dividas", rotulo: "Gestão de Dívidas", descricao: "Dívidas, parcelas, saldo devedor e contas em aberto.", telas: ["/gestao/dividas"] },
+  { chave: "consultor_ia", rotulo: "Consultor com IA", descricao: "Chat livre com uma IA externa no Consultor Gui (opcional, desligado por padrão).", telas: [], padrao: false },
   { chave: "importacao", rotulo: "Importação", descricao: "Extratos OFX e CSV do banco.", telas: ["/financeiro/importacoes"] },
   { chave: "exportacao", rotulo: "Exportação", descricao: "Exportar listas para Excel e CSV.", telas: [] },
   { chave: "impressao", rotulo: "Impressão", descricao: "Impressão em PDF das listas e relatórios.", telas: [] },
 ] as const;
 export type Recurso = (typeof RECURSOS)[number]["chave"];
+/** Recursos que já nascem desligados (a pessoa precisa ligar de propósito). */
+const DESLIGADOS_POR_PADRAO = new Set<string>(RECURSOS.filter((r) => "padrao" in r && r.padrao === false).map((r) => r.chave));
 export type Recursos = Record<Recurso, boolean>;
 
 const bool = (v: unknown, padrao: boolean) => (typeof v === "boolean" ? v : padrao);
@@ -134,12 +139,17 @@ export function lerParametrosDe(c: Record<string, unknown>): Parametros {
       alertasDesligados: Array.isArray(c["dividas.alertas_desligados"]) ? (c["dividas.alertas_desligados"] as unknown[]).filter((x): x is string => typeof x === "string" && /^R\d{1,2}$/.test(x)) : [],
       cartaoVisaoGeral: bool(c["dividas.cartao_visao_geral"], true),
     },
+    ia: {
+      provedor: typeof c["ia.provedor"] === "string" && /^[a-z0-9_-]{1,30}$/.test(c["ia.provedor"] as string) ? (c["ia.provedor"] as string) : "gemini",
+      modelo: typeof c["ia.modelo"] === "string" && /^[A-Za-z0-9._-]{1,80}$/.test(c["ia.modelo"] as string) ? (c["ia.modelo"] as string) : "gemini-2.5-flash",
+      limiteDiario: inteiroEntre(c["ia.limite_diario"], 1, 200, 20),
+    },
   };
 }
 
 export function lerRecursosDe(c: Record<string, unknown>): Recursos {
   const r = {} as Recursos;
-  for (const { chave } of RECURSOS) r[chave] = bool(c[`recursos.${chave}`], true);
+  for (const { chave } of RECURSOS) r[chave] = bool(c[`recursos.${chave}`], !DESLIGADOS_POR_PADRAO.has(chave));
   return r;
 }
 

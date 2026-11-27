@@ -7,6 +7,7 @@ import { getDb, schema } from "@/db";
 import { diferencas, registrarAuditoria } from "@/lib/auditoria";
 import { falha, idValido, obrigatorio, primeiroErro, type Resultado } from "@/lib/cadastros/resultado";
 import { gravarConfiguracao } from "@/lib/configuracao";
+import { acharProvedor } from "@/lib/dividas/consultor/ia/provedores";
 import { diaDoMesValido, feriadosSugeridos } from "@/lib/parametros/feriados";
 import { CADASTROS_AUXILIARES, OPCOES_NOVO_ATUALIZADO, OPCOES_PREVISAO, type CadastroAuxiliar, type CampoAuxiliar } from "@/lib/parametros/tipos";
 import { exigirLogin } from "@/lib/sessao";
@@ -146,6 +147,27 @@ export async function salvarParametrosDividas(entrada: DadosDividas): Promise<Re
     await gravarConfiguracao(tx, "dividas.dias_negociar", d.diasParaNegociar, aud(`o Atraso que sugere negociação para ${d.diasParaNegociar} dias`));
     await gravarConfiguracao(tx, "dividas.alertas_desligados", alertas, aud(alertas.length ? `os Alertas do Consultor desligados (${alertas.join(", ")})` : "os Alertas do Consultor (todos ligados)"));
     await gravarConfiguracao(tx, "dividas.cartao_visao_geral", d.cartaoVisaoGeral, aud(d.cartaoVisaoGeral ? "o Cartão Dívidas da Visão Geral para visível" : "o Cartão Dívidas da Visão Geral para escondido"));
+  });
+  refresh();
+  return { ok: true };
+}
+
+export type DadosIA = { provedor: string; modelo: string; limiteDiario: string };
+
+/** Consultor com IA: provedor, modelo e limite de perguntas por dia. A chave NÃO é salva aqui: fica só na variável de ambiente GUI_IA_CHAVE. */
+export async function salvarParametrosIA(entrada: DadosIA): Promise<Resultado> {
+  await exigirLogin();
+  const provedor = acharProvedor(String(entrada?.provedor ?? ""));
+  if (!provedor) return falha("Escolha um **Provedor** da lista.");
+  const modelo = String(entrada.modelo ?? "").trim();
+  if (!/^[A-Za-z0-9._-]{1,80}$/.test(modelo)) return falha("Informe um **Modelo** válido (letras, números, ponto, hífen e sublinhado).");
+  const limite = Number(String(entrada.limiteDiario ?? "").trim());
+  if (!Number.isInteger(limite) || limite < 1 || limite > 200) return falha("Informe um número inteiro de 1 a 200 em **Limite de perguntas por dia**.");
+  await getDb().transaction(async (tx) => {
+    const aud = (descricao: string) => ({ tela: TELA, descricao });
+    await gravarConfiguracao(tx, "ia.provedor", provedor.id, aud(`o Provedor da IA do Consultor para ${provedor.id}`));
+    await gravarConfiguracao(tx, "ia.modelo", modelo, aud(`o Modelo da IA do Consultor para ${modelo}`));
+    await gravarConfiguracao(tx, "ia.limite_diario", limite, aud(`o Limite diário de perguntas à IA para ${limite}`));
   });
   refresh();
   return { ok: true };

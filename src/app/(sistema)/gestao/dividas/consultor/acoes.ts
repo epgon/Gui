@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { refresh } from "next/cache";
 import { getDb, schema } from "@/db";
 import { registrarAuditoria } from "@/lib/auditoria";
@@ -9,7 +9,13 @@ import { gravarConfiguracao } from "@/lib/configuracao";
 import { hojeIso } from "@/lib/datas";
 import { dadosFaltando, interpretarPergunta, PERGUNTAS_PRONTAS, responder, rotuloPergunta, textoDaPergunta, TEXTO_NAO_ENTENDI, type IdPergunta } from "@/lib/dividas/consultor/perguntas";
 import { atualizarEstadoAlertas, CHAVE_ESTADO_ALERTAS, lerEstadoAlertas, type AcaoAlerta } from "@/lib/dividas/consultor/regras";
+import { INSTRUCAO_FIXA, montarMensagem } from "@/lib/dividas/consultor/ia/prompt";
+import { montarResumo } from "@/lib/dividas/consultor/ia/resumo";
+import { perguntarParaIA } from "@/lib/dividas/consultor/ia/servico";
+import { dependenciasIA, lerConfigIA, registrarFalhaIA } from "@/lib/dividas/consultor/ia/servidor";
+import type { TurnoIA } from "@/lib/dividas/consultor/ia/tipos";
 import { carregarPainelDividas } from "@/lib/dividas/consultor/servidor";
+import { recursoAtivo } from "@/lib/parametros/servidor";
 import { erro, executar, exigirRecurso, lerTexto, lerValor, ErroFormulario } from "@/lib/dividas/validacao";
 import { lerConfiguracao } from "@/lib/configuracao";
 
@@ -26,6 +32,12 @@ const IDS = new Set<string>(PERGUNTAS_PRONTAS.map((p) => p.id));
  */
 export async function perguntarAoConsultor(assuntoId: number | null, entrada: { pergunta: string | null; texto: string; valor: string; parcelas: string }): Promise<Resultado> {
   await exigirRecurso();
+  // Texto livre que não é nenhuma pergunta pronta: com o Consultor com IA ligado, vai para a IA. As perguntas prontas nunca vão.
+  if (!entrada.pergunta && (entrada.texto ?? "").trim() && interpretarPergunta(entrada.texto).id === null && (await recursoAtivo("consultor_ia"))) {
+    const r = await executar(() => perguntarComIA(assuntoId, entrada.texto));
+    if (r.ok) refresh();
+    return r;
+  }
   const r = await executar(() =>
     getDb().transaction(async (tx) => {
       if (assuntoId !== null && !idValido.safeParse(assuntoId).success) return erro("Assunto não encontrado.");
@@ -82,6 +94,83 @@ export async function perguntarAoConsultor(assuntoId: number | null, entrada: { 
   );
   if (r.ok) refresh();
   return r;
+}
+
+/**
+ * Pergunta livre respondida pela IA externa (recurso Consultor com IA ligado). A IA só devolve texto e botões que abrem as janelas
+ * normais: nada de dívida, lançamento ou saldo é gravado aqui, só a conversa. A chamada de rede acontece FORA de qualquer transação.
+ * Se a IA estiver sem chave, sem limite ou fora do ar, a pergunta fica no assunto com um aviso e as perguntas prontas seguem valendo.
+ */
+async function perguntarComIA(assuntoId: number | null, texto: string): Promise<Resultado> {
+  if (assuntoId !== null && !idValido.safeParse(assuntoId).success) return erro("Assunto não encontrado.");
+  const pergunta = lerTexto(texto ?? "", "Pergunta", 300, true)!;
+  const db = getDb();
+  let historico: TurnoIA[] = [];
+  if (assuntoId !== null) {
+    const [a] = await db.select({ situacao: consultorAssunto.situacao }).from(consultorAssunto).where(eq(consultorAssunto.id, assuntoId));
+    if (!a) return erro("Este assunto não existe mais.");
+    if (a.situacao === "arquivado") return erro("Este assunto está arquivado. Desarquive para continuar a conversa.");
+    // Histórico resumido: só as últimas perguntas da pessoa e respostas da IA (anonimizadas). O texto calculado pelo Gui cita nomes e nunca é enviado.
+    const recentes = await db
+      .select({ autor: consultorMensagem.autor, texto: consultorMensagem.texto, dados: consultorMensagem.dados })
+      .from(consultorMensagem)
+      .where(and(eq(consultorMensagem.assuntoId, assuntoId), inArray(consultorMensagem.autor, ["pessoa", "gui_ia"])))
+      .orderBy(desc(consultorMensagem.id))
+      .limit(4);
+    historico = recentes.reverse().map((m) => {
+      if (m.autor === "pessoa") return { papel: "pessoa" as const, texto: m.texto.slice(0, 300) };
+      const anonimo = (m.dados as { textoAnonimo?: string } | null)?.textoAnonimo;
+      return { papel: "ia" as const, texto: (anonimo ?? "").slice(0, 600) };
+    }).filter((t) => t.texto);
+  }
+
+  const hoje = hojeIso();
+  const [cfg, painel] = await Promise.all([lerConfigIA(hoje), carregarPainelDividas(hoje)]);
+  const resumo = montarResumo(painel.ctx);
+  const r = await perguntarParaIA({ pergunta, historico, resumo }, dependenciasIA(cfg, hoje));
+  if (!r.ok && (r.motivo === "falha" || r.motivo === "limite_provedor" || r.motivo === "resposta_vazia")) await registrarFalhaIA(hoje);
+
+  return getDb().transaction(async (tx) => {
+    let assunto: { id: number; titulo: string };
+    if (assuntoId === null) {
+      const titulo = pergunta.slice(0, 80);
+      const [novo] = await tx.insert(consultorAssunto).values({ titulo }).returning({ id: consultorAssunto.id, titulo: consultorAssunto.titulo });
+      await registrarAuditoria(tx, { tela: TELA, entidade: ENTIDADE, entidadeId: novo.id, acao: "cadastrou", descricao: `o Assunto ${titulo} do Consultor Gui`, dados: { titulo } });
+      assunto = novo;
+    } else {
+      const [a] = await tx.select({ id: consultorAssunto.id, titulo: consultorAssunto.titulo }).from(consultorAssunto).where(eq(consultorAssunto.id, assuntoId));
+      if (!a) return erro("Este assunto não existe mais.");
+      assunto = a;
+    }
+    await tx.insert(consultorMensagem).values({ assuntoId: assunto.id, autor: "pessoa", texto: pergunta, dados: { tipo: "pergunta_livre" } });
+    if (r.ok) {
+      await tx.insert(consultorMensagem).values({ assuntoId: assunto.id, autor: "gui_ia", texto: r.texto, dados: { tipo: "ia", textoAnonimo: r.textoAnonimo, acoes: r.acoes, numerosFora: r.numerosFora, provedor: cfg.provedorId, modelo: cfg.modelo } });
+    } else {
+      await tx.insert(consultorMensagem).values({ assuntoId: assunto.id, autor: "gui", texto: r.aviso, dados: { tipo: "ia_indisponivel", motivo: r.motivo } });
+    }
+    await tx.update(consultorAssunto).set({ atualizadoEm: new Date() }).where(eq(consultorAssunto.id, assunto.id));
+    await registrarAuditoria(tx, {
+      tela: TELA,
+      entidade: ENTIDADE,
+      entidadeId: assunto.id,
+      acao: "alterou",
+      descricao: `o Assunto ${assunto.titulo} do Consultor Gui com uma pergunta ${r.ok ? "respondida pela IA" : "que a IA não respondeu"}`,
+      dados: { pergunta, resultado: r.ok ? "respondida" : r.motivo, provedor: cfg.provedorId, modelo: cfg.modelo },
+    });
+    return { ok: true as const, id: assunto.id };
+  });
+}
+
+export type ResumoParaVer = { ok: true; texto: string; instrucao: string; provedor: string; modelo: string; semChave: boolean } | { ok: false; erro: string };
+
+/** "Ver o que será enviado": o resumo anonimizado exato e a instrução fixa. Não chama a IA e não gasta o limite do dia. */
+export async function verResumoIA(): Promise<ResumoParaVer> {
+  await exigirRecurso();
+  if (!(await recursoAtivo("consultor_ia"))) return { ok: false, erro: "O Consultor com IA está desligado em Configurações > Recursos." };
+  const hoje = hojeIso();
+  const [cfg, painel] = await Promise.all([lerConfigIA(hoje), carregarPainelDividas(hoje)]);
+  const resumo = montarResumo(painel.ctx);
+  return { ok: true, texto: montarMensagem(resumo, "(a sua pergunta entra aqui, sem e-mails, documentos nem números longos)"), instrucao: INSTRUCAO_FIXA, provedor: cfg.provedor?.rotulo ?? cfg.provedorId, modelo: cfg.modelo, semChave: !cfg.pronto };
 }
 
 export async function criarAssunto(titulo: string): Promise<Resultado> {

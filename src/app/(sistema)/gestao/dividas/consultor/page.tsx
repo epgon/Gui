@@ -3,6 +3,7 @@ import { PainelAjuda } from "@/components/layout/painel-ajuda";
 import { RecursoDesativado } from "@/components/layout/recurso-desativado";
 import { parametro, type ParametrosBusca } from "@/lib/cadastros/filtros";
 import { hojeIso } from "@/lib/datas";
+import { lerConfigIA } from "@/lib/dividas/consultor/ia/servidor";
 import { carregarPainelDividas, listarAssuntos, listarMensagens } from "@/lib/dividas/consultor/servidor";
 import { recursoAtivo } from "@/lib/parametros/servidor";
 import { realizarAutomaticos } from "@/lib/recorrentes/servidor";
@@ -15,6 +16,7 @@ const ARTIGOS = [
   "Perguntas prontas e palavras-chave: o que ele entende (sem IA)",
   "Clique em Por quê? ou Como calculei para ver de onde vem cada número",
   "Dispensar e Lembrar em 7 dias: como tratar um alerta",
+  "Consultor com IA (opcional): o que é enviado, privacidade e limite diário",
 ];
 
 export default async function PaginaConsultor({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
@@ -22,7 +24,7 @@ export default async function PaginaConsultor({ searchParams }: { searchParams: 
   const sp = await searchParams;
   const hoje = hojeIso();
   await realizarAutomaticos(hoje);
-  const [painel, assuntos] = await Promise.all([carregarPainelDividas(hoje), listarAssuntos()]);
+  const [painel, assuntos, cfg] = await Promise.all([carregarPainelDividas(hoje), listarAssuntos(), lerConfigIA(hoje)]);
   const pedido = parametro(sp, "assunto");
   const escolhido = /^\d+$/.test(pedido) ? assuntos.find((a) => a.id === Number(pedido)) : undefined;
   const mensagens = escolhido ? await listarMensagens(escolhido.id) : [];
@@ -31,7 +33,7 @@ export default async function PaginaConsultor({ searchParams }: { searchParams: 
       <main className="min-w-0 flex-1">
         <CabecalhoPagina titulo="Gestão de Dívidas" trilha="Gestão" />
         <div className="space-y-4 p-6">
-          <TelaConsultor assuntos={assuntos} escolhido={escolhido?.id ?? null} mensagens={mensagens} alertas={{ visiveis: painel.visiveis, escondidos: painel.escondidos }} mostrarArquivados={parametro(sp, "arquivados") === "1"} />
+          <TelaConsultor assuntos={assuntos} escolhido={escolhido?.id ?? null} mensagens={mensagens} alertas={{ visiveis: painel.visiveis, escondidos: painel.escondidos }} mostrarArquivados={parametro(sp, "arquivados") === "1"} ia={{ ligado: cfg.ligado, pronto: cfg.pronto, chaveCadastrada: cfg.chaveCadastrada, provedor: cfg.provedor?.rotulo ?? cfg.provedorId, usadasHoje: cfg.usadasHoje, limiteDiario: cfg.limiteDiario }} />
         </div>
       </main>
       <PainelAjuda trilha={["Gestão", "Gestão de Dívidas", "Consultor Gui"]} artigos={ARTIGOS} />

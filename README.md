@@ -149,6 +149,33 @@ Fases prontas:
   na Visão Geral do sistema (escondível). Limites e regras ligam/desligam em **Configurações > Parâmetros > Consultor Gui**. Avisos antes
   de confirmar: taxa alta no cadastro, renegociação mais cara ou que não cabe na sobra, e uso da reserva acima do recomendado.
 
+- **Fase D6 (Gestão de Dívidas: Consultor com IA, opcional)**: o Consultor Gui ganha um **chat livre com uma IA externa**, **desligado por
+  padrão**. Sem ele (ou se ele cair), tudo continua igual: perguntas prontas e alertas calculados pelo Gui. Liga-se em
+  **Configurações > Recursos > Consultor com IA** (com aviso de privacidade antes de ligar) e configura-se em
+  **Configurações > Parâmetros > Consultor com IA** (provedor, modelo e limite de perguntas por dia, padrão 20).
+  - Só perguntas **fora das prontas** vão para a IA, marcadas como **Resposta com IA**. Vai apenas um **resumo anonimizado dos números**
+    (dívidas como "Dívida A, Dívida B", sem nome de credor, descrição, conta, documento ou nome do plano) mais a pergunta, sem
+    e-mails, documentos e números longos. O botão **Ver o que será enviado** mostra o texto exato.
+  - A IA só **explica**: números da resposta que não estão no resumo são marcados, e as ações sugeridas vêm de uma lista fechada
+    (Simular, Abrir negociação, Atualizar saldo, Criar plano) e viram botões que só **abrem a janela normal**. Nada é pago nem gravado
+    pela IA.
+  - Limite diário contado em `consultor_uso_ia` (só a contagem; nada da conversa). Passou do limite, sem chave ou serviço fora do ar:
+    o Consultor avisa e volta às perguntas prontas. O código do provedor fica isolado em `src/lib/dividas/consultor/ia/`.
+
+### Consultor com IA: como cadastrar a chave (gratuita)
+
+A chave **nunca** vai para o código, o banco ou o GitHub: fica só na variável de ambiente `GUI_IA_CHAVE`.
+
+1. Entre em <https://aistudio.google.com/apikey> com a sua conta Google e clique em **Create API key** (plano gratuito, sem cartão).
+2. Na Vercel: projeto do Gui > **Settings > Environment Variables** > nome `GUI_IA_CHAVE`, valor = a chave, ambiente **Production** > Save.
+   Depois faça um **Redeploy** para a variável valer. (Para testar no computador, ponha `GUI_IA_CHAVE=...` no seu `.env`, que não vai para o GitHub.)
+3. No Gui: **Configurações > Recursos** > ligue **Consultor com IA** (leia o aviso) e confira em **Parâmetros > Consultor com IA** o
+   provedor (Google Gemini), o modelo e o limite diário (mantenha abaixo do limite do plano gratuito do Google).
+4. Para **só ver o chat funcionando antes de ter a chave**, escolha o provedor **Simulado** nos Parâmetros: não usa chave nem envia nada para fora.
+
+Atenção: nos planos gratuitos o provedor pode usar o conteúdo enviado para melhorar os produtos dele; confira os termos atuais do
+Google AI Studio. Se o Google trocar ou aposentar o modelo, é só mudar o nome do modelo em Parâmetros.
+
 Todas as telas dos menus estão prontas.
 
 ### Como os relatórios funcionam
