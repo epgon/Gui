@@ -285,7 +285,7 @@ function Dividas({ p, contas }: { p: Parametros; contas: Item[] }) {
             </label>
           ))}
         </div>
-        <p className="mt-2 text-xs text-gray-500">Desligar um alerta só o esconde: nada é apagado. As regras R9 e R10 chegam com o Plano de Quitação.</p>
+        <p className="mt-2 text-xs text-gray-500">Desligar um alerta só o esconde: nada é apagado.</p>
       </div>
       <label className="mt-4 flex items-center gap-2 text-sm text-gray-700">
         <input

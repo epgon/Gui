@@ -190,6 +190,8 @@ export type EntradaSimulacao = {
   /** Mês de início ("AAAA-MM"): o mês de hoje. */
   inicioYm: string;
   limiteMeses?: number;
+  /** Já pago neste mês de início (Plano de Quitação, no meio do mês): sai do valor mensal do primeiro mês. */
+  jaPagoNoInicioCentavos?: number;
 };
 
 export type MesSimulado = {
@@ -280,8 +282,9 @@ export function simular(e: EntradaSimulacao): ResultadoSimulacao {
 
     // 2. O extra do mês vai para as dívidas da vez, na ordem da estratégia.
     const valorMensal = e.valorMensalCentavos;
-    const oferecido = (valorMensal === null ? 0 : Math.max(0, valorMensal - parcelas)) + extrasDoMes(i);
-    if (valorMensal !== null && valorMensal < parcelas) mesesComParcelaMaiorQueValor++;
+    const jaPago = i === 0 ? Math.max(0, e.jaPagoNoInicioCentavos ?? 0) : 0;
+    const oferecido = (valorMensal === null ? 0 : Math.max(0, valorMensal - jaPago - parcelas)) + extrasDoMes(i);
+    if (valorMensal !== null && valorMensal - jaPago < parcelas) mesesComParcelaMaiorQueValor++;
     let sobraDoExtra = oferecido;
     for (const id of ordem) {
       if (sobraDoExtra <= 0) break;

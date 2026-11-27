@@ -13,6 +13,7 @@ import {
   responderExtra,
   responderLivre,
   responderOrdem,
+  responderPlano,
   responderProposta,
   responderReserva,
   responderTotal,
@@ -249,5 +250,48 @@ describe("respostas", () => {
       expect(texto).not.toMatch(/garant(imos|o|ido|ia) (que|o)/i);
       expect(texto).not.toMatch(/\p{Extended_Pictographic}/u);
     }
+  });
+});
+
+describe("perguntas do plano de quitação", () => {
+  const plano = {
+    id: 3,
+    nome: "Plano 2027",
+    versao: 1,
+    mesAnterior: { mes: "2026-10", planejadoCentavos: 120_000, realizadoCentavos: 60_000, situacao: "parcial" as const },
+    mesFinalPlanejado: "2027-06",
+    previsaoMesFinal: "2027-08",
+    ajustePendente: true,
+    desvios: ["O realizado ficou abaixo do planejado nos meses fechados: faltam R$ 600,00."],
+    deficitCentavos: 60_000,
+    ajusteRecomendado: "Aumentar R$ 80,00 por mês",
+    novasDividas: [],
+    comprasParceladas: [],
+  };
+  it("reconhece 'Por que meu plano atrasou?' e frases parecidas", () => {
+    expect(interpretarPergunta("Por que meu plano atrasou?").id).toBe("plano");
+    expect(interpretarPergunta("meu plano furou, o que houve").id).toBe("plano");
+    expect(PERGUNTAS_PRONTAS.some((p) => p.id === "plano")).toBe(true);
+  });
+  it("sem plano ativo, diz isso e oferece criar um", () => {
+    const r = responderPlano(contexto());
+    expect(r.conclusao).toContain("não tem um Plano de Quitação ativo");
+    expect(r.acoes[0].href).toBe("/gestao/dividas/plano");
+  });
+  it("com desvio, explica o motivo e a sugestão, sem gravar nada", () => {
+    const r = responderPlano(contexto({ plano }));
+    expect(r.conclusao).toContain("atrasou");
+    expect(r.conclusao).toContain("Nada muda sem a sua aprovação");
+    expect(r.numeros.map((n) => n.valor)).toContain("ago/2027");
+    expect(r.acoes.every((a) => a.href.startsWith("/gestao/dividas"))).toBe(true);
+  });
+  it("sem desvio, diz que não atrasou", () => {
+    const r = responderPlano(contexto({ plano: { ...plano, desvios: [], deficitCentavos: 0, previsaoMesFinal: "2027-06", ajusteRecomendado: null, ajustePendente: false } }));
+    expect(r.conclusao).toContain("não atrasou");
+  });
+  it("'Quando fico livre' usa a data do plano quando há plano ativo", () => {
+    const r = responderLivre(contexto({ plano }));
+    expect(r.conclusao).toContain("ago/2027");
+    expect(r.numeros[0].rotulo).toContain("Plano 2027");
   });
 });

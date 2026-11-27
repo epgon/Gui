@@ -11,8 +11,9 @@ import { carregarNegociacoes } from "../negociacoes";
 import { evolucaoDoTotalDevido, fatiasDeDividas, jurosEstimadosPorMes, parcelasDoMes, preverQuitacao, type ItemEvolucao } from "../painel";
 import { estaAtiva, rotuloTipoDivida } from "../regras";
 import { carregarDividasCompletas, ordenarDividas, resumirDividas, type DividaCompleta } from "../servidor";
+import { analisarPlano, carregarComprasParceladas, lerPlanoAtivo, type AnalisePlano } from "../plano-servidor";
 import { carregarSituacaoFinanceira } from "../simulador-servidor";
-import { mesDe, somarMesesYm } from "../simulador";
+import { mesDe, rotuloMes, somarMesesYm } from "../simulador";
 import type { LinhaDivida, ResumoDividas } from "../tipos";
 import type { PropostaAberta, ContextoPerguntas } from "./perguntas";
 import {
@@ -88,6 +89,8 @@ export type PainelDividas = {
   porCredor: ReturnType<typeof fatiasDeDividas>;
   porTipo: ReturnType<typeof fatiasDeDividas>;
   cartaoNaVisaoGeral: boolean;
+  /** O Plano de Quitação ativo, comparado com o realizado (null = não há plano ativo). */
+  plano: AnalisePlano | null;
 };
 
 export function limitesDe(p: Awaited<ReturnType<typeof lerParametros>>["dividas"]): LimitesConsultor {
@@ -152,8 +155,14 @@ export const carregarPainelDividas = cache(async (hoje: string = hojeIso()): Pro
       .map((p) => ({ negociacaoId: n.id, propostaId: p.id, credor: n.credor, dividas: n.dividas.map((d) => d.descricao).join(", "), saldoCentavos: n.saldoCentavos, modalidade: p.modalidade, entradaCentavos: p.entradaCentavos, parcelas: p.parcelas, valorParcelaCentavos: p.valorParcelaCentavos, validade: p.validade })),
   );
 
+  // Plano de Quitação ativo: a previsão dele vale no lugar de "só as parcelas", e as regras R9 e R10 olham para ele.
+  const planoAtivo = await lerPlanoAtivo();
+  const analisePlano = planoAtivo ? await analisarPlano({ ativo: planoAtivo, completas, situacao: sit, temHistorico, hoje }) : null;
+  if (analisePlano && planoAtivo) analisePlano.paraConsultor.comprasParceladas = await carregarComprasParceladas(planoAtivo.plano.aprovadoEm ? new Date(planoAtivo.plano.aprovadoEm) : null, temHistorico ? sit.sobraMensalCentavos : null);
+
   const ctx: ContextoPerguntas = {
     hoje,
+    plano: analisePlano?.paraConsultor ?? null,
     dividas,
     rendaMensalCentavos: renda > 0 ? renda : null,
     sobraMensalCentavos: temHistorico ? sit.sobraMensalCentavos : null,
@@ -200,13 +209,22 @@ export const carregarPainelDividas = cache(async (hoje: string = hojeIso()): Pro
     parcelasMesCentavos: parcelasMes,
     percentualRenda,
     nivelRenda: percentualRenda === null ? "ok" : classificarPercentualRenda(percentualRenda, limites),
-    previsao: preverQuitacao(ativas.flatMap((c) => (c.sim ? [c.sim] : [])), mesDe(hoje)),
+    previsao: previsaoDoPlano(analisePlano) ?? preverQuitacao(ativas.flatMap((c) => (c.sim ? [c.sim] : [])), mesDe(hoje)),
     evolucao: evolucaoDoTotalDevido(itens, hoje, 12),
     porCredor: fatiasDeDividas(ativasLinhas.map((l) => ({ chave: String(l.contatoId), nome: l.credor, saldoCentavos: l.saldo.exibido }))),
     porTipo: fatiasDeDividas(ativasLinhas.map((l) => ({ chave: l.tipo, nome: rotuloTipo(l.tipo), saldoCentavos: l.saldo.exibido }))),
     cartaoNaVisaoGeral: parametros.dividas.cartaoVisaoGeral,
+    plano: analisePlano,
   };
 });
+
+/** Com plano ativo, a previsão de quitação é a do plano (recalculada com o que falta pagar hoje). */
+function previsaoDoPlano(a: AnalisePlano | null): ReturnType<typeof preverQuitacao> | null {
+  if (!a || a.concluido) return null;
+  const r = a.previsao;
+  if (r && r.quitouTudo && r.mesFinal) return { tipo: "data", mes: r.mesFinal, rotulo: rotuloMes(r.mesFinal), meses: r.mesesAteQuitar ?? 0, aproximada: false, doPlano: true };
+  return { tipo: "sem_previsao", motivo: "Com o valor mensal do plano, as dívidas dele não terminam em 30 anos." };
+}
 
 function somarDiasTexto(data: string, dias: number): string {
   const [a, m, d] = data.split("-").map(Number);

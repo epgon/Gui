@@ -489,3 +489,13 @@ A pessoa pediu que as fases fossem construídas sem esperar (26/11/2026). Para c
 - A **previsão de quitação** paga só as parcelas (plano ativo chega na D5); com dívida sem parcelas a data é marcada como aproximada.
 - A sobra mensal da D3 não foi alterada nesta fase.
 - Avisos antes de confirmar (7.6) nunca bloqueiam: Voltar ou "Continuar mesmo assim".
+
+### Decisões tomadas na construção da D5 (27/11/2026)
+
+- **Sem rascunho gravado**: o plano em edição vive no endereço da tela (vindo do Simulador, de uma simulação guardada ou do zero). **Aprovar plano** grava direto como ativo e encerra o anterior (com aviso de substituição). Um plano ativo por vez.
+- O **realizado** nunca é gravado: é a soma dos lançamentos pagos ligados às dívidas do plano, no mês do pagamento. No gráfico ele é aproximado (não conta os juros do atraso). Tolerância de R$ 1,00 para "cumprido".
+- Situação do mês: Cumprido, Parcial, Não cumprido e **Em andamento** (mês atual ainda sem fechar).
+- **Ajuste**: a proposta oferece "aumentar o valor mensal" (o menor valor que ainda fecha no mês final planejado) e "adiar a data final"; a pessoa escolhe. **Aprovar ajuste** cria a versão n+1 e a anterior fica "substituída". **Manter como está** guarda a recusa; a mesma proposta não volta a aparecer até a situação mudar. Depois de um ajuste, só os meses a partir do atual contam para déficit e R9 (`acompanharDesde`).
+- Desvio por queda de sobra: queda de 20% ou mais em relação à da aprovação (constante, fora de Parâmetros). R10: compra parcelada grande = acima da sobra mensal (ou R$ 1.000,00 sem histórico).
+- **Agendar**: um clique, um lançamento não pago, só no mês atual e no seguinte, nunca acima do que falta agendar. Em dívida com parcelas, o mesmo valor sai das últimas parcelas em aberto (como "reduzir a quantidade" da amortização), para o saldo não contar duas vezes; em dívida sem parcelas, o extra agendado não soma ao saldo até ser pago. Fica registrado no histórico da dívida.
+- Dívidas sem parcelas não têm mínimo personalizável no plano. A previsão de quitação e a pergunta "Quando fico livre das dívidas?" passam a usar o plano ativo.

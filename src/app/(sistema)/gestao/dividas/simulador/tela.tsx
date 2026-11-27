@@ -287,6 +287,26 @@ export function TelaSimulador({ dados, inicio }: { dados: DadosSimulador; inicio
 
   const ordemExibida = [...estado.ordem.filter((id) => estado.selecionadas.includes(id)), ...estado.selecionadas.filter((id) => !estado.ordem.includes(id))];
 
+  // "Criar plano a partir desta simulação": leva os números para a tela do Plano de Quitação, onde a pessoa confere e aprova.
+  const linkDoPlano = (() => {
+    if ((estado.modo !== "estrategias" && estado.modo !== "cenarios") || !dividasSim.some((d) => !d.hipotetica)) return null;
+    const cen = estado.modo === "cenarios" ? cenarios.find((c) => c.valor === cenarioAberto) : null;
+    const valorDoPlano = cen ? cen.valorMensalCentavos : valorMensal;
+    const reservaDoPlano = cen ? cen.reservaUsadaCentavos : reservaUsada;
+    const ids = dividasSim.filter((d) => !d.hipotetica).map((d) => d.id.replace(/^d/, ""));
+    const q = new URLSearchParams({ novo: "1", origem: "simulacao", estrategia: estado.estrategia, dividas: ids.join(","), ordem: estado.ordem.filter((id) => estado.selecionadas.includes(id)).join(",") });
+    if (valorDoPlano !== null) q.set("valor", String(valorDoPlano));
+    else q.set("solo", "1");
+    if (reservaDoPlano > 0) q.set("reserva", String(reservaDoPlano));
+    const extra = centavos(estado.extraValor);
+    if (extra > 0 && /^\d{4}-\d{2}$/.test(estado.extraMes)) {
+      q.set("extraValor", String(extra));
+      q.set("extraMes", estado.extraMes);
+    }
+    q.set("sim", `${MODOS.find((m) => m.valor === estado.modo)?.rotulo ?? "Simulação"}${cen ? `: ${cen.rotulo}` : ""}`);
+    return `/gestao/dividas/plano?${q.toString()}`;
+  })();
+
   return (
     <>
       <AvisoAntesDeConfirmar
@@ -440,6 +460,11 @@ export function TelaSimulador({ dados, inicio }: { dados: DadosSimulador; inicio
                 <Botao variante="secundario" className="h-8" icone={<Save className="h-4 w-4" />} onClick={() => { setErro(""); setGuardando(true); }}>
                   Guardar simulação
                 </Botao>
+                {linkDoPlano && (
+                  <Link href={linkDoPlano} className="inline-flex h-8 items-center justify-center gap-2 rounded-md bg-verde px-4 text-sm font-semibold text-white transition hover:bg-verde-escuro" title="Leva esta simulação para o Plano de Quitação. Nada é criado até você aprovar lá.">
+                    Criar plano a partir desta simulação
+                  </Link>
+                )}
                 {recursos.impressao && (
                   <Botao variante="secundario" className="h-8" icone={<Printer className="h-4 w-4" />} onClick={imprimir}>
                     Imprimir/PDF

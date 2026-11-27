@@ -944,6 +944,84 @@ export const consultorMensagem = pgTable(
   (t) => [index("consultor_mensagem_assunto_idx").on(t.assuntoId, t.criadoEm)],
 );
 
+// ---------------------------------------------------------------------------
+// Gestão de Dívidas (fase D5): Plano de Quitação
+// ---------------------------------------------------------------------------
+
+/**
+ * Plano de Quitação "vivo". Guarda só o que se planejou (meta de pagamento por mês e dívida).
+ * O realizado nunca é gravado: é calculado dos lançamentos pagos ligados às dívidas.
+ * Cada ajuste aprovado cria uma nova versão; a anterior fica como "substituido".
+ */
+export const planoQuitacao = pgTable(
+  "plano_quitacao",
+  {
+    id: serial("id").primaryKey(),
+    nome: varchar("nome", { length: 80 }).notNull(),
+    versao: integer("versao").notNull().default(1),
+    planoAnteriorId: integer("plano_anterior_id").references((): AnyPgColumn => planoQuitacao.id, { onDelete: "set null" }),
+    /** rascunho, ativo, substituido ou encerrado. */
+    situacao: varchar("situacao", { length: 12 }).notNull().default("ativo"),
+    estrategia: varchar("estrategia", { length: 20 }).notNull(),
+    /** Quanto se paga por mês no total, parcelas incluídas. Vazio = só as parcelas. */
+    valorMensalCentavos: bigint("valor_mensal_centavos", { mode: "number" }),
+    reservaMinimaCentavos: bigint("reserva_minima_centavos", { mode: "number" }).notNull().default(0),
+    /** Primeiro mês do plano (dia 1). */
+    inicio: date("inicio").notNull(),
+    /** Ordem personalizada, extras pontuais, sobra na aprovação, saldo planejado mês a mês e de onde veio o plano. */
+    parametros: jsonb("parametros").notNull(),
+    aprovadoEm: timestamp("aprovado_em", { withTimezone: true }),
+    encerradoEm: timestamp("encerrado_em", { withTimezone: true }),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [index("plano_quitacao_situacao_idx").on(t.situacao)],
+);
+
+/** Meta de pagamento de cada dívida em cada mês do plano. */
+export const planoQuitacaoMes = pgTable(
+  "plano_quitacao_mes",
+  {
+    id: serial("id").primaryKey(),
+    planoId: integer("plano_id")
+      .notNull()
+      .references(() => planoQuitacao.id, { onDelete: "cascade" }),
+    /** Primeiro dia do mês. */
+    competencia: date("competencia").notNull(),
+    dividaId: integer("divida_id")
+      .notNull()
+      .references(() => divida.id),
+    planejadoCentavos: bigint("planejado_centavos", { mode: "number" }).notNull(),
+  },
+  (t) => [uniqueIndex("plano_quitacao_mes_unico").on(t.planoId, t.competencia, t.dividaId), index("plano_quitacao_mes_divida_idx").on(t.dividaId)],
+);
+
+/** Proposta de ajuste do plano e a decisão da pessoa. Nada muda no plano sem a aprovação. */
+export const planoAjuste = pgTable(
+  "plano_ajuste",
+  {
+    id: serial("id").primaryKey(),
+    planoId: integer("plano_id")
+      .notNull()
+      .references(() => planoQuitacao.id, { onDelete: "cascade" }),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+    motivo: text("motivo").notNull(),
+    /** As opções calculadas na hora da proposta (aumentar o valor ou adiar) e o cálculo. */
+    proposta: jsonb("proposta").notNull(),
+    /** pendente, aprovado ou recusado. */
+    situacao: varchar("situacao", { length: 10 }).notNull().default("pendente"),
+    /** Qual opção foi aprovada (aumentar ou adiar). */
+    opcao: varchar("opcao", { length: 10 }),
+    decididoEm: timestamp("decidido_em", { withTimezone: true }),
+    /** A versão nova criada ao aprovar. */
+    planoNovoId: integer("plano_novo_id").references(() => planoQuitacao.id, { onDelete: "set null" }),
+  },
+  (t) => [index("plano_ajuste_plano_idx").on(t.planoId, t.situacao)],
+);
+
 export const acaoAuditoriaEnum = pgEnum("acao_auditoria", [
   "cadastrou",
   "alterou",

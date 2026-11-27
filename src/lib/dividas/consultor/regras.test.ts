@@ -19,8 +19,11 @@ import {
   regraR5,
   regraR6,
   regraR7,
+  regraR10,
   regraR8,
+  regraR9,
   sobraLivre,
+  type PlanoParaConsultor,
   type ContextoConsultor,
   type DividaConsultor,
 } from "./regras";
@@ -292,5 +295,57 @@ describe("Dispensar e Lembrar em 7 dias", () => {
   it("lê só o que está no formato certo", () => {
     expect(lerEstadoAlertas({ "R1:3": { dispensado: true }, "R2": { ate: "2026-12-01" }, lixo: { dispensado: true }, "R4:1": { ate: "amanhã" } })).toEqual({ "R1:3": { dispensado: true }, R2: { ate: "2026-12-01" } });
     expect(lerEstadoAlertas(null)).toEqual({});
+  });
+});
+
+const plano = (extra: Partial<PlanoParaConsultor> = {}): PlanoParaConsultor => ({
+  id: 3,
+  nome: "Plano 2027",
+  versao: 1,
+  mesAnterior: { mes: "2026-10", planejadoCentavos: 120_000, realizadoCentavos: 120_000, situacao: "cumprido" },
+  mesFinalPlanejado: "2027-06",
+  previsaoMesFinal: "2027-06",
+  ajustePendente: false,
+  desvios: [],
+  deficitCentavos: 0,
+  ajusteRecomendado: null,
+  novasDividas: [],
+  comprasParceladas: [],
+  ...extra,
+});
+
+describe("R9: plano com o mês anterior abaixo do planejado", () => {
+  it("dispara com mês parcial ou não cumprido, mostrando o cálculo", () => {
+    const [a] = regraR9(contexto({ plano: plano({ mesAnterior: { mes: "2026-10", planejadoCentavos: 120_000, realizadoCentavos: 70_000, situacao: "parcial" } }) }));
+    expect(a.regra).toBe("R9");
+    expect(a.gravidade).toBe("atencao");
+    expect(a.texto).toContain("R$ 500,00");
+    expect(a.calculo.join(" ")).toContain("R$ 1.200,00 − R$ 700,00");
+    expect(regraR9(contexto({ plano: plano({ mesAnterior: { mes: "2026-10", planejadoCentavos: 120_000, realizadoCentavos: 0, situacao: "nao_cumprido" } }) }))).toHaveLength(1);
+  });
+  it("não dispara com o mês cumprido, sem plano ou sem mês fechado", () => {
+    expect(regraR9(contexto({ plano: plano() }))).toEqual([]);
+    expect(regraR9(contexto())).toEqual([]);
+    expect(regraR9(contexto({ plano: plano({ mesAnterior: null }) }))).toEqual([]);
+  });
+  it("só entra em calcularAlertas quando a regra está ligada", () => {
+    const c = contexto({ plano: plano({ mesAnterior: { mes: "2026-10", planejadoCentavos: 120_000, realizadoCentavos: 0, situacao: "nao_cumprido" } }) });
+    expect(calcularAlertas(c, LIMITES_PADRAO).some((a) => a.regra === "R9")).toBe(true);
+    expect(calcularAlertas(c, LIMITES_PADRAO, ["R9"]).some((a) => a.regra === "R9")).toBe(false);
+  });
+});
+
+describe("R10: dívida nova ou compra parcelada depois do plano", () => {
+  it("dispara para dívida nova e para compra parcelada grande", () => {
+    const alertas = regraR10(contexto({ plano: plano({ novasDividas: [{ id: 8, descricao: "Cheque especial", saldoCentavos: 80_000 }], comprasParceladas: [{ parcelamentoId: 5, descricao: "Geladeira", totalCentavos: 360_000, parcelas: 12, parcelaCentavos: 30_000 }] }) }));
+    expect(alertas.map((a) => a.id)).toEqual(["R10:d8", "R10:c5"]);
+    expect(alertas[1].texto).toContain("12×");
+  });
+  it("não dispara sem plano ou sem novidade", () => {
+    expect(regraR10(contexto())).toEqual([]);
+    expect(regraR10(contexto({ plano: plano() }))).toEqual([]);
+  });
+  it("o estado de Dispensar aceita o id da regra", () => {
+    expect(lerEstadoAlertas({ "R10:c5": { dispensado: true }, "R9:3": { ate: "2026-12-01" } })).toEqual({ "R10:c5": { dispensado: true }, "R9:3": { ate: "2026-12-01" } });
   });
 });

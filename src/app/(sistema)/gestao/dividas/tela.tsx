@@ -223,12 +223,12 @@ function ParcelasDoMes({ dados }: { dados: DadosVisaoGeralDividas }) {
 
 function Previsao({ previsao }: { previsao: PrevisaoQuitacao }) {
   return (
-    <Indicador titulo="Previsão de quitação" icone={<CalendarCheck className="h-5 w-5 text-pago-texto" />} href="/gestao/dividas/simulador" dica="Mês em que tudo acaba pagando só as parcelas. Quando houver um Plano de Quitação ativo, vale a data dele." labelMenu="Ver o Simulador">
+    <Indicador titulo="Previsão de quitação" icone={<CalendarCheck className="h-5 w-5 text-pago-texto" />} href={previsao.tipo === "data" && previsao.doPlano ? "/gestao/dividas/plano" : "/gestao/dividas/simulador"} dica="Mês em que tudo acaba pagando só as parcelas. Quando há um Plano de Quitação ativo, vale a previsão dele, recalculada com o que falta pagar." labelMenu={previsao.tipo === "data" && previsao.doPlano ? "Ver o Plano de Quitação" : "Ver o Simulador"}>
       {previsao.tipo === "data" ? (
         <>
           <p className="text-3xl font-semibold capitalize text-gray-900">{previsao.rotulo}</p>
           <p className="mt-1 text-xs text-gray-500">
-            Em {plural(previsao.meses, "mês", "meses")}, pagando só as parcelas{previsao.aproximada ? " (aproximado: há dívida sem parcelas definidas)" : ""}
+            Em {plural(previsao.meses, "mês", "meses")}, {previsao.doPlano ? "seguindo o plano de quitação ativo" : "pagando só as parcelas"}{previsao.aproximada ? " (aproximado: há dívida sem parcelas definidas)" : ""}
           </p>
         </>
       ) : previsao.tipo === "sem_previsao" ? (

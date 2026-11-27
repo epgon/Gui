@@ -107,6 +107,16 @@ export const calcularNotificacoes = cache(async (hoje = hojeIso()): Promise<{ li
     // Os alertas graves do Consultor Gui (regras R1, R2, R3, R4 e R13 com gravidade Alta), calculados na hora.
     // Dispensados e adiados não aparecem. Se o cálculo falhar, o sino segue sem eles.
     const painel = await carregarPainelDividas(hoje).catch(() => null);
+    if (painel?.plano?.propostaVisivel) {
+      lista.push({
+        id: `divida:plano-ajuste:${painel.plano.plano.id}:${hoje}`,
+        tipo: "alerta",
+        titulo: "Seu plano de quitação precisa de ajuste",
+        texto: painel.plano.desvios[0]?.texto ?? "O plano saiu do rumo. Veja a proposta de ajuste e decida.",
+        href: "/gestao/dividas/plano",
+        rotuloLink: "Ver o plano",
+      });
+    }
     for (const a of (painel?.visiveis ?? []).filter((x) => x.gravidade === "alta").slice(0, 5)) {
       lista.push({
         id: `divida:${a.id}:${hoje}`,

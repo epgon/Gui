@@ -105,8 +105,12 @@ function obrigacoesDe(base: Base, d: Base["dividas"][number]) {
   const cfg = configDe(d.d, base.parametros);
   const idRecorrencias = new Set(base.vinculos.filter((v) => v.dividaId === d.d.id && v.recorrenciaId !== null).map((v) => v.recorrenciaId));
   const ajustadas = new Set<number>();
+  // Pagamentos extras agendados pelo Plano de Quitação: o evento guarda o lançamento e, nas dívidas com parcelas, as parcelas que diminuíram.
+  const extrasDoPlano = new Set<number>();
   for (const e of base.eventos) {
-    if (e.dividaId === d.d.id && e.tipo === "amortizacao" && e.dados && typeof e.dados === "object" && "ajustes" in e.dados) {
+    const doPlano = e.tipo === "anotacao" && !!e.dados && typeof e.dados === "object" && (e.dados as { planoExtra?: unknown }).planoExtra === true;
+    if (doPlano && e.lancamentoId) extrasDoPlano.add(e.lancamentoId);
+    if (e.dividaId === d.d.id && (e.tipo === "amortizacao" || doPlano) && e.dados && typeof e.dados === "object" && "ajustes" in e.dados) {
       for (const a of (e.dados as { ajustes: { id: number }[] }).ajustes) ajustadas.add(a.id);
     }
   }
@@ -120,7 +124,8 @@ function obrigacoesDe(base: Base, d: Base["dividas"][number]) {
     const estimativa = estimarAtraso(valor, x.dataVencimento, hoje, cfg);
     const aberta = !x.dataPagamento;
     contas.push({
-      o: { id: x.id, valorCentavos: valor, vencimento: x.dataVencimento, dataPagamento: x.dataPagamento, registradoEm: x.atualizadoEm.getTime(), deSistema: x.origem === "sistema" },
+      // Dívida sem parcelas: o extra agendado pelo plano ainda não pago é só previsão de pagamento e não aumenta o saldo; quando for pago, o saldo cai.
+      o: { id: x.id, valorCentavos: !x.dataPagamento && d.d.forma === "sem_parcelas" && extrasDoPlano.has(x.id) ? 0 : valor, vencimento: x.dataVencimento, dataPagamento: x.dataPagamento, registradoEm: x.atualizadoEm.getTime(), deSistema: x.origem === "sistema" },
       linha: {
         chave: `l${x.id}`,
         origem: "lancamento",
@@ -263,6 +268,8 @@ export type DividaCompleta = {
   /** Pagamentos extras e quitações registrados no histórico. */
   extras: { data: string; valorCentavos: number }[];
   quitadaEm: string | null;
+  /** Quando a dívida foi encerrada (quitação, renegociação ou cancelamento). */
+  encerradaEm: string | null;
   /** Desde quando a dívida existe no Gui (contratação ou cadastro). */
   desde: string;
   /** A dívida no formato do Simulador (null se estiver encerrada ou sem saldo). */
@@ -280,6 +287,7 @@ export async function carregarDividasCompletas(hoje = hojeIso()): Promise<Divida
       obrigacoes: contas.map((c) => c.linha),
       extras: base.eventos.filter((e) => e.dividaId === d.d.id && (e.tipo === "amortizacao" || e.tipo === "quitacao") && e.valorCentavos !== null).map((e) => ({ data: e.data, valorCentavos: Number(e.valorCentavos) })),
       quitadaEm: d.d.quitadaEm,
+      encerradaEm: d.d.encerradaEm,
       desde: d.d.dataContratacao ?? d.d.criadoEm.toISOString().slice(0, 10),
       sim: sim && sim.saldoCentavos > 0 ? sim : null,
     };

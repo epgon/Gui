@@ -11,13 +11,14 @@ import { ordenarDividas, analisarQuitacao, formatarReais, mesDe, quitarComExtraM
 import { taxaMensalParaAnual } from "../regras";
 import { classificarPercentualRenda, percentualDaRenda, sobraLivre, type ContextoConsultor, type DividaConsultor, type LimitesConsultor, type LinkAcao } from "./regras";
 
-export type IdPergunta = "total" | "ordem" | "cabe" | "extra" | "reserva" | "proposta" | "livre" | "compra";
+export type IdPergunta = "total" | "ordem" | "cabe" | "extra" | "reserva" | "proposta" | "livre" | "compra" | "plano";
 
 export type Dado = "valor" | "parcelas";
 
 export const PERGUNTAS_PRONTAS: { id: IdPergunta; grupo: string; rotulo: string; pede: Dado[] }[] = [
   { id: "total", grupo: "Minha situação", rotulo: "Quanto eu devo no total?", pede: [] },
   { id: "livre", grupo: "Minha situação", rotulo: "Quando fico livre das dívidas?", pede: [] },
+  { id: "plano", grupo: "Meu plano", rotulo: "Por que meu plano atrasou?", pede: [] },
   { id: "ordem", grupo: "O que fazer", rotulo: "Qual dívida pagar primeiro?", pede: [] },
   { id: "cabe", grupo: "O que fazer", rotulo: "Cabe uma parcela de R$ X?", pede: ["valor"] },
   { id: "extra", grupo: "O que fazer", rotulo: "Quanto economizo pagando R$ X a mais?", pede: ["valor"] },
@@ -94,7 +95,8 @@ export function interpretarPergunta(texto: string): PerguntaLida {
   const parcelas = acharParcelas(texto);
   const tem = (...padroes: RegExp[]) => padroes.some((p) => p.test(t));
   let id: IdPergunta | null = null;
-  if (tem(/\bcompra\b/, /\bcomprar\b/, /compra parcelada/, /financiar/, /parcelar (uma|um|o|a)\b/)) id = "compra";
+  if (tem(/\bplano\b.*(atras|furou|fugiu|desvi|abaixo|parou)/, /(atras|furou|fugiu|desvi).*\bplano\b/, /por que (o |meu )?plano/, /\bmeu plano\b/)) id = "plano";
+  else if (tem(/\bcompra\b/, /\bcomprar\b/, /compra parcelada/, /financiar/, /parcelar (uma|um|o|a)\b/)) id = "compra";
   else if (tem(/\bcabe\b/, /\bcaber\b/, /\bcaberia\b/, /parcela de r\$/)) id = "cabe";
   else if (tem(/economiz/, /a mais\b/, /pagando mais/, /pagar mais/, /adiantar/, /amortiz/)) id = "extra";
   else if (tem(/reserva/, /poupanca/, /fundo de emergencia/)) id = "reserva";
@@ -402,14 +404,18 @@ export function responderLivre(c: ContextoPerguntas): Resposta {
   const comExtra = extra > 0 ? simular({ dividas: sims, estrategia: "avalanche", valorMensalCentavos: c.parcelasReferenciaCentavos + extra, inicioYm }) : null;
   const semParcelas = lista.filter((d) => d.forma === "sem_parcelas");
   const quita = soParcelas.quitouTudo && soParcelas.mesFinal;
+  const doPlano = c.plano?.previsaoMesFinal ?? null;
   const aprox = semParcelas.length ? ` (estimativa: ${plural(semParcelas.length, "dívida não tem", "dívidas não têm")} parcelas definidas e conto como pagamento só os juros do mês)` : "";
   const numeros = [
+    ...(doPlano ? [{ rotulo: `Pelo plano "${c.plano!.nome}"`, valor: `${rotuloMes(doPlano)}${c.plano!.mesFinalPlanejado && doPlano > c.plano!.mesFinalPlanejado ? ` (o plano previa ${rotuloMes(c.plano!.mesFinalPlanejado)})` : ""}` }] : []),
     { rotulo: "Só pagando as parcelas", valor: quita ? `${rotuloMes(soParcelas.mesFinal!)} (${plural(soParcelas.mesesAteQuitar ?? 0, "mês", "meses")})` : "sem previsão" },
     { rotulo: "Juros previstos até lá", valor: formatarReais(soParcelas.totalJurosCentavos) },
     ...(comExtra && comExtra.quitouTudo && comExtra.mesFinal ? [{ rotulo: `Com ${formatarReais(extra)} a mais por mês`, valor: `${rotuloMes(comExtra.mesFinal)} (${plural(comExtra.mesesAteQuitar ?? 0, "mês", "meses")}), ${formatarReais(soParcelas.totalJurosCentavos - comExtra.totalJurosCentavos)} a menos de juros` }] : []),
   ];
   return {
-    conclusao: quita
+    conclusao: doPlano
+      ? `Seguindo o seu plano ativo você fica livre das dívidas em ${rotuloMes(doPlano)}. Só pagando as parcelas seria ${quita ? rotuloMes(soParcelas.mesFinal!) : "depois de 30 anos"}.`
+      : quita
       ? `Pagando só as parcelas você fica livre das dívidas em ${rotuloMes(soParcelas.mesFinal!)}${aprox}${comExtra?.quitouTudo && comExtra.mesFinal && comExtra.mesesAteQuitar! < soParcelas.mesesAteQuitar! ? `; com ${formatarReais(extra)} a mais por mês, em ${rotuloMes(comExtra.mesFinal)}` : ""}.`
       : "Com o ritmo atual as dívidas não terminam em 30 anos: os pagamentos não cobrem os juros. Aumente o valor pago por mês ou renegocie.",
     numeros,
@@ -418,10 +424,50 @@ export function responderLivre(c: ContextoPerguntas): Resposta {
       `Dívidas na conta: ${lista.map((d) => `${d.descricao} (${formatarReais(d.saldoCentavos)})`).join("; ")}.`,
       "Parcelas futuras entram a valor presente pela taxa da dívida e o atraso estimado cai no mês atual.",
       comExtra ? `Com extra: ${pct(c.limites.extraSobraPct)} da sobra livre de ${formatarReais(livre)} = ${formatarReais(extra)} por mês, na dívida mais cara (Avalanche).` : "Não há sobra livre para simular um valor extra.",
+      ...(doPlano ? ["Pelo plano: simulo o valor mensal do plano com o que falta pagar hoje (é a previsão recalculada da tela Plano de Quitação)."] : []),
       "Limite de 360 meses. É uma projeção: atrasos, juros do credor e novas dívidas mudam o resultado.",
     ],
     acoes: [{ rotulo: "Comparar estratégias", href: "/gestao/dividas/simulador?modo=estrategias" }],
     cuidado: !quita,
+  };
+}
+
+/** "Por que meu plano atrasou?" */
+export function responderPlano(c: ContextoPerguntas): Resposta {
+  const p = c.plano;
+  const ver: LinkAcao = { rotulo: "Ver o Plano de Quitação", href: "/gestao/dividas/plano" };
+  if (!p) {
+    return {
+      conclusao: "Você não tem um Plano de Quitação ativo, então não há o que atrasar. Dá para criar um a partir de uma simulação ou do zero.",
+      numeros: [],
+      criterio: "Só olho o plano ativo (aprovado por você).",
+      comoCalculei: ["Procurei um plano com situação Ativo e não encontrei."],
+      acoes: [{ rotulo: "Criar plano", href: "/gestao/dividas/plano" }, { rotulo: "Ir ao Simulador", href: "/gestao/dividas/simulador" }],
+    };
+  }
+  const atrasado = p.previsaoMesFinal !== null && p.mesFinalPlanejado !== null && p.previsaoMesFinal > p.mesFinalPlanejado;
+  const numeros = [
+    { rotulo: "Plano", valor: `${p.nome} (versão ${p.versao})` },
+    ...(p.mesFinalPlanejado ? [{ rotulo: "Término previsto no plano", valor: rotuloMes(p.mesFinalPlanejado) }] : []),
+    ...(p.previsaoMesFinal ? [{ rotulo: "Previsão recalculada hoje", valor: rotuloMes(p.previsaoMesFinal) }] : []),
+    { rotulo: "Ficou sem pagar nos meses fechados", valor: formatarReais(p.deficitCentavos) },
+  ];
+  if (!p.desvios.length) {
+    return {
+      conclusao: `O seu plano não atrasou: ${p.mesAnterior ? "o mês anterior foi cumprido e " : ""}a previsão continua em ${p.previsaoMesFinal ? rotuloMes(p.previsaoMesFinal) : "dia"}.`,
+      numeros,
+      criterio: "Comparo, mês a mês, o que o plano previa com o que foi pago nas dívidas do plano (lançamentos pagos), e recalculo a previsão com o que falta pagar hoje.",
+      comoCalculei: ["Realizado = soma dos lançamentos pagos ligados às dívidas do plano, na data do pagamento (inclui pagamento parcial e o restante).", "Não encontrei desvio: nenhum mês fechado ficou abaixo, a previsão não passou do prazo, a sobra não caiu muito e não há dívida nova fora do plano."],
+      acoes: [ver],
+    };
+  }
+  return {
+    conclusao: `O plano ${atrasado ? "atrasou" : "saiu do rumo"} por ${p.desvios.length === 1 ? "um motivo" : `${p.desvios.length} motivos`}: ${p.desvios[0].replace(/\.$/, "")}${p.desvios.length > 1 ? " (e mais)" : ""}.${p.ajusteRecomendado ? ` O Gui sugere: ${p.ajusteRecomendado.charAt(0).toLowerCase()}${p.ajusteRecomendado.slice(1)}. Nada muda sem a sua aprovação.` : ""}`,
+    numeros,
+    criterio: "Comparo o planejado com o realizado dos meses fechados, a previsão recalculada com o prazo do plano, a sobra de hoje com a da aprovação e as dívidas novas.",
+    comoCalculei: [...p.desvios, "Realizado = soma dos lançamentos pagos ligados às dívidas do plano, na data do pagamento.", "O ajuste proposto só vira uma nova versão do plano se você clicar em Aprovar ajuste."],
+    acoes: [ver],
+    cuidado: true,
   };
 }
 
@@ -483,6 +529,8 @@ export function responder(id: IdPergunta, c: ContextoPerguntas, entrada: { valor
       return responderProposta(c);
     case "livre":
       return responderLivre(c);
+    case "plano":
+      return responderPlano(c);
     case "compra":
       return responderCompra(c, entrada.valorCentavos ?? 0, entrada.parcelas ?? 1);
   }
