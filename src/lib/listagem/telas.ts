@@ -47,6 +47,49 @@ const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "
 const SIM_NAO: CampoAvancado["tipo"] = "booleano";
 
 export const TELAS_LISTAGEM: Record<string, TelaListagem> = {
+  lancamentos: {
+    titulo: "Lançamentos",
+    destaques: true,
+    ordenacaoPadrao: [{ campo: "data", direcao: "asc" }],
+    colunas: [
+      { chave: "codigo", rotulo: "Código", padrao: false },
+      { chave: "data", rotulo: "Data", fixa: true, padrao: true },
+      { chave: "dataCompra", rotulo: "Data de Compra", padrao: false },
+      { chave: "dataReferencia", rotulo: "Data de Referência", padrao: false },
+      { chave: "dataPagamento", rotulo: "Data de Pagamento", padrao: false },
+      { chave: "banco", rotulo: "Logotipo do Banco ou Cartão", padrao: true },
+      { chave: "conta", rotulo: "Conta Financeira ou Cartão", padrao: false },
+      { chave: "contato", rotulo: "Cliente ou Fornecedor", padrao: true },
+      { chave: "cor", rotulo: "Cor da Categoria", padrao: true },
+      { chave: "descricao", rotulo: "Descrição", fixa: true, padrao: true },
+      { chave: "documento", rotulo: "Documento", padrao: false },
+      { chave: "categoria", rotulo: "Categoria", padrao: false },
+      { chave: "forma", rotulo: "Forma de Pagamento", padrao: false },
+      { chave: "tags", rotulo: "Tags", padrao: false },
+      { chave: "observacao", rotulo: "Observação", padrao: false },
+      { chave: "anexos", rotulo: "Anexos", padrao: false },
+      { chave: "valorPago", rotulo: "Valor Pago", padrao: false },
+      { chave: "valor", rotulo: "Valor", fixa: true, padrao: true },
+      { chave: "situacao", rotulo: "Situação", padrao: true },
+      { chave: "saldo", rotulo: "Saldo Acumulado", padrao: false },
+    ],
+    // O Filtro Avançado de Lançamentos tem campos próprios (lib/lancamentos/avancado.ts): aqui só a ordenação.
+    campos: [],
+    camposOrdenacao: [
+      { chave: "codigo", rotulo: "Código" },
+      { chave: "data", rotulo: "Data" },
+      { chave: "dataCompra", rotulo: "Data de Compra" },
+      { chave: "dataReferencia", rotulo: "Data de Referência" },
+      { chave: "dataPagamento", rotulo: "Data de Pagamento" },
+      { chave: "conta", rotulo: "Conta Financeira ou Cartão" },
+      { chave: "contato", rotulo: "Cliente ou Fornecedor" },
+      { chave: "descricao", rotulo: "Descrição" },
+      { chave: "documento", rotulo: "Documento" },
+      { chave: "categoria", rotulo: "Categoria" },
+      { chave: "forma", rotulo: "Forma de Pagamento" },
+      { chave: "valor", rotulo: "Valor" },
+    ],
+  },
   dividas: {
     titulo: "Minhas Dívidas",
     colunas: [

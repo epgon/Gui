@@ -254,3 +254,15 @@ describe("Notificações e Auditoria", () => {
     expect(linhasDosDados({ antes: 1, depois: 2 })).toEqual([{ campo: "Valor", antes: "1", valor: "2" }]);
   });
 });
+
+describe("Lançamentos nas Configurações da Listagem", () => {
+  it("tem as colunas de fábrica, a ordenação por data e aceita só os campos de ordenação próprios", () => {
+    const padrao = preferenciaPadrao("lancamentos");
+    expect(padrao.colunas).toEqual(["data", "banco", "contato", "cor", "descricao", "valor", "situacao"]);
+    expect(padrao.ordenacao).toEqual([{ campo: "data", direcao: "asc" }]);
+    const p = normalizarPreferencia("lancamentos", {
+      ordenacao: [{ campo: "valor", direcao: "desc" }, { campo: "situacao", direcao: "asc" }, { campo: "documento" }],
+    });
+    expect(p.ordenacao).toEqual([{ campo: "valor", direcao: "desc" }, { campo: "documento", direcao: "asc" }]);
+  });
+});

@@ -23,12 +23,14 @@ export function enderecoExportacao(tela: string, parametros: Record<string, stri
  * Botão "Imprimir" das listas e relatórios: Impressão Padrão (PDF, com Visualizar ou Download)
  * e exportação para Excel e CSV. Tudo respeita os filtros que estão na tela.
  */
-export function BotaoImprimir({ tela, parametros: proprios, exportar: exportarPedido = true, personalizada = false, className }: {
+export function BotaoImprimir({ tela, parametros: proprios, exportar: exportarPedido = true, personalizada = false, somente, className }: {
   tela: string;
   parametros: Record<string, string>;
   exportar?: boolean;
   /** Mostra a "Impressão Personalizada" (listas de Cadastros). */
   personalizada?: boolean;
+  /** Botão quadrado só com o ícone: "imprimir" gera a Impressão Padrão direto; "exportar" abre o menu do Excel e CSV. */
+  somente?: "imprimir" | "exportar";
   className?: string;
 }) {
   const { recursos } = useSistema();
@@ -87,30 +89,44 @@ export function BotaoImprimir({ tela, parametros: proprios, exportar: exportarPe
   const item = "flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-verde-claro";
   // Configurações > Recursos: sem Impressão e sem Exportação, o botão some.
   if (!imprimirLigado && !exportar) return null;
+  if (somente === "imprimir" && !imprimirLigado) return null;
+  if (somente === "exportar" && !exportar) return null;
+  const soIcone = !!somente;
+  const Icone = somente === "exportar" ? Download : Printer;
+  const dica = somente === "exportar" ? "Exportar" : somente === "imprimir" ? "Imprimir" : "Imprimir ou exportar";
   return (
-    <div ref={ref} className={cn("relative", className)}>
+    <div ref={ref} className={cn("group/dica relative", className)}>
       <button
         type="button"
-        onClick={() => setAberto((a) => !a)}
-        aria-expanded={aberto}
-        aria-haspopup="menu"
+        onClick={() => (somente === "imprimir" ? imprimir() : setAberto((a) => !a))}
+        aria-expanded={somente === "imprimir" ? undefined : aberto}
+        aria-haspopup={somente === "imprimir" ? undefined : "menu"}
+        aria-label={soIcone ? dica : undefined}
         disabled={gerando}
-        title="Imprimir ou exportar"
-        className="inline-flex h-9 items-center gap-1.5 rounded-md border border-borda bg-white px-2.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+        title={soIcone ? undefined : dica}
+        className={cn(
+          "inline-flex h-9 items-center rounded-md border border-borda bg-white text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-60",
+          soIcone ? "w-9 justify-center" : "gap-1.5 px-2.5",
+        )}
       >
-        {gerando ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-verde border-t-transparent" /> : <Printer className="h-4 w-4 text-verde" />}
-        <span className="hidden sm:inline">{gerando ? "Gerando..." : "Imprimir"}</span>
+        {gerando ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-verde border-t-transparent" /> : <Icone className="h-4 w-4 text-verde" />}
+        {!soIcone && <span className="hidden sm:inline">{gerando ? "Gerando..." : "Imprimir"}</span>}
       </button>
-      {aberto && (
+      {soIcone && (
+        <span aria-hidden="true" className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-xs text-white opacity-0 group-hover/dica:opacity-100">
+          {dica}
+        </span>
+      )}
+      {aberto && somente !== "imprimir" && (
         <ul role="menu" className="absolute right-0 z-40 mt-1 min-w-52 overflow-hidden rounded-lg border border-borda bg-white py-1 text-sm shadow-lg">
-          {imprimirLigado && (
+          {imprimirLigado && !somente && (
             <li>
               <button type="button" role="menuitem" className={item} onClick={() => imprimir()}>
                 <FileText className="h-4 w-4 text-verde" /> Impressão Padrão (PDF)
               </button>
             </li>
           )}
-          {imprimirLigado && personalizada && (
+          {imprimirLigado && personalizada && !somente && (
             <li>
               <button
                 type="button"

@@ -2,7 +2,7 @@
 import type { SituacaoFatura } from "@/lib/cartoes/regras";
 import type { Situacao, TipoLancamento } from "./regras";
 
-export type Aba = "todos" | "receitas" | "despesas" | "transferencias";
+export type Aba = "todos" | "receitas" | "despesas" | "transferencias" | "recorrentes";
 export type FiltroSituacao = "" | "nao_realizado" | "realizado" | "a_vencer" | "vencido";
 
 export type Filtros = {
@@ -37,6 +37,10 @@ export type LinhaLista = {
   data: string;
   dataPagamento: string | null;
   dataCompra: string | null;
+  dataReferencia: string | null;
+  documento: string | null;
+  /** Valor pago (positivo), quando já foi pago. */
+  valorPagoCentavos: number | null;
   situacao: Situacao;
   contaOuCartao: string;
   bancoCodigo: string | null;

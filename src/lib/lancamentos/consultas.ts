@@ -25,7 +25,7 @@ export function lerFiltros(sp: ParametrosBusca, hoje = hojeIso()): Filtros {
   const id = (nome: string) => (/^\d+$/.test(parametro(sp, nome)) ? parametro(sp, nome) : "");
   return {
     mes: /^\d{4}-(0[1-9]|1[0-2])$/.test(mes) ? mes : hoje.slice(0, 7),
-    aba: (["receitas", "despesas", "transferencias"].includes(aba) ? aba : "todos") as Aba,
+    aba: (["receitas", "despesas", "transferencias", "recorrentes"].includes(aba) ? aba : "todos") as Aba,
     destino: /^(conta|cartao):\d+$/.test(destino) ? destino : "",
     situacao: (["nao_realizado", "realizado", "a_vencer", "vencido"].includes(situacao) ? situacao : "") as FiltroSituacao,
     busca: parametro(sp, "busca").slice(0, 100),
@@ -41,7 +41,9 @@ export function lerFiltros(sp: ParametrosBusca, hoje = hojeIso()): Filtros {
 const passaSituacao = (s: Situacao, filtro: FiltroSituacao) =>
   !filtro || (filtro === "nao_realizado" ? s !== "realizado" : s === filtro);
 
-const passaAba = (aba: Aba, tipo: string, valor: number) => {
+const passaAba = (aba: Aba, x: LinhaLista) => {
+  const { tipo, valorCentavos: valor } = x;
+  if (aba === "recorrentes") return x.recorrenciaId !== null || x.previsto !== null;
   const transferencia = tipo === "transferencia_saida" || tipo === "transferencia_entrada";
   if (aba === "transferencias") return transferencia;
   if (aba === "receitas") return !transferencia && valor > 0;
@@ -102,6 +104,9 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
       dataVencimento: l.dataVencimento,
       dataPagamento: l.dataPagamento,
       dataCompra: l.dataCompra,
+      dataReferencia: l.dataReferencia,
+      documento: l.documento,
+      valorPago: l.valorPagoCentavos,
       contaId: l.contaId,
       cartaoId: l.cartaoId,
       faturaId: l.faturaId,
@@ -162,6 +167,9 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
       data: x.dataVencimento,
       dataPagamento: x.dataPagamento,
       dataCompra: x.dataCompra,
+      dataReferencia: x.dataReferencia,
+      documento: x.documento,
+      valorPagoCentavos: x.valorPago === null ? null : Math.abs(Number(x.valorPago)),
       situacao: situacaoDe(x.dataVencimento, x.dataPagamento, hoje),
       contaOuCartao: x.contaNome ?? x.cartaoNome ?? "",
       bancoCodigo: x.bancoCodigo,
@@ -235,6 +243,9 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
         data: fa.dataVencimento,
         dataPagamento,
         dataCompra: null,
+        dataReferencia: null,
+        documento: null,
+        valorPagoCentavos: null,
         situacao: situacaoDe(fa.dataVencimento, dataPagamento, hoje),
         contaOuCartao: c?.nome ?? "",
         eCartao: true,
@@ -272,7 +283,7 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
     }
   }
 
-  linhas = linhas.filter((x) => passaAba(f.aba, x.tipo, x.valorCentavos) && passaSituacao(x.situacao, f.situacao));
+  linhas = linhas.filter((x) => passaAba(f.aba, x) && passaSituacao(x.situacao, f.situacao));
   if (avancados.length) linhas = filtrarAvancado(linhas, avancados, CAMPOS_LANCAMENTOS_BASE, LEITORES_LANCAMENTOS);
 
   const receitas = linhas.filter((x) => x.valorCentavos > 0).reduce((s, x) => s + x.valorCentavos, 0);
@@ -374,6 +385,9 @@ async function linhasPrevistas(
         data: perna.dataVencimento,
         dataPagamento: null,
         dataCompra: perna.dataCompra,
+        dataReferencia: null,
+        documento: null,
+        valorPagoCentavos: null,
         situacao: situacaoDe(perna.dataVencimento, null, o.hoje),
         contaOuCartao: lugar?.nome ?? "",
         bancoCodigo: lugar?.bancoCodigo ?? null,
