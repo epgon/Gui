@@ -16,10 +16,7 @@ export default async function PaginaRecursos() {
           <TelaRecursos recursos={recursos} />
         </div>
       </main>
-      <PainelAjuda
-        trilha={["Configurações", "Recursos"]}
-        artigos={["Lançamentos, Contas Financeiras, Categorias, Relatórios e Visão Geral são a base do sistema e ficam sempre ativos."]}
-      />
+      <PainelAjuda />
     </>
   );
 }

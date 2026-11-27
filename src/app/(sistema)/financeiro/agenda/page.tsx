@@ -11,7 +11,6 @@ import { recursoAtivo } from "@/lib/parametros/servidor";
 
 export const metadata = { title: "Agenda" };
 const CAMINHO = "/financeiro/agenda";
-const ARTIGOS = ["Como usar a Agenda", "O que significa o % Realizado", "Como pagar ou receber pelo dia da Agenda"];
 
 export default async function PaginaAgenda({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
   if (!(await recursoAtivo("agenda"))) return <RecursoDesativado titulo="Agenda" trilha="Financeiro" />;
@@ -30,7 +29,7 @@ export default async function PaginaAgenda({ searchParams }: { searchParams: Pro
           <TelaAgenda linhas={linhas} resumo={resumo} destino={f.destino} opcoes={opcoes} hoje={hoje} mes={mesDe(f.mes)} caminho={CAMINHO} />
         </div>
       </main>
-      <PainelAjuda artigos={ARTIGOS} trilha={["Financeiro", "Agenda"]} />
+      <PainelAjuda />
     </>
   );
 }

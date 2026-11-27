@@ -3,7 +3,6 @@ import { PainelAjuda } from "@/components/layout/painel-ajuda";
 import { parametro, type ParametrosBusca } from "@/lib/cadastros/filtros";
 import { listarImportacoes, listarRegras } from "@/lib/importacao/consultas";
 import { carregarOpcoes } from "@/lib/lancamentos/consultas";
-import { ARTIGOS_IMPORTACAO } from "./artigos";
 import { TelaImportacoes } from "./tela";
 import { RecursoDesativado } from "@/components/layout/recurso-desativado";
 import { recursoAtivo } from "@/lib/parametros/servidor";
@@ -22,7 +21,7 @@ export default async function PaginaImportacoes({ searchParams }: { searchParams
           <TelaImportacoes aba={aba} importacoes={importacoes} regras={regras} opcoes={opcoes} />
         </div>
       </main>
-      <PainelAjuda artigos={ARTIGOS_IMPORTACAO} />
+      <PainelAjuda />
     </>
   );
 }

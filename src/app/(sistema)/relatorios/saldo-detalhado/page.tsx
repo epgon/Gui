@@ -40,7 +40,7 @@ export default async function PaginaSaldoDetalhado({ searchParams }: { searchPar
             <p className="text-sm text-gray-500">O Saldo Detalhado soma receitas, despesas e o resultado do período, agrupados do jeito que você escolher.</p>
           </div>
         </main>
-        <PainelAjuda artigos={["Como utilizar o relatório de saldo detalhado", "Como usar os filtros para lançamentos"]} />
+        <PainelAjuda />
       </>
     );
   }

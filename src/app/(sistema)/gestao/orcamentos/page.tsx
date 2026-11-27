@@ -12,7 +12,6 @@ import { recursoAtivo } from "@/lib/parametros/servidor";
 
 export const metadata = { title: "Orçamentos" };
 
-const ARTIGOS = ["Gerar orçamentos a partir das categorias", "Como definir o limite de cada categoria", "Como o orçamento é replicado nos meses seguintes"];
 
 export default async function PaginaOrcamentos({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
   if (!(await recursoAtivo("orcamentos"))) return <RecursoDesativado titulo="Orçamentos" trilha="Gestão" />;
@@ -33,7 +32,7 @@ export default async function PaginaOrcamentos({ searchParams }: { searchParams:
             <PrimeiroAcesso raizes={raizes} />
           </div>
         </main>
-        <PainelAjuda artigos={ARTIGOS} />
+        <PainelAjuda />
       </>
     );
   }
@@ -50,7 +49,7 @@ export default async function PaginaOrcamentos({ searchParams }: { searchParams:
           <TelaOrcamento orcamento={dados.orcamento} mes={dados.mes} filtros={filtros} destinos={opcoes.destinos} raizes={raizes} escolhidas={dados.escolhidas} hoje={hoje} />
         </div>
       </main>
-      <PainelAjuda artigos={ARTIGOS} />
+      <PainelAjuda />
     </>
   );
 }

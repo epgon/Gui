@@ -140,7 +140,7 @@ export default async function VisaoGeral() {
           <TelaVisaoGeral painel={painel} hoje={hoje} dividas={dividas} />
         </div>
       </main>
-      <PainelAjuda artigos={["Como navegar pela interface", "Visão Geral: o que cada cartão mostra", "Configurações iniciais e primeiro lançamento"]} />
+      <PainelAjuda />
     </>
   );
 }

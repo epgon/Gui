@@ -16,13 +16,7 @@ export default async function PaginaNotificacoes() {
           <TelaNotificacoes lista={lista.map((n) => ({ ...n, lida: lidas.includes(n.id) }))} />
         </div>
       </main>
-      <PainelAjuda
-        trilha={["Notificações"]}
-        artigos={[
-          "Os avisos são calculados na hora com os seus dados: quando o motivo some (a conta foi paga, por exemplo), o aviso some sozinho.",
-          "Os avisos do dia voltam no dia seguinte se continuarem valendo, mesmo que tenham sido marcados como lidos.",
-        ]}
-      />
+      <PainelAjuda />
     </>
   );
 }

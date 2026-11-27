@@ -1,14 +1,11 @@
 "use client";
 
 import { CircleHelp, Funnel, Headset, Pin, PinOff, type LucideIcon } from "lucide-react";
-import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { CentralAjudaPainel } from "@/components/ajuda/central-ajuda-painel";
 import { usePainel } from "@/components/layout/provedor-painel";
 import { PainelConfiguracao } from "@/components/listagem/painel-configuracao";
 import { cn } from "@/lib/cn";
-import { telaAjudaDoCaminho, trilhaDoCaminho } from "@/lib/ajuda/contexto";
-import type { TelaAjuda } from "@/lib/ajuda/tipos";
 
 type Aba = "filtros" | "ajuda";
 
@@ -66,16 +63,7 @@ function BotaoBarra({ icone: Icone, rotulo, dica, ativo, desativado, aoClicar, a
  * Painel da direita das telas: uma barra de ícones no rodapé troca o conteúdo entre "Filtros" e
  * "Central de Ajuda". O alfinete fixa o painel; solto, ele vira uma faixa estreita e abre por cima da tela.
  */
-export function PainelLateral({ filtros, inicial, artigos, trilha, tela }: {
-  filtros?: React.ReactNode;
-  inicial?: Aba;
-  /** Títulos de artigos ainda não escritos, para telas sem Central de Ajuda própria. */
-  artigos?: string[];
-  /** Caminho da tela sem "Início" (padrão: deduzido do endereço). */
-  trilha?: string[];
-  tela?: TelaAjuda;
-}) {
-  const caminho = usePathname();
+export function PainelLateral({ filtros, inicial }: { filtros?: React.ReactNode; inicial?: Aba }) {
   const { configuracao, fecharConfiguracao, pedidosDeFiltros, registrarPainel, larga } = usePainel();
   const [aba, setAba] = useState<Aba>(inicial ?? (filtros ? "filtros" : "ajuda"));
   const [fixado, setFixado] = useState(true);
@@ -155,8 +143,6 @@ export function PainelLateral({ filtros, inicial, artigos, trilha, tela }: {
   };
 
   const faixa = !fixado && !aberto && !mostrandoConfiguracao;
-  const trilhaFinal = trilha ?? trilhaDoCaminho(caminho);
-  const telaFinal = tela ?? telaAjudaDoCaminho(caminho);
 
   return (
     <aside ref={raiz} className={cn("hidden shrink-0 border-l border-borda-painel bg-painel xl:flex", !fixado && "w-12")} aria-label="Painel lateral">
@@ -173,7 +159,7 @@ export function PainelLateral({ filtros, inicial, artigos, trilha, tela }: {
           {mostrandoConfiguracao && <PainelConfiguracao key={configuracao.tela} tela={configuracao.tela} pref={configuracao.pref} aoFechar={fecharConfiguracao} />}
           {filtros && <div className={cn((aba !== "filtros" || mostrandoConfiguracao) && "hidden")}>{filtros}</div>}
           <div className={cn((aba !== "ajuda" || mostrandoConfiguracao) && "hidden")}>
-            <CentralAjudaPainel trilha={trilhaFinal} tela={telaFinal} artigos={artigos} />
+            <CentralAjudaPainel />
           </div>
         </div>
         <div className={cn("flex border-borda-painel", faixa ? "flex-1 flex-col items-center gap-1 py-2" : "items-center border-t px-3 py-2")}>
