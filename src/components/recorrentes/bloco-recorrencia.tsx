@@ -1,5 +1,6 @@
 "use client";
 
+import { DicaAjuda } from "@/components/ui/dica-ajuda";
 import { CalendarClock, X } from "lucide-react";
 import { CampoSelecao, CampoTexto, Rotulo } from "@/components/ui/campo";
 import { Chave } from "@/components/ui/chave";
@@ -99,8 +100,9 @@ export function BlocoRecorrencia({ valor, aoMudar, realizar, aoMudarRealizar, ao
                 <input type="radio" name="fim-recorrencia" checked={valor.fim === v} onChange={() => aoMudar({ fim: v })} className="accent-verde" /> {r}
               </label>
             ))}
-            <span title="Para lançamentos que se repetem por tempo indeterminado, mantenha este campo em branco." className="cursor-help text-xs text-gray-400">
+            <span className="inline-flex items-center gap-1 text-xs text-gray-400">
               (opcional)
+              <DicaAjuda texto="Para lançamentos que se repetem por tempo indeterminado, mantenha este campo em branco." />
             </span>
           </div>
           {valor.fim === "repeticoes" ? (
