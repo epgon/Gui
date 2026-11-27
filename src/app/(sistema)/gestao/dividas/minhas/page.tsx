@@ -43,6 +43,7 @@ export default async function PaginaMinhasDividas({ searchParams }: { searchPara
             hoje={hoje}
             totalDevido={dados.totalDevidoLista}
             todas={dados.todas}
+            motivosNaoExcluir={dados.motivosNaoExcluir}
             contasEmAberto={abertas.contas}
             recorrentes={abertas.recorrentes}
             padroes={{ contaId: contaPadrao, categoriaId: categorias.parcelas ? String(categorias.parcelas) : "" }}
