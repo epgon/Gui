@@ -1,5 +1,5 @@
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { PainelAjuda } from "@/components/layout/painel-ajuda";
+import { PainelAjudaDividas } from "@/components/ajuda/central-ajuda";
 import { RecursoDesativado } from "@/components/layout/recurso-desativado";
 import { parametro, type ParametrosBusca } from "@/lib/cadastros/filtros";
 import { hojeIso } from "@/lib/datas";
@@ -10,14 +10,6 @@ import { realizarAutomaticos } from "@/lib/recorrentes/servidor";
 import { TelaConsultor } from "./tela";
 
 export const metadata = { title: "Consultor Gui" };
-
-const ARTIGOS = [
-  "O Consultor só calcula: ele nunca paga, cria ou altera nada sozinho.",
-  "Perguntas prontas e palavras-chave: o que ele entende (sem IA)",
-  "Clique em Por quê? ou Como calculei para ver de onde vem cada número",
-  "Dispensar e Lembrar em 7 dias: como tratar um alerta",
-  "Consultor com IA (opcional): o que é enviado, privacidade e limite diário",
-];
 
 export default async function PaginaConsultor({ searchParams }: { searchParams: Promise<ParametrosBusca> }) {
   if (!(await recursoAtivo("dividas"))) return <RecursoDesativado titulo="Gestão de Dívidas" trilha="Gestão" />;
@@ -36,7 +28,7 @@ export default async function PaginaConsultor({ searchParams }: { searchParams: 
           <TelaConsultor assuntos={assuntos} escolhido={escolhido?.id ?? null} mensagens={mensagens} alertas={{ visiveis: painel.visiveis, escondidos: painel.escondidos }} mostrarArquivados={parametro(sp, "arquivados") === "1"} ia={{ ligado: cfg.ligado, pronto: cfg.pronto, chaveCadastrada: cfg.chaveCadastrada, provedor: cfg.provedor?.rotulo ?? cfg.provedorId, usadasHoje: cfg.usadasHoje, limiteDiario: cfg.limiteDiario }} />
         </div>
       </main>
-      <PainelAjuda trilha={["Gestão", "Gestão de Dívidas", "Consultor Gui"]} artigos={ARTIGOS} />
+      <PainelAjudaDividas tela="consultor" trilha={["Gestão", "Gestão de Dívidas", "Consultor Gui"]} />
     </>
   );
 }

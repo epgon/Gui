@@ -1,6 +1,6 @@
 import { desc } from "drizzle-orm";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { PainelAjuda } from "@/components/layout/painel-ajuda";
+import { PainelAjudaDividas } from "@/components/ajuda/central-ajuda";
 import { RecursoDesativado } from "@/components/layout/recurso-desativado";
 import { getDb, schema } from "@/db";
 import { parametro, type ParametrosBusca } from "@/lib/cadastros/filtros";
@@ -16,14 +16,6 @@ import { realizarAutomaticos } from "@/lib/recorrentes/servidor";
 import { TelaPlano, type AnaliseTela, type RascunhoInicial } from "./tela";
 
 export const metadata = { title: "Plano de Quitação" };
-
-const ARTIGOS = [
-  "O plano guarda só o que você planejou pagar: o realizado vem dos lançamentos pagos das dívidas.",
-  "Planejado x realizado: Cumprido, Parcial, Não cumprido e Futuro",
-  "Seu plano precisa de ajuste: aprovar cria uma nova versão e a anterior continua no histórico",
-  "Agendar um pagamento extra cria um lançamento ainda não pago, só com o seu clique",
-  "Nada muda no plano sem a sua aprovação",
-];
 
 const ESTRATEGIAS = ["bola_de_neve", "avalanche", "risco", "personalizada"];
 const lista = (t: string) => t.split(",").map((x) => x.trim()).filter((x) => /^\d{1,9}$/.test(x));
@@ -126,7 +118,7 @@ export default async function PaginaPlano({ searchParams }: { searchParams: Prom
           />
         </div>
       </main>
-      <PainelAjuda trilha={["Gestão", "Gestão de Dívidas", "Plano de Quitação"]} artigos={ARTIGOS} />
+      <PainelAjudaDividas tela="plano" trilha={["Gestão", "Gestão de Dívidas", "Plano de Quitação"]} />
     </>
   );
 }

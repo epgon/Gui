@@ -3,6 +3,7 @@
 import { ExternalLink, HandCoins, Wallet } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
+import { JanelaAjuda } from "@/components/ajuda/central-ajuda";
 import { acompanharComoDivida } from "@/app/(sistema)/gestao/dividas/acoes";
 import { CampoComNovo } from "@/app/(sistema)/financeiro/lancamentos/campos";
 import { ModalNovoContato } from "@/app/(sistema)/financeiro/lancamentos/formulario";
@@ -40,6 +41,7 @@ export function ContasEmAberto({ contas, recorrentes, dividas, contatos, hoje }:
   const [pagando, setPagando] = useState<ContaEmAberto | null>(null);
   const [fatura, setFatura] = useState<number | null>(null);
   const [acompanhando, setAcompanhando] = useState<ContaEmAberto | null>(null);
+  const [ajudaAberta, setAjudaAberta] = useState(false);
   const [erro, setErro] = useState("");
   const [ocupado, iniciar] = useTransition();
   const linhas = mostrarRecorrentes ? [...contas, ...recorrentes] : contas;
@@ -64,6 +66,9 @@ export function ContasEmAberto({ contas, recorrentes, dividas, contatos, hoje }:
       <div>
         <h2 className="text-base font-semibold text-gray-900">Contas em aberto no Gui</h2>
         <p className="text-sm text-gray-500">O que já está no sistema e ainda não é dívida: faturas fechadas e despesas vencidas e não pagas. Nada é cadastrado em dobro: acompanhar só liga a conta a uma dívida.</p>
+        <button type="button" onClick={() => setAjudaAberta(true)} className="mt-1 text-sm font-semibold text-verde hover:underline">
+          Como decidir entre Pagar e Acompanhar como dívida
+        </button>
       </div>
       <ProvedorOcultar>
         <Tabela
@@ -110,6 +115,7 @@ export function ContasEmAberto({ contas, recorrentes, dividas, contatos, hoje }:
       <FaixaErro>{erro && <TextoComDestaque texto={erro} />}</FaixaErro>
       {recorrentes.length > 0 && <Chave ligada={mostrarRecorrentes} aoMudar={setMostrarRecorrentes} rotulo="Mostrar recorrentes de despesa (consignado, pensão... para acompanhar como dívida)" />}
 
+      <JanelaAjuda tela="minhas" artigoInicial="conta-vencida-vira-divida" aberto={ajudaAberta} aoFechar={() => setAjudaAberta(false)} />
       {pagando && (
         <ModalPagar
           titulo={`${pagando.descricao} · venceu em ${formatarData(pagando.vencimento)}`}
