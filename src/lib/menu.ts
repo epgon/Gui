@@ -66,6 +66,7 @@ export const ABAS_DIVIDAS: ItemMenu[] = [
   { titulo: "Minhas Dívidas", href: "/gestao/dividas/minhas", fase: 13, descricao: "Lista das suas dívidas, com saldo, parcelas e situação." },
   { titulo: "Negociações", href: "/gestao/dividas/negociacoes", fase: 13, descricao: "A conversa com o credor, as propostas e a renegociação em acordo." },
   { titulo: "Simulador", href: "/gestao/dividas/simulador", fase: 13, descricao: "Compare estratégias, cenários e propostas para quitar. Só cálculo: nada real é alterado." },
+  { titulo: "Plano de Quitação", href: "/gestao/dividas/plano", fase: 13, descricao: "Seu plano para quitar as dívidas: planejado contra realizado, desvios e ajustes que só valem com a sua aprovação." },
   { titulo: "Consultor Gui", href: "/gestao/dividas/consultor", fase: 13, descricao: "Alertas, perguntas prontas e explicações dos números das suas dívidas. Só cálculo: nada é pago ou alterado." },
 ];
 

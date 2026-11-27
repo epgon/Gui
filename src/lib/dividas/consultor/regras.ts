@@ -5,7 +5,7 @@
  *
  * Cada regra devolve gravidade, título, texto, "Como calculei" (os números), ação sugerida (só um link: o Consultor
  * nunca grava nada) e o endereço da tela que resolve.
- * R9 e R10 (plano de quitação) chegam na fase D5.
+ * R9 e R10 olham o Plano de Quitação ativo (fase D5).
  */
 import { diasEntre, taxaMensalParaAnual } from "../regras";
 import { formatarReais, quitarComExtraMensal, reservaUsavel, rotuloMes, somarMesesYm, mesDe, type DividaSim } from "../simulador";
@@ -31,7 +31,7 @@ export type Alerta = {
   dividaId: number | null;
 };
 
-/** As regras que existem nesta fase (R9 e R10 chegam com o Plano de Quitação, na D5). */
+/** As regras do Consultor. R9 e R10 só valem com um Plano de Quitação ativo. */
 export const REGRAS_CONSULTOR: { id: string; titulo: string; gravidade: string }[] = [
   { id: "R1", titulo: "Parcela de dívida em atraso", gravidade: "Alta" },
   { id: "R2", titulo: "Parcelas do mês acima do limite da renda", gravidade: "Atenção ou Alta" },
@@ -41,6 +41,8 @@ export const REGRAS_CONSULTOR: { id: string; titulo: string; gravidade: string }
   { id: "R6", titulo: "Reserva abaixo do mínimo enquanto paga extra", gravidade: "Atenção" },
   { id: "R7", titulo: "Dívida atrasada há muito tempo: vale negociar", gravidade: "Informação" },
   { id: "R8", titulo: "Saldo antigo ou dívida sem taxa", gravidade: "Informação" },
+  { id: "R9", titulo: "Plano ativo com o mês anterior abaixo do planejado", gravidade: "Atenção" },
+  { id: "R10", titulo: "Dívida nova ou compra parcelada grande depois do plano", gravidade: "Atenção" },
   { id: "R11", titulo: "Pagando só o mínimo com sobra positiva", gravidade: "Informação" },
   { id: "R12", titulo: "Dívida quitada: parcela liberada", gravidade: "Boa notícia" },
   { id: "R13", titulo: "Fatura de cartão alta e vencida (sinal de rotativo)", gravidade: "Alta" },
@@ -110,8 +112,34 @@ export type DividaConsultor = {
 
 export type FaturaVencida = { cartaoId: number; cartao: string; rotulo: string; vencimento: string; valorCentavos: number };
 
+/** O que as regras R9 e R10 precisam saber do Plano de Quitação ativo. */
+export type PlanoParaConsultor = {
+  id: number;
+  nome: string;
+  versao: number;
+  /** O último mês fechado do plano, comparado com o realizado. */
+  mesAnterior: { mes: string; planejadoCentavos: number; realizadoCentavos: number; situacao: "cumprido" | "parcial" | "nao_cumprido" } | null;
+  mesFinalPlanejado: string | null;
+  /** Previsão recalculada com o que falta pagar hoje. */
+  previsaoMesFinal: string | null;
+  /** Há desvio e proposta de ajuste esperando a decisão da pessoa. */
+  ajustePendente: boolean;
+  /** Os desvios detectados, em frases (para "Por que meu plano atrasou?"). */
+  desvios: string[];
+  /** Quanto ficou sem pagar nos meses fechados. */
+  deficitCentavos: number;
+  /** Frase da opção de ajuste recomendada (null = sem desvio). */
+  ajusteRecomendado: string | null;
+  /** Dívidas ativas criadas depois da aprovação e que não estão no plano. */
+  novasDividas: { id: number; descricao: string; saldoCentavos: number }[];
+  /** Compras parceladas no cartão feitas depois da aprovação e grandes em relação à sobra. */
+  comprasParceladas: { parcelamentoId: number; descricao: string; totalCentavos: number; parcelas: number; parcelaCentavos: number }[];
+};
+
 export type ContextoConsultor = {
   hoje: string;
+  /** Plano de Quitação ativo (null = não há). */
+  plano?: PlanoParaConsultor | null;
   dividas: DividaConsultor[];
   /** Receitas médias por mês; null = ainda sem histórico para calcular. */
   rendaMensalCentavos: number | null;
@@ -351,6 +379,58 @@ export function regraR8(c: ContextoConsultor, l: LimitesConsultor): Alerta[] {
   return alertas;
 }
 
+/** R9: o plano ativo ficou abaixo do planejado no mês anterior. */
+export function regraR9(c: ContextoConsultor): Alerta[] {
+  const p = c.plano;
+  const m = p?.mesAnterior;
+  if (!p || !m || (m.situacao !== "parcial" && m.situacao !== "nao_cumprido")) return [];
+  const falta = m.planejadoCentavos - m.realizadoCentavos;
+  return [
+    {
+      id: `R9:${p.id}`,
+      regra: "R9",
+      gravidade: "atencao",
+      titulo: `Seu plano de quitação ficou abaixo do planejado em ${rotuloMes(m.mes)}`,
+      texto: `Em ${rotuloMes(m.mes)} o plano previa ${formatarReais(m.planejadoCentavos)} e você pagou ${formatarReais(m.realizadoCentavos)}: faltaram ${formatarReais(falta)}.${p.ajustePendente ? " Há uma proposta de ajuste esperando a sua decisão." : ""}`,
+      calculo: [
+        `Plano "${p.nome}" (versão ${p.versao}): meta de ${formatarReais(m.planejadoCentavos)} em ${rotuloMes(m.mes)}.`,
+        `Pago nesse mês nas dívidas do plano: ${formatarReais(m.realizadoCentavos)} (situação: ${m.situacao === "parcial" ? "parcial" : "não cumprido"}).`,
+        `${formatarReais(m.planejadoCentavos)} − ${formatarReais(m.realizadoCentavos)} = ${formatarReais(falta)} a menos.`,
+        ...(p.mesFinalPlanejado && p.previsaoMesFinal ? [`Prevista no plano: ${rotuloMes(p.mesFinalPlanejado)}. Previsão recalculada hoje: ${rotuloMes(p.previsaoMesFinal)}.`] : []),
+      ],
+      acao: { rotulo: "Ver o plano", href: "/gestao/dividas/plano" },
+      dividaId: null,
+    },
+  ];
+}
+
+/** R10: dívida nova ou compra parcelada grande depois de aprovado o plano. */
+export function regraR10(c: ContextoConsultor): Alerta[] {
+  const p = c.plano;
+  if (!p) return [];
+  const novas: Alerta[] = p.novasDividas.map((d) => ({
+    id: `R10:d${d.id}`,
+    regra: "R10",
+    gravidade: "atencao" as const,
+    titulo: `Dívida nova depois do plano: ${d.descricao}`,
+    texto: `A dívida ${d.descricao} (${formatarReais(d.saldoCentavos)}) foi cadastrada depois que o plano "${p.nome}" foi aprovado e não está nele. Ela pesa no orçamento e pode atrasar a quitação.`,
+    calculo: [`Plano "${p.nome}" (versão ${p.versao}) foi aprovado antes do cadastro desta dívida.`, `Saldo da dívida nova: ${formatarReais(d.saldoCentavos)}.`, "Abra o plano: se houver desvio, o Gui propõe um ajuste que inclui a dívida (você aprova ou mantém como está)."],
+    acao: { rotulo: "Ver o plano", href: "/gestao/dividas/plano" },
+    dividaId: d.id,
+  }));
+  const compras: Alerta[] = p.comprasParceladas.map((x) => ({
+    id: `R10:c${x.parcelamentoId}`,
+    regra: "R10",
+    gravidade: "atencao" as const,
+    titulo: `Compra parcelada grande depois do plano: ${x.descricao}`,
+    texto: `Uma compra de ${formatarReais(x.totalCentavos)} em ${x.parcelas}× de ${formatarReais(x.parcelaCentavos)} no cartão foi lançada depois que o plano foi aprovado. Ela ocupa a sua sobra dos próximos meses.`,
+    calculo: [`Total da compra: ${formatarReais(x.totalCentavos)} em ${x.parcelas} parcelas de ${formatarReais(x.parcelaCentavos)}.`, c.sobraMensalCentavos === null ? "Sem histórico para comparar com a sobra mensal; usei um valor mínimo de R$ 1.000,00 para considerar a compra grande." : `Considero grande a compra que passa da sua sobra mensal de ${formatarReais(c.sobraMensalCentavos)}.`, "Compras no cartão não são dívida cadastrada: o plano não conta com elas."],
+    acao: { rotulo: "Ver o plano", href: "/gestao/dividas/plano" },
+    dividaId: null,
+  }));
+  return [...novas, ...compras];
+}
+
 /** R11: pagando só o mínimo, com sobra positiva. */
 export function regraR11(c: ContextoConsultor, l: LimitesConsultor): Alerta[] {
   const livre = sobraLivre(c);
@@ -439,7 +519,7 @@ export function regraR13(c: ContextoConsultor, l: LimitesConsultor): Alerta[] {
 
 /** Roda todas as regras ligadas e devolve os alertas na ordem de gravidade (e, dentro dela, nos de valor maior primeiro). */
 export function calcularAlertas(c: ContextoConsultor, limites: LimitesConsultor = LIMITES_PADRAO, desligadas: string[] = []): Alerta[] {
-  const todas = [...regraR1(c), ...regraR2(c, limites), ...regraR3(c), ...regraR4(c, limites), ...regraR5(c, limites), ...regraR6(c), ...regraR7(c, limites), ...regraR8(c, limites), ...regraR11(c, limites), ...regraR12(c, limites), ...regraR13(c, limites)];
+  const todas = [...regraR1(c), ...regraR2(c, limites), ...regraR3(c), ...regraR4(c, limites), ...regraR5(c, limites), ...regraR6(c), ...regraR7(c, limites), ...regraR8(c, limites), ...regraR9(c), ...regraR10(c), ...regraR11(c, limites), ...regraR12(c, limites), ...regraR13(c, limites)];
   return todas.filter((a) => !desligadas.includes(a.regra)).sort((a, b) => ORDEM_GRAVIDADE[a.gravidade] - ORDEM_GRAVIDADE[b.gravidade] || a.id.localeCompare(b.id, "pt-BR", { numeric: true }));
 }
 

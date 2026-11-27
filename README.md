@@ -346,3 +346,9 @@ npm run dev             # abre em http://localhost:3000
 ## Ferramentas
 
 Next.js 16 (App Router, TypeScript), Tailwind CSS 4, Auth.js 5, Drizzle ORM com Postgres (Neon), bcryptjs, Zod, ícones Lucide.
+- **Fase D5 (Gestão de Dívidas: Plano de Quitação)**: a aba **Plano de Quitação** cria o plano a partir de uma simulação (botão no Simulador) ou do zero,
+  com aviso antes de aprovar quando deixa mês negativo ou reserva abaixo do mínimo. Há um plano ativo por vez, com versões e histórico. Mostra
+  planejado x realizado por mês, progresso e previsão recalculada. Quando a vida real foge do plano, o cartão **Seu plano precisa de ajuste**
+  propõe aumentar o valor ou adiar a data; nada muda sem **Aprovar ajuste** (que cria uma nova versão) e **Manter como está** guarda a recusa.
+  Os pagamentos extras são **agendados** um a um, só no clique. Regras R9 e R10 e as perguntas "Por que meu plano atrasou?" e "Quando fico livre
+  das dívidas?" no Consultor Gui.

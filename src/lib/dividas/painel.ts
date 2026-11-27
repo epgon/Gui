@@ -72,12 +72,12 @@ export function fatiasDeDividas(dividas: { chave: string; nome: string; saldoCen
 }
 
 export type PrevisaoQuitacao =
-  | { tipo: "data"; mes: string; rotulo: string; meses: number; /** Há dívida sem parcelas definidas: o mínimo considerado é só o juro do mês. */ aproximada: boolean }
+  | { tipo: "data"; mes: string; rotulo: string; meses: number; /** Há dívida sem parcelas definidas: o mínimo considerado é só o juro do mês. */ aproximada: boolean; /** A data vem do Plano de Quitação ativo. */ doPlano?: boolean }
   | { tipo: "sem_previsao"; motivo: string }
   | { tipo: "nada" };
 
 /**
- * Previsão de quitação pagando só as parcelas (sem plano ativo; o plano chega na D5).
+ * Previsão de quitação pagando só as parcelas (quando há Plano de Quitação ativo, vale a previsão dele).
  * Dívida sem parcelas definidas entra com o pagamento mínimo igual aos juros do mês (como no Simulador): a data é aproximada.
  */
 export function preverQuitacao(dividas: DividaSim[], inicioYm: string): PrevisaoQuitacao {

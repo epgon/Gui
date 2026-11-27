@@ -99,6 +99,13 @@
       "when": 1795737201310,
       "tag": "0013_consultor",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795746113588,
+      "tag": "0014_plano_quitacao",
+      "breakpoints": true
     }
   ]
 }

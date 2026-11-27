@@ -74,7 +74,7 @@ Quem constrói uma fase **lê antes**: este plano, a especificação (principalm
 - **Sobra mensal** e **reserva** calculadas (seção 8.4), com as mesmas contas do Fluxo de Caixa; contas da reserva e reserva mínima em Parâmetros.
 - Tabela mês a mês, gráfico, frase-resumo, avisos de mês negativo e reserva abaixo do mínimo; **Guardar simulação**, lista de simulações guardadas, Imprimir/PDF.
 - Botão **Simular** na proposta de negociação (D2) e no menu da dívida.
-- Botão "Criar plano a partir desta simulação" fica escondido até a D5.
+- O botão "Criar plano a partir desta simulação" liga na D5.
 
 **Banco**: `simulacao`.
 
@@ -87,7 +87,7 @@ Quem constrói uma fase **lê antes**: este plano, a especificação (principalm
 
 **Entrega**
 - **Visão Geral** completa do módulo (seção 7.1): todos os indicadores, "Opções" no menu de três pontos dos cartões, rosca por credor/tipo, e **Análises e recomendações** abaixo.
-- **Motor de regras** do Consultor com R1 a R8 e R11 a R13 (seção 8.6); R9 e R10 chegam na D5. Cada alerta com "Por quê?" (cálculo), ação sugerida, Dispensar e Lembrar em 7 dias.
+- **Motor de regras** do Consultor com R1 a R8 e R11 a R13 (seção 8.6); R9 e R10 vieram com a D5. Cada alerta com "Por quê?" (cálculo), ação sugerida, Dispensar e Lembrar em 7 dias.
 - Alertas graves no **sino de Notificações** (calculados na hora).
 - Aba **Consultor Gui**: assuntos com histórico, **perguntas prontas**, campo de texto com palavras-chave (sem IA, sem fingir que entende), respostas com conclusão, números, critério e "Como calculei", botões de ação que abrem as janelas normais.
 - **Avisos antes de confirmar** (seção 7.6, "Questionar decisões") no cadastro de dívida, no acordo e no uso da reserva no simulador.

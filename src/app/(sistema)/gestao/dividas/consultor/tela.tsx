@@ -165,7 +165,7 @@ export function TelaConsultor({ assuntos, escolhido, mensagens, alertas, mostrar
           {!arquivado && (
             <div className="space-y-3 rounded-xl border border-borda bg-white p-4 shadow-cartao">
               <p className="text-sm font-semibold text-gray-800">Perguntas prontas</p>
-              {(["Minha situação", "O que fazer", "Antes de comprar"] as const).map((grupo) => (
+              {(["Minha situação", "Meu plano", "O que fazer", "Antes de comprar"] as const).map((grupo) => (
                 <div key={grupo}>
                   <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">{grupo}</p>
                   <div className="flex flex-wrap gap-2">
