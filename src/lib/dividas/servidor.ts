@@ -123,9 +123,11 @@ function obrigacoesDe(base: Base, d: Base["dividas"][number]) {
     const valor = Math.abs(Number(x.valorCentavos));
     const estimativa = estimarAtraso(valor, x.dataVencimento, hoje, cfg);
     const aberta = !x.dataPagamento;
+    // O pagamento de um recorrente ligado (o "Lembrar todo mês") é um pagamento da dívida: abate o saldo informado, como o botão Pagar.
+    const doLembrete = x.recorrenciaId !== null && idRecorrencias.has(x.recorrenciaId);
     contas.push({
       // Dívida sem parcelas: o extra agendado pelo plano ainda não pago é só previsão de pagamento e não aumenta o saldo; quando for pago, o saldo cai.
-      o: { id: x.id, valorCentavos: !x.dataPagamento && d.d.forma === "sem_parcelas" && extrasDoPlano.has(x.id) ? 0 : valor, vencimento: x.dataVencimento, dataPagamento: x.dataPagamento, registradoEm: x.atualizadoEm.getTime(), deSistema: x.origem === "sistema" },
+      o: { id: x.id, valorCentavos: !x.dataPagamento && d.d.forma === "sem_parcelas" && extrasDoPlano.has(x.id) ? 0 : valor, vencimento: x.dataVencimento, dataPagamento: x.dataPagamento, registradoEm: x.atualizadoEm.getTime(), deSistema: x.origem === "sistema" || doLembrete },
       linha: {
         chave: `l${x.id}`,
         origem: "lancamento",

@@ -2,6 +2,7 @@
 
 import { AvisoAntesDeConfirmar } from "./aviso-confirmar";
 import { useMemo, useState } from "react";
+import { JanelaAjuda } from "@/components/ajuda/central-ajuda";
 import { type DadosDivida, salvarDivida } from "@/app/(sistema)/gestao/dividas/acoes";
 import { ModalCadastro, useFormularioCadastro } from "@/components/cadastros/modal-cadastro";
 import { CampoAreaTexto, CampoSelecao, CampoTexto, CampoValor } from "@/components/ui/campo";
@@ -71,6 +72,7 @@ export function ModalDivida({ formulario: form, opcoes, multaPadrao, moraPadrao,
   const [avisoTaxa, setAvisoTaxa] = useState(false);
   const { recursos } = useSistema();
   const [novoCredor, setNovoCredor] = useState(false);
+  const [ajudaAberta, setAjudaAberta] = useState(false);
   const [credoresNovos, setCredoresNovos] = useState<{ id: number; rotulo: string; ativo: boolean }[]>([]);
   const d = form.dados;
   const edicao = !form.novo;
@@ -105,6 +107,14 @@ export function ModalDivida({ formulario: form, opcoes, multaPadrao, moraPadrao,
         resumo={[d.descricao || "Descrição", TIPOS_DIVIDA.find((t) => t.valor === d.tipo)?.rotulo].join(" · ")}
         aoSalvar={() => (taxaAlta ? setAvisoTaxa(true) : form.salvar(salvarDivida))}
       >
+        {!edicao && (
+          <p className="text-sm text-gray-600">
+            Não sabe como preencher?{" "}
+            <button type="button" onClick={() => setAjudaAberta(true)} className="font-semibold text-verde hover:underline">
+              Veja o passo a passo do seu caso
+            </button>
+          </p>
+        )}
         <CampoTexto rotulo="Descrição" obrigatorio autoFocus maxLength={120} ajuda="Como você reconhece esta dívida. Ex.: Empréstimo pessoal Banco X." valor={d.descricao} aoMudar={(v) => form.mudar("descricao", v)} />
         <div className="grid gap-4 sm:grid-cols-2">
           <CampoComNovo rotulo="Credor" obrigatorio vazio="Selecione" valor={d.contatoId} aoMudar={(v) => form.mudar("contatoId", v)} opcoes={credores} aoCriar={() => setNovoCredor(true)} rotuloNovo="Novo Cliente ou Fornecedor" />
@@ -181,6 +191,7 @@ export function ModalDivida({ formulario: form, opcoes, multaPadrao, moraPadrao,
           <Chave ligada={d.registrarEntrada} aoMudar={(v) => form.mudar("registrarEntrada", v)} rotulo="Registrar a entrada do dinheiro na conta (empréstimo novo)" />
         )}
       </ModalCadastro>
+      <JanelaAjuda tela="minhas" artigoInicial="qual-e-o-seu-caso" aberto={ajudaAberta} aoFechar={() => setAjudaAberta(false)} />
       <AvisoAntesDeConfirmar
         aberto={avisoTaxa}
         titulo="Taxa de juros alta"

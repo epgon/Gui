@@ -1,5 +1,5 @@
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { PainelAjuda } from "@/components/layout/painel-ajuda";
+import { PainelAjudaDividas } from "@/components/ajuda/central-ajuda";
 import { RecursoDesativado } from "@/components/layout/recurso-desativado";
 import { hojeIso } from "@/lib/datas";
 import { carregarPainelDividas } from "@/lib/dividas/consultor/servidor";
@@ -9,14 +9,6 @@ import { realizarAutomaticos } from "@/lib/recorrentes/servidor";
 import { TelaVisaoGeralDividas } from "./tela";
 
 export const metadata = { title: "Gestão de Dívidas" };
-
-const ARTIGOS = [
-  "Como cadastrar uma dívida com parcelas fixas ou só com o saldo",
-  "Como as parcelas aparecem em Lançamentos, Agenda e Vencidos",
-  "Como atualizar o saldo com o que o credor informou",
-  "O que são as contas em aberto no Gui",
-  "Como o Consultor Gui calcula os alertas (clique em Por quê?)",
-];
 
 export default async function PaginaDividas() {
   if (!(await recursoAtivo("dividas"))) return <RecursoDesativado titulo="Gestão de Dívidas" trilha="Gestão" />;
@@ -49,7 +41,7 @@ export default async function PaginaDividas() {
           />
         </div>
       </main>
-      <PainelAjuda trilha={["Gestão", "Gestão de Dívidas"]} artigos={ARTIGOS} />
+      <PainelAjudaDividas tela="visao" trilha={["Gestão", "Gestão de Dívidas"]} />
     </>
   );
 }

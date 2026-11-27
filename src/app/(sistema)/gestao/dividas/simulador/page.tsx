@@ -1,5 +1,5 @@
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { PainelAjuda } from "@/components/layout/painel-ajuda";
+import { PainelAjudaDividas } from "@/components/ajuda/central-ajuda";
 import { RecursoDesativado } from "@/components/layout/recurso-desativado";
 import { parametro, type ParametrosBusca } from "@/lib/cadastros/filtros";
 import { hojeIso } from "@/lib/datas";
@@ -9,14 +9,6 @@ import { realizarAutomaticos } from "@/lib/recorrentes/servidor";
 import { TelaSimulador, type InicioSimulador } from "./tela";
 
 export const metadata = { title: "Simulador de Dívidas" };
-
-const ARTIGOS = [
-  "O Simulador só calcula: nenhum lançamento, dívida ou saldo é alterado.",
-  "Bola de Neve, Avalanche, Risco primeiro ou a sua ordem: o que muda em cada uma",
-  "Como a sobra mensal e a reserva são calculadas (as mesmas contas do Fluxo de Caixa)",
-  "Cenários Conservador, Intermediário e Acelerado",
-  "Como comparar uma proposta de negociação com continuar como está",
-];
 
 const MODOS = ["quitar", "estrategias", "cenarios", "proposta"] as const;
 
@@ -36,7 +28,7 @@ export default async function PaginaSimulador({ searchParams }: { searchParams: 
           <TelaSimulador dados={dados} inicio={{ modo, divida: numero("divida"), negociacao: numero("negociacao"), proposta: numero("proposta") }} />
         </div>
       </main>
-      <PainelAjuda trilha={["Gestão", "Gestão de Dívidas", "Simulador"]} artigos={ARTIGOS} />
+      <PainelAjudaDividas tela="simulador" trilha={["Gestão", "Gestão de Dívidas", "Simulador"]} />
     </>
   );
 }
