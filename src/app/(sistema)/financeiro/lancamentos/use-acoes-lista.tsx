@@ -1,11 +1,11 @@
 "use client";
 
-import { CalendarClock, CheckCircle2, CreditCard, FileText, Pencil, RotateCcw, Trash2, Wallet } from "lucide-react";
+import { CalendarCheck, CheckCircle2, Copy, CreditCard, FileText, Pencil, RotateCcw, Trash2, Wallet } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import type { ItemMenuLinha } from "@/components/cadastros/menu-linha";
+import type { ItemMenuLinha, SeparadorMenu } from "@/components/cadastros/menu-linha";
 import { JanelaFatura } from "@/components/cartoes/janela-fatura";
-import type { LinhaLista, Ocorrencia, Opcoes } from "@/lib/lancamentos/tipos";
+import type { DadosLancamento, LinhaLista, Ocorrencia, Opcoes } from "@/lib/lancamentos/tipos";
 import { carregarLancamento, carregarOcorrencia, estornarLancamentos, excluirLancamentos, pularOcorrencias, realizarLancamentos } from "./acoes";
 import { dadosVazios, ModalLancamento, type Aba, type Pedido } from "./formulario";
 import { ModalExcluir, ModalPagar, type PagamentoUnico } from "./linhas";
@@ -78,6 +78,32 @@ export function useAcoesLista({ opcoes, hoje, destino, abrirNovo }: {
       setPedido({ chave: Date.now(), inicial: r.dados, ocorrencia: true });
     });
 
+  /** Abre o Novo Lançamento com os mesmos dados, sem vínculo com o original (sem edição, recorrência nem pagamento). */
+  const abrirClone = (dados: DadosLancamento) =>
+    setPedido({ chave: Date.now(), inicial: { ...dados, pago: false, dataPagamento: "", recorrente: null, ocorrencia: null, parcelar: null } });
+
+  const clonar = (l: LinhaLista) =>
+    iniciarAbertura(async () => {
+      setAviso("");
+      if (l.previsto) {
+        const r = await carregarOcorrencia(l.previsto);
+        if ("erro" in r) {
+          setAviso(r.erro);
+          router.refresh();
+          return;
+        }
+        abrirClone(r.dados);
+        return;
+      }
+      const edicao = l.id !== null ? await carregarLancamento(l.id) : null;
+      if (!edicao) {
+        setAviso("Este lançamento não existe mais.");
+        router.refresh();
+        return;
+      }
+      abrirClone(edicao.dados);
+    });
+
   const executar = (acao: () => Promise<Resposta>, depois?: () => void) =>
     iniciar(async () => {
       setAviso("");
@@ -120,46 +146,58 @@ export function useAcoesLista({ opcoes, hoje, destino, abrirNovo }: {
   };
 
   const menuDe = (l: LinhaLista, aoVerFatura?: (cartaoId: number) => void): ItemMenuLinha[] => {
-    const verRecorrente = l.recorrenciaId
-      ? [{ rotulo: "Editar o recorrente", icone: <CalendarClock className="h-4 w-4" />, aoClicar: () => router.push(`/financeiro/recorrentes?editar=${l.recorrenciaId}`) }]
-      : [];
-    if (l.previsto) {
+    const icone = "h-4 w-4";
+    const sep: SeparadorMenu = { separador: true };
+    // Gerado por recorrência (previsto ou já gravado): Editar · Clonar | Realizar | Excluir.
+    if (l.previsto || (l.id !== null && l.recorrenciaId !== null && l.tipo !== "saldo_inicial")) {
       const o = l.previsto;
+      const id = l.id;
+      const realizar = (data: string) => executar(() => realizarLancamentos(id !== null ? [id] : [], data, o ? [o] : []));
+      const grupoRealizar: ItemMenuLinha[] = l.dataPagamento
+        ? [{ rotulo: "Voltar para não pago", icone: <RotateCcw className={icone} />, aoClicar: () => estornar(alvoDe([l], l.descricao)) }]
+        : l.eCartao
+          ? o
+            ? [{ rotulo: "Confirmar compra", icone: <CheckCircle2 className={icone} />, aoClicar: () => realizar(hoje) }]
+            : []
+          : [
+              { rotulo: "Realizar Hoje", icone: <CheckCircle2 className={icone} />, aoClicar: () => realizar(hoje) },
+              { rotulo: "Realizar no Vencimento", icone: <CalendarCheck className={icone} />, aoClicar: () => realizar(l.data) },
+            ];
       return [
-        { rotulo: "Editar esta ocorrência", icone: <Pencil className="h-4 w-4" />, aoClicar: () => editarOcorrencia(o) },
-        {
-          rotulo: l.eCartao ? "Confirmar compra" : l.valorCentavos > 0 ? "Receber" : "Pagar",
-          icone: <CheckCircle2 className="h-4 w-4" />,
-          aoClicar: () => pedirPagamento([l], l.descricao),
-        },
-        ...verRecorrente,
-        { rotulo: "Excluir esta ocorrência", icone: <Trash2 className="h-4 w-4" />, aoClicar: () => pedirExclusao([l], l.descricao) },
+        { rotulo: "Editar", icone: <Pencil className={icone} />, aoClicar: () => (o ? editarOcorrencia(o) : editar(id!)) },
+        { rotulo: "Clonar", icone: <Copy className={icone} />, aoClicar: () => clonar(l) },
+        ...(grupoRealizar.length ? [sep, ...grupoRealizar] : []),
+        sep,
+        { rotulo: "Excluir", icone: <Trash2 className={`${icone} text-negativo`} />, aoClicar: () => pedirExclusao([l], l.descricao) },
       ];
     }
     if (l.id === null) {
       const faturaId = l.faturaId;
       const itens: ItemMenuLinha[] = [];
       if (faturaId !== null) {
-        if (l.situacao !== "realizado") itens.push({ rotulo: "Pagar fatura", icone: <Wallet className="h-4 w-4" />, aoClicar: () => setFaturaAberta(faturaId) });
-        itens.push({ rotulo: "Abrir fatura (fechar, desfazer pagamento)", icone: <FileText className="h-4 w-4" />, aoClicar: () => setFaturaAberta(faturaId) });
+        if (l.situacao !== "realizado") itens.push({ rotulo: "Pagar fatura", icone: <Wallet className={icone} />, aoClicar: () => setFaturaAberta(faturaId) });
+        itens.push({ rotulo: "Abrir fatura (fechar, desfazer pagamento)", icone: <FileText className={icone} />, aoClicar: () => setFaturaAberta(faturaId) });
       }
-      if (aoVerFatura) itens.push({ rotulo: "Ver compras desta fatura", icone: <CreditCard className="h-4 w-4" />, aoClicar: () => aoVerFatura(l.cartaoId!) });
+      if (aoVerFatura) itens.push({ rotulo: "Ver compras desta fatura", icone: <CreditCard className={icone} />, aoClicar: () => aoVerFatura(l.cartaoId!) });
       return itens;
     }
     if (l.tipo === "saldo_inicial") {
-      return [{ rotulo: "Alterar na Conta Financeira", icone: <Pencil className="h-4 w-4" />, aoClicar: () => router.push("/cadastros/contas-financeiras") }];
+      return [{ rotulo: "Alterar na Conta Financeira", icone: <Pencil className={icone} />, aoClicar: () => router.push("/cadastros/contas-financeiras") }];
     }
     const id = l.id;
-    const itens: ItemMenuLinha[] = [{ rotulo: "Editar", icone: <Pencil className="h-4 w-4" />, aoClicar: () => editar(id) }];
+    const itens: ItemMenuLinha[] = [
+      { rotulo: "Editar", icone: <Pencil className={icone} />, aoClicar: () => editar(id) },
+      { rotulo: "Clonar", icone: <Copy className={icone} />, aoClicar: () => clonar(l) },
+    ];
     if (!l.eCartao) {
       itens.push(
+        sep,
         l.dataPagamento
-          ? { rotulo: "Voltar para não pago", icone: <RotateCcw className="h-4 w-4" />, aoClicar: () => executar(() => estornarLancamentos([id])) }
-          : { rotulo: l.valorCentavos > 0 ? "Receber" : "Pagar", icone: <CheckCircle2 className="h-4 w-4" />, aoClicar: () => pedirPagamento([l], l.descricao) },
+          ? { rotulo: "Voltar para não pago", icone: <RotateCcw className={icone} />, aoClicar: () => executar(() => estornarLancamentos([id])) }
+          : { rotulo: l.valorCentavos > 0 ? "Receber" : "Pagar", icone: <CheckCircle2 className={icone} />, aoClicar: () => pedirPagamento([l], l.descricao) },
       );
     }
-    itens.push(...verRecorrente);
-    itens.push({ rotulo: "Excluir", icone: <Trash2 className="h-4 w-4" />, aoClicar: () => pedirExclusao([l], l.descricao) });
+    itens.push(sep, { rotulo: "Excluir", icone: <Trash2 className={`${icone} text-negativo`} />, aoClicar: () => pedirExclusao([l], l.descricao) });
     return itens;
   };
 

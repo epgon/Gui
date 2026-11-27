@@ -11,11 +11,13 @@ import { mesDe, situacaoDe, somarDias, valorComSinal, type Situacao } from "./re
 import { valorComSinalSql, valorRealizadoSql } from "./sql";
 import { filtrarAvancado, lerFiltrosAvancados } from "@/lib/listagem/avancado";
 import { CAMPOS_LANCAMENTOS_BASE, LEITORES_LANCAMENTOS } from "./avancado";
-import type { Aba, Filtros, FiltroSituacao, LinhaLista, Opcoes, Resumo } from "./tipos";
+import type { Aba, Filtros, FiltroSituacao, LinhaLista, OperadorFiltro, Opcoes, Resumo } from "./tipos";
 
 const { lancamento: l, contaFinanceira: conta, cartaoCredito: cartao, banco, categoria, contato, formaPagamento: forma, tag, lancamentoTag, lancamentoItem, anexo, fatura, divida } = schema;
 
 export { valorComSinalSql, valorRealizadoSql } from "./sql";
+
+const operador = (sp: ParametrosBusca, nome: string): OperadorFiltro => (parametro(sp, nome) === "dif" ? "dif" : "");
 
 export function lerFiltros(sp: ParametrosBusca, hoje = hojeIso()): Filtros {
   const mes = parametro(sp, "mes");
@@ -34,6 +36,10 @@ export function lerFiltros(sp: ParametrosBusca, hoje = hojeIso()): Filtros {
     forma: id("forma"),
     contato: id("contato"),
     tag: id("tag"),
+    categoriaOp: operador(sp, "categoria_op"),
+    formaOp: operador(sp, "forma_op"),
+    contatoOp: operador(sp, "contato_op"),
+    tagOp: operador(sp, "tag_op"),
     avancado: parametro(sp, "av").slice(0, 2000),
   };
 }
@@ -74,16 +80,19 @@ export async function listarLancamentos(f: Filtros, hoje = hojeIso()): Promise<{
       or(contemTexto(l.descricao, f.busca), contemTexto(l.documento, f.busca), centavos !== null ? eq(sql`abs(${l.valorCentavos})`, Math.abs(centavos)) : undefined)!,
     );
   }
+  // DIFERENTE exclui o que tem aquele valor (lançamentos sem valor nenhum continuam aparecendo).
   if (f.categoria) {
     const todas = await db.select({ id: categoria.id, categoriaPaiId: categoria.categoriaPaiId }).from(categoria);
     const ids = [Number(f.categoria), ...descendentes(todas, Number(f.categoria))];
-    filtrosConteudo.push(
-      or(inArray(l.categoriaId, ids), sql`exists (select 1 from ${lancamentoItem} where ${lancamentoItem.lancamentoId} = ${l.id} and ${inArray(lancamentoItem.categoriaId, ids)})`)!,
-    );
+    const tem = or(inArray(l.categoriaId, ids), sql`exists (select 1 from ${lancamentoItem} where ${lancamentoItem.lancamentoId} = ${l.id} and ${inArray(lancamentoItem.categoriaId, ids)})`)!;
+    filtrosConteudo.push(f.categoriaOp === "dif" ? sql`not coalesce(${tem}, false)` : tem);
   }
-  if (f.forma) filtrosConteudo.push(eq(l.formaPagamentoId, Number(f.forma)));
-  if (f.contato) filtrosConteudo.push(eq(l.contatoId, Number(f.contato)));
-  if (f.tag) filtrosConteudo.push(sql`exists (select 1 from ${lancamentoTag} where ${lancamentoTag.lancamentoId} = ${l.id} and ${lancamentoTag.tagId} = ${Number(f.tag)})`);
+  if (f.forma) filtrosConteudo.push(f.formaOp === "dif" ? sql`${l.formaPagamentoId} is distinct from ${Number(f.forma)}` : eq(l.formaPagamentoId, Number(f.forma)));
+  if (f.contato) filtrosConteudo.push(f.contatoOp === "dif" ? sql`${l.contatoId} is distinct from ${Number(f.contato)}` : eq(l.contatoId, Number(f.contato)));
+  if (f.tag) {
+    const tem = sql`exists (select 1 from ${lancamentoTag} where ${lancamentoTag.lancamentoId} = ${l.id} and ${lancamentoTag.tagId} = ${Number(f.tag)})`;
+    filtrosConteudo.push(f.tagOp === "dif" ? sql`not ${tem}` : tem);
+  }
   const avancados = lerFiltrosAvancados(f.avancado, CAMPOS_LANCAMENTOS_BASE);
   const agruparFaturas = cartaoFiltro === null && filtrosConteudo.length === 0 && avancados.length === 0;
 

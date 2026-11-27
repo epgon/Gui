@@ -85,6 +85,10 @@ export function TelaLancamentos({ linhas, total, pagina, saldos, preferencia, re
     forma: filtros.forma,
     contato: filtros.contato,
     tag: filtros.tag,
+    categoria_op: filtros.categoriaOp,
+    forma_op: filtros.formaOp,
+    contato_op: filtros.contatoOp,
+    tag_op: filtros.tagOp,
     av: filtros.avancado,
   };
   const link = (mudancas: Record<string, string>) => {

@@ -1,5 +1,6 @@
 "use client";
 
+import { Check } from "lucide-react";
 import Form from "next/form";
 import Link from "next/link";
 import { useState } from "react";
@@ -26,9 +27,9 @@ export function PainelFiltrosCliente({ caminho, children, limpar, avancado }: {
       inicial="filtros"
       filtros={
         <Form action={caminho} className="space-y-4">
-          <h2 className="text-lg text-gray-800">Filtros</h2>
+          <h2 className="text-lg font-normal text-gray-800">Filtros</h2>
           {avancado && (
-            <div className="flex rounded-md border border-borda bg-white p-0.5 text-sm" role="tablist">
+            <div className="flex gap-4 border-b border-borda-painel" role="tablist">
               {(["simples", "avancado"] as const).map((a) => (
                 <button
                   key={a}
@@ -36,7 +37,7 @@ export function PainelFiltrosCliente({ caminho, children, limpar, avancado }: {
                   role="tab"
                   aria-selected={aba === a}
                   onClick={() => setAba(a)}
-                  className={cn("flex-1 rounded px-3 py-1.5 font-medium", aba === a ? "bg-verde text-white" : "text-gray-600 hover:bg-gray-50")}
+                  className={cn("-mb-px border-b-2 pb-1.5 text-[13px]", aba === a ? "border-verde font-medium text-gray-900" : "border-transparent text-gray-600 hover:text-gray-900")}
                 >
                   {a === "simples" ? "Simples" : "Avançado"}
                 </button>
@@ -50,11 +51,12 @@ export function PainelFiltrosCliente({ caminho, children, limpar, avancado }: {
               <FiltroAvancado campos={avancado.campos} valor={avancado.valor} />
             </div>
           )}
-          <div className="flex items-center gap-2">
-            <button type="submit" className="h-9 flex-1 rounded-md bg-verde px-4 text-sm font-semibold text-white hover:bg-verde-escuro">
+          <div className="flex items-center gap-3">
+            <button type="submit" className="inline-flex h-8 items-center gap-1.5 rounded-md bg-verde px-4 text-[13px] font-medium text-white hover:bg-verde-escuro">
+              <Check className="h-4 w-4" />
               Filtrar
             </button>
-            <Link href={limpar ?? caminho} className="h-9 rounded-md px-3 text-sm leading-9 text-gray-600 hover:bg-gray-100">
+            <Link href={limpar ?? caminho} className="text-[13px] text-gray-500 underline-offset-2 hover:text-gray-800 hover:underline">
               Limpar
             </Link>
           </div>

@@ -47,14 +47,14 @@ export default async function PaginaLancamentos({ searchParams }: { searchParams
             <input key={k} type="hidden" name={k} value={v} />
           ))}
         <FiltroSelecao
-          nome="categoria"
+          nome="categoria" operador={{ nome: "categoria_op", valor: f.categoriaOp }}
           rotulo="Categorias"
           valor={f.categoria}
           opcoes={[todas, ...opcoes.categorias.map((c) => ({ valor: String(c.id), rotulo: "  ".repeat(c.nivel - 1) + c.rotulo }))]}
         />
-        <FiltroSelecao nome="forma" rotulo="Formas de Pagamento" valor={f.forma} opcoes={[todas, ...opcoes.formas.map((o) => ({ valor: String(o.id), rotulo: o.rotulo }))]} />
-        <FiltroSelecao nome="contato" rotulo="Clientes e Fornecedores" valor={f.contato} opcoes={[{ valor: "", rotulo: "Todos" }, ...opcoes.contatos.map((o) => ({ valor: String(o.id), rotulo: o.rotulo }))]} />
-        <FiltroSelecao nome="tag" rotulo="Tags" valor={f.tag} opcoes={[todas, ...opcoes.tags.map((o) => ({ valor: String(o.id), rotulo: o.rotulo }))]} />
+        <FiltroSelecao nome="forma" operador={{ nome: "forma_op", valor: f.formaOp }} rotulo="Formas de Pagamento" valor={f.forma} opcoes={[todas, ...opcoes.formas.map((o) => ({ valor: String(o.id), rotulo: o.rotulo }))]} />
+        <FiltroSelecao nome="contato" operador={{ nome: "contato_op", valor: f.contatoOp }} rotulo="Clientes e Fornecedores" valor={f.contato} opcoes={[{ valor: "", rotulo: "Todos" }, ...opcoes.contatos.map((o) => ({ valor: String(o.id), rotulo: o.rotulo }))]} />
+        <FiltroSelecao nome="tag" operador={{ nome: "tag_op", valor: f.tagOp }} rotulo="Tags" valor={f.tag} opcoes={[todas, ...opcoes.tags.map((o) => ({ valor: String(o.id), rotulo: o.rotulo }))]} />
       </PainelFiltros>
     </>
   );

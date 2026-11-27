@@ -5,6 +5,8 @@ import type { Situacao, TipoLancamento } from "./regras";
 export type Aba = "todos" | "receitas" | "despesas" | "transferencias" | "recorrentes";
 export type FiltroSituacao = "" | "nao_realizado" | "realizado" | "a_vencer" | "vencido";
 
+export type OperadorFiltro = "" | "dif";
+
 export type Filtros = {
   mes: string; // "2026-11"
   aba: Aba;
@@ -16,6 +18,11 @@ export type Filtros = {
   forma: string;
   contato: string;
   tag: string;
+  /** Operador de cada filtro acima: "" = igual, "dif" = diferente. */
+  categoriaOp: OperadorFiltro;
+  formaOp: OperadorFiltro;
+  contatoOp: OperadorFiltro;
+  tagOp: OperadorFiltro;
   /** Filtro Avançado ("av" da URL). */
   avancado: string;
 };
