@@ -499,3 +499,16 @@ A pessoa pediu que as fases fossem construídas sem esperar (26/11/2026). Para c
 - Desvio por queda de sobra: queda de 20% ou mais em relação à da aprovação (constante, fora de Parâmetros). R10: compra parcelada grande = acima da sobra mensal (ou R$ 1.000,00 sem histórico).
 - **Agendar**: um clique, um lançamento não pago, só no mês atual e no seguinte, nunca acima do que falta agendar. Em dívida com parcelas, o mesmo valor sai das últimas parcelas em aberto (como "reduzir a quantidade" da amortização), para o saldo não contar duas vezes; em dívida sem parcelas, o extra agendado não soma ao saldo até ser pago. Fica registrado no histórico da dívida.
 - Dívidas sem parcelas não têm mínimo personalizável no plano. A previsão de quitação e a pergunta "Quando fico livre das dívidas?" passam a usar o plano ativo.
+
+
+### Decisões tomadas na construção da D6 (27/11/2026)
+
+- O recurso **Consultor com IA** nasce **desligado** (os outros recursos nascem ligados). Para ligar, a tela de Recursos mostra o aviso de privacidade e exige a confirmação; o servidor também recusa ligar sem ela.
+- **Provedor**: só Gemini (decisão provisória 11), mais o provedor **Simulado** para testar sem chave. Chave só em `GUI_IA_CHAVE`; enviada no cabeçalho `x-goog-api-key`. Modelo padrão `gemini-2.5-flash`, editável em Parâmetros, e limite padrão de 20 perguntas por dia (1 a 200).
+- **Quando vai para a IA**: só o texto livre que o Consultor não reconhece como pergunta pronta, com o recurso ligado. As prontas sempre são calculadas pelo Gui.
+- **Resumo anonimizado**: totais, renda, sobra, reserva, parcelas do mês, dívidas como "Dívida A, B" (tipo, saldo, taxa, parcela, atraso, garantia), faturas vencidas (só quantidade e total), propostas abertas (só valores) e o plano (versão, meses e déficit; sem nome). A pergunta é limpa de e-mails, documentos, telefones e números longos. O histórico enviado tem só as últimas perguntas e respostas da IA em forma anônima, nunca o texto calculado pelo Gui (que cita nomes). "Dívida A" volta a ser o nome real só na tela.
+- **Conferência**: valores em R$ e porcentagens da resposta que não estão no resumo nem na pergunta ganham o aviso "Confira antes de usar".
+- **Limite diário**: uma única instrução no banco reserva a chamada só se estiver abaixo do limite (duas perguntas ao mesmo tempo não passam dele). Toda tentativa conta, inclusive as que falham no provedor, porque o plano gratuito também as conta. Recurso desligado ou sem chave: nenhuma chamada e nenhuma contagem.
+- **Falhas**: sem chave, limite do dia, limite do provedor, rede, tempo esgotado (20 s) ou resposta vazia ficam registrados no assunto como aviso do Gui, e as perguntas prontas seguem valendo. A chamada de rede acontece fora de qualquer transação do banco.
+- **Ações**: a IA só pode indicar `simular`, `negociar`, `atualizar_saldo` e `criar_plano`; qualquer outra é descartada, e o endereço do botão é sempre montado pelo Gui.
+

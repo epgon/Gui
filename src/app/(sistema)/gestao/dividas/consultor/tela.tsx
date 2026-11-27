@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, ArchiveRestore, Bell, ChevronDown, MessageSquarePlus, Pencil, Send, ShieldAlert } from "lucide-react";
+import { Archive, ArchiveRestore, Bell, ChevronDown, Eye, MessageSquarePlus, Pencil, Send, ShieldAlert, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
@@ -14,14 +14,16 @@ import { cn } from "@/lib/cn";
 import { formatarData } from "@/lib/datas";
 import { PERGUNTAS_PRONTAS, interpretarPergunta, type IdPergunta, type Resposta } from "@/lib/dividas/consultor/perguntas";
 import type { Alerta } from "@/lib/dividas/consultor/regras";
+import { AVISO_PRIVACIDADE_IA } from "@/lib/dividas/consultor/ia/textos";
 import type { AssuntoLinha, MensagemLinha } from "@/lib/dividas/consultor/servidor";
-import { arquivarAssunto, criarAssunto, perguntarAoConsultor, renomearAssunto } from "./acoes";
+import { arquivarAssunto, criarAssunto, perguntarAoConsultor, renomearAssunto, verResumoIA, type ResumoParaVer } from "./acoes";
 
 const CAMINHO = "/gestao/dividas/consultor";
 
 type Pedido = { id: IdPergunta; valor: string; parcelas: string };
+export type StatusIAConsultor = { ligado: boolean; pronto: boolean; chaveCadastrada: boolean; provedor: string; usadasHoje: number; limiteDiario: number };
 
-export function TelaConsultor({ assuntos, escolhido, mensagens, alertas, mostrarArquivados }: { assuntos: AssuntoLinha[]; escolhido: number | null; mensagens: MensagemLinha[]; alertas: { visiveis: Alerta[]; escondidos: Alerta[] }; mostrarArquivados: boolean }) {
+export function TelaConsultor({ assuntos, escolhido, mensagens, alertas, mostrarArquivados, ia }: { ia: StatusIAConsultor; assuntos: AssuntoLinha[]; escolhido: number | null; mensagens: MensagemLinha[]; alertas: { visiveis: Alerta[]; escondidos: Alerta[] }; mostrarArquivados: boolean }) {
   const router = useRouter();
   const assunto = escolhido !== null ? assuntos.find((a) => a.id === escolhido) ?? null : null;
   const [texto, setTexto] = useState("");
@@ -30,6 +32,7 @@ export function TelaConsultor({ assuntos, escolhido, mensagens, alertas, mostrar
   const [janela, setJanela] = useState<"novo" | "renomear" | null>(null);
   const [titulo, setTitulo] = useState("");
   const [ocupado, iniciar] = useTransition();
+  const [resumo, setResumo] = useState<ResumoParaVer | null>(null);
 
   const abertos = assuntos.filter((a) => a.situacao === "aberto");
   const arquivados = assuntos.filter((a) => a.situacao === "arquivado");
@@ -67,6 +70,18 @@ export function TelaConsultor({ assuntos, escolhido, mensagens, alertas, mostrar
     enviar({ pergunta: null, texto, valor: "", parcelas: "" });
   };
 
+  const verEnviado = () =>
+    iniciar(async () => {
+      setErro("");
+      try {
+        const r = await verResumoIA();
+        if (!r.ok) return setErro(r.erro);
+        setResumo(r);
+      } catch {
+        setErro("Não foi possível montar o resumo agora. Tente de novo.");
+      }
+    });
+
   const criar = () =>
     iniciar(async () => {
       setErro("");
@@ -100,6 +115,23 @@ export function TelaConsultor({ assuntos, escolhido, mensagens, alertas, mostrar
     <>
       <AbasDividas ativa={CAMINHO} />
       <FaixaErro>{erro && <TextoComDestaque texto={erro} />}</FaixaErro>
+      {ia.ligado && (
+        <section className="rounded-xl border border-amarelo-borda bg-amarelo px-4 py-3 text-sm text-amarelo-texto" aria-label="Aviso de privacidade da IA">
+          <p className="flex flex-wrap items-center gap-2 font-semibold">
+            <Sparkles className="h-4 w-4" /> Consultor com IA ligado
+            <span className="rounded-full bg-white/60 px-2 py-0.5 text-xs font-medium">
+              {ia.provedor} · {ia.usadasHoje} de {ia.limiteDiario} perguntas hoje
+            </span>
+          </p>
+          <p className="mt-1">Perguntas que não são das prontas vão para um serviço de fora, com um resumo anonimizado dos seus números. Nos planos gratuitos, o provedor pode usar o conteúdo para melhorar os produtos dele. Não escreva nomes, documentos ou números de conta na pergunta.</p>
+          {!ia.pronto && <p className="mt-1 font-medium">Falta cadastrar a chave da IA (GUI_IA_CHAVE): enquanto isso, nada é enviado e as perguntas prontas seguem funcionando.</p>}
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Botao type="button" variante="secundario" icone={<Eye className="h-4 w-4" />} carregando={ocupado} onClick={verEnviado}>
+              Ver o que será enviado
+            </Botao>
+          </div>
+        </section>
+      )}
       <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
         {/* Assuntos */}
         <aside className="space-y-3" aria-label="Assuntos do Consultor">
@@ -196,7 +228,7 @@ export function TelaConsultor({ assuntos, escolhido, mensagens, alertas, mostrar
                   perguntarTexto();
                 }}
               >
-                <CampoTexto rotulo="Ou escreva a sua pergunta" valor={texto} aoMudar={setTexto} maxLength={300} placeholder='Ex.: "quanto devo", "pagar primeiro", "cabe R$ 300"' className="min-w-64 flex-1" ajuda="O Consultor ainda não conversa em texto livre: ele reconhece palavras-chave e números e leva você à pergunta pronta certa. Quando não entende, diz isso." />
+                <CampoTexto rotulo="Ou escreva a sua pergunta" valor={texto} aoMudar={setTexto} maxLength={300} placeholder='Ex.: "quanto devo", "pagar primeiro", "cabe R$ 300"' className="min-w-64 flex-1" ajuda={ia.ligado ? "Perguntas que não são das prontas vão para a IA (resposta marcada como \"Resposta com IA\"). As prontas continuam sendo calculadas pelo Gui." : "O Consultor ainda não conversa em texto livre: ele reconhece palavras-chave e números e leva você à pergunta pronta certa. Quando não entende, diz isso."} />
                 <Botao type="submit" icone={<Send className="h-4 w-4" />} carregando={ocupado} disabled={!texto.trim()}>
                   Perguntar
                 </Botao>
@@ -208,6 +240,41 @@ export function TelaConsultor({ assuntos, escolhido, mensagens, alertas, mostrar
           </p>
         </section>
       </div>
+
+      <Modal
+        aberto={resumo !== null}
+        aoFechar={() => setResumo(null)}
+        titulo="O que será enviado à IA"
+        resumo="Exatamente este texto sai do Gui quando você faz uma pergunta livre."
+        largura="larga"
+        rodape={
+          <Botao type="button" variante="secundario" onClick={() => setResumo(null)}>
+            Fechar
+          </Botao>
+        }
+      >
+        {resumo?.ok && (
+          <div className="space-y-3 text-sm text-gray-700">
+            <p>
+              Provedor: <strong>{resumo.provedor}</strong> · Modelo: <strong>{resumo.modelo}</strong>
+              {resumo.semChave && " · sem chave cadastrada: nada é enviado"}
+            </p>
+            <div>
+              <p className="mb-1 font-semibold text-gray-900">Resumo dos seus números + a sua pergunta</p>
+              <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg border border-borda bg-subcabecalho p-3 text-xs leading-relaxed">{resumo.texto}</pre>
+            </div>
+            <details className="rounded-lg border border-borda px-3 py-2">
+              <summary className="cursor-pointer font-medium text-gray-800">Instrução fixa que acompanha a pergunta</summary>
+              <pre className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-gray-600">{resumo.instrucao}</pre>
+            </details>
+            <ul className="list-disc space-y-1 pl-5 text-xs text-gray-500">
+              {AVISO_PRIVACIDADE_IA.map((t) => (
+                <li key={t}>{t}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </Modal>
 
       <Modal
         aberto={janela !== null}
@@ -249,6 +316,35 @@ function Mensagem({ m }: { m: MensagemLinha }) {
       <div className="flex justify-end">
         <p className="max-w-[85%] rounded-2xl rounded-br-sm bg-verde px-4 py-2 text-sm text-white">{m.texto}</p>
       </div>
+    );
+  }
+  if (m.autor === "gui_ia") {
+    const ia = m.dados as { acoes?: { rotulo: string; href: string }[]; numerosFora?: string[] } | null;
+    return (
+      <article className="max-w-3xl rounded-2xl rounded-bl-sm border border-borda bg-white p-4 shadow-cartao">
+        <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-400">
+          Consultor Gui <span className="inline-flex items-center gap-1 rounded-full bg-amarelo px-2 py-0.5 normal-case tracking-normal text-amarelo-texto"><Sparkles className="h-3 w-3" />Resposta com IA</span>
+        </p>
+        <p className="mt-1 whitespace-pre-line text-sm text-gray-900">{m.texto}</p>
+        {ia?.numerosFora && ia.numerosFora.length > 0 && (
+          <p className="mt-3 rounded-md border border-amarelo-borda bg-amarelo px-3 py-2 text-xs text-amarelo-texto">
+            Confira antes de usar: {ia.numerosFora.join(", ")} {ia.numerosFora.length === 1 ? "não está" : "não estão"} nos números enviados à IA. Os números oficiais são os calculados pelo Gui.
+          </p>
+        )}
+        {ia?.acoes && ia.acoes.length > 0 && (
+          <>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {ia.acoes.map((a) => (
+                <Link key={a.href + a.rotulo} href={a.href} className="inline-flex h-8 items-center rounded-md border border-verde px-3 text-sm font-semibold text-verde hover:bg-verde-claro">
+                  {a.rotulo}
+                </Link>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] text-gray-400">A IA só sugere: os botões abrem a tela certa. Nada é pago ou alterado sem você confirmar na janela.</p>
+          </>
+        )}
+        <p className="mt-2 text-[11px] text-gray-400">Resposta de uma IA externa a partir de um resumo dos seus números. Pode errar e não substitui um profissional.</p>
+      </article>
     );
   }
   const dados = m.dados as { tipo?: string; resposta?: Resposta } | null;

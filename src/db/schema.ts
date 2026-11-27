@@ -945,6 +945,22 @@ export const consultorMensagem = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// Gestão de Dívidas (fase D6): Consultor com IA (só a contagem de chamadas por dia)
+// ---------------------------------------------------------------------------
+
+/** Quantas vezes a IA externa foi chamada em cada dia (para o limite diário e o limite do plano gratuito). Não guarda perguntas, respostas nem chave. */
+export const consultorUsoIa = pgTable("consultor_uso_ia", {
+  id: serial("id").primaryKey(),
+  dia: date("dia", { mode: "string" }).notNull().unique(),
+  chamadas: integer("chamadas").notNull().default(0),
+  falhas: integer("falhas").notNull().default(0),
+  atualizadoEm: timestamp("atualizado_em", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+// ---------------------------------------------------------------------------
 // Gestão de Dívidas (fase D5): Plano de Quitação
 // ---------------------------------------------------------------------------
 
