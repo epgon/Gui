@@ -11,7 +11,7 @@ const { importacao, importacaoLinha: linha, mapeamentoCsv, regraImportacao, cont
 export type ImportacaoLista = {
   id: number;
   arquivoNome: string;
-  formato: "ofx" | "csv";
+  formato: "ofx" | "csv" | "pdf";
   situacao: "rascunho" | "concluida" | "cancelada";
   etapa: "destino" | "vinculo" | "revisao";
   destino: string | null;

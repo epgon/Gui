@@ -110,7 +110,7 @@ export function TelaImportacoes({ aba, importacoes, regras, opcoes }: { aba: "im
           chaveLinha={(i) => i.id}
           vazio={
             <span>
-              Nenhuma importação ainda. Clique em <strong>Nova Importação</strong> e envie o extrato OFX ou CSV do seu banco.
+              Nenhuma importação ainda. Clique em <strong>Nova Importação</strong> e envie o extrato OFX ou CSV do seu banco (ou o PDF da fatura do cartão do Banco do Brasil).
             </span>
           }
           colunas={[

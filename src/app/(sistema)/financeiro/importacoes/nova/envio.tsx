@@ -11,7 +11,7 @@ import { FaixaErro } from "@/components/ui/faixa-erro";
 import { cn } from "@/lib/cn";
 import { Etapas } from "../etapas";
 
-/** Passo 1: escolher o arquivo do extrato (OFX, CSV ou TXT). */
+/** Passo 1: escolher o arquivo do extrato (OFX, CSV, TXT ou PDF da fatura do BB). */
 export function EnvioArquivo() {
   const router = useRouter();
   const entrada = useRef<HTMLInputElement>(null);
@@ -56,7 +56,7 @@ export function EnvioArquivo() {
         <div className="space-y-4">
           <p className="text-sm text-gray-600">
             Baixe o extrato no site ou aplicativo do banco no formato <strong>OFX</strong> (o melhor: os campos são reconhecidos sozinhos) ou <strong>CSV</strong>. Também serve a
-            fatura do cartão de crédito.
+            fatura do cartão de crédito. A fatura do cartão do <strong>Banco do Brasil</strong> pode ser enviada direto em <strong>PDF</strong>.
           </p>
           <label
             onDragOver={(e) => {
@@ -84,8 +84,8 @@ export function EnvioArquivo() {
                 Arraste o arquivo para cá ou <span className="font-semibold text-verde underline">clique para escolher</span>
               </span>
             )}
-            <span className="text-xs text-gray-500">.OFX, .CSV ou .TXT, até 2 MB</span>
-            <input ref={entrada} type="file" accept=".ofx,.qfx,.csv,.txt,.xls,.xlsx" className="sr-only" onChange={(e) => escolher(e.target.files?.[0])} aria-label="Arquivo do extrato" />
+            <span className="text-xs text-gray-500">.OFX, .CSV ou .TXT, até 2 MB, ou .PDF da fatura do Banco do Brasil</span>
+            <input ref={entrada} type="file" accept=".ofx,.qfx,.csv,.txt,.pdf,.xls,.xlsx" className="sr-only" onChange={(e) => escolher(e.target.files?.[0])} aria-label="Arquivo do extrato" />
           </label>
           <FaixaErro>{erro && <TextoComDestaque texto={erro} />}</FaixaErro>
           <p className="text-xs text-gray-500">
