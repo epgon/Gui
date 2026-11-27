@@ -3,6 +3,7 @@
 import { Plus, X } from "lucide-react";
 import { useId } from "react";
 import { Rotulo } from "@/components/ui/campo";
+import { SeletorCategoria } from "@/components/ui/seletor-categoria";
 import { cn } from "@/lib/cn";
 import type { OpcaoCategoria, OpcaoDestino, OpcaoSimples } from "@/lib/lancamentos/tipos";
 
@@ -53,27 +54,11 @@ export function CampoCategoria({ rotulo = "Categoria", valor, aoMudar, categoria
   obrigatorio?: boolean;
 }) {
   const id = useId();
-  const escolhida = categorias.find((c) => String(c.id) === valor);
   const lista = categorias.filter((c) => c.natureza === natureza && (c.ativo || String(c.id) === valor));
   return (
     <div>
       <Rotulo texto={rotulo} obrigatorio={obrigatorio} htmlFor={id} />
-      <div className="relative">
-        <span
-          className="pointer-events-none absolute top-1/2 left-3 h-2.5 w-2.5 -translate-y-1/2 rounded-full"
-          style={{ background: escolhida?.cor ?? "#d1d5db" }}
-          aria-hidden
-        />
-        <select id={id} value={valor} onChange={(e) => aoMudar(e.target.value)} className={cn(estilo, "pl-8")}>
-          <option value="">Selecione</option>
-          {lista.map((c) => (
-            <option key={c.id} value={c.id}>
-              {"   ".repeat(c.nivel - 1)}
-              {c.rotulo}
-            </option>
-          ))}
-        </select>
-      </div>
+      <SeletorCategoria id={id} valor={valor} aoMudar={aoMudar} categorias={lista} className="h-10 px-3" />
     </div>
   );
 }
