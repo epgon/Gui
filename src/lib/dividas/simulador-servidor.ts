@@ -34,7 +34,7 @@ export async function carregarSituacaoFinanceira(hoje = hojeIso()): Promise<{ si
   const db = getDb();
   const { dividas: p } = await lerParametros();
   const { inicio, fim } = periodoDaSobra(hoje, p.sobraMeses);
-  const filtros: FiltrosRelatorio = { de: "", ate: "", inicio, fim, destino: "", situacao: "realizado", considerar: "pagamento", categoria: "", forma: "", contato: "", tag: "", incluirAcerto: false, incluirTransferencia: false };
+  const filtros: FiltrosRelatorio = { de: "", ate: "", inicio, fim, destino: "", situacao: "realizado", considerar: "pagamento", categoria: "", forma: "", contato: "", tag: "", incluirAcerto: false, incluirTransferencia: false, incluirZeradas: false };
   const arvore = await carregarArvore();
   const [movimentos, contas, saldos] = await Promise.all([
     carregarMovimentos(filtros, arvore, hoje),
