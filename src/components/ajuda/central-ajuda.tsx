@@ -3,12 +3,13 @@
 import { ArrowLeft, BookOpen, CircleHelp, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LeitorArtigo } from "@/components/ajuda/leitor-artigo";
+import { cn } from "@/lib/cn";
 import { Modal } from "@/components/ui/modal";
 import { artigosDaTela, buscarArtigos } from "@/lib/ajuda/busca";
 import { ARTIGOS_DIVIDAS } from "@/lib/ajuda/dividas";
 import { ASSUNTOS_AJUDA, type ArtigoAjuda, type TelaAjuda } from "@/lib/ajuda/tipos";
 
-const SEM_RESULTADO = "Nenhum artigo encontrado. Tente outra palavra, como cartão, empréstimo ou acordo.";
+export const SEM_RESULTADO = "Nenhum artigo encontrado. Tente outra palavra, como cartão, empréstimo ou acordo.";
 
 function ItemArtigo({ artigo, aoAbrir }: { artigo: ArtigoAjuda; aoAbrir: (id: string) => void }) {
   return (
@@ -119,7 +120,7 @@ export function JanelaAjuda({ tela, artigoInicial, aberto, aoFechar }: { tela: T
 }
 
 /** Botão pequeno "Ajuda", ao lado das abas. Aceita ?ajuda=<id> no endereço para abrir direto num artigo. */
-export function BotaoAjuda({ tela }: { tela: TelaAjuda }) {
+export function BotaoAjuda({ tela, className }: { tela: TelaAjuda; className?: string }) {
   const [aberto, setAberto] = useState(false);
   const [artigo, setArtigo] = useState<string | undefined>(undefined);
 
@@ -134,57 +135,10 @@ export function BotaoAjuda({ tela }: { tela: TelaAjuda }) {
 
   return (
     <>
-      <button type="button" onClick={() => { setArtigo(undefined); setAberto(true); }} className="-mb-px ml-auto inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-verde hover:text-verde-escuro hover:underline">
+      <button type="button" onClick={() => { setArtigo(undefined); setAberto(true); }} className={cn("-mb-px ml-auto inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-verde hover:text-verde-escuro hover:underline", className)}>
         <CircleHelp className="h-4 w-4" aria-hidden="true" /> Ajuda
       </button>
       <JanelaAjuda tela={tela} artigoInicial={artigo} aberto={aberto} aoFechar={() => setAberto(false)} />
-    </>
-  );
-}
-
-/** Painel da direita das telas de dívidas: busca que funciona e atalhos para os artigos da tela. */
-export function PainelAjudaDividas({ tela, trilha = [] }: { tela: TelaAjuda; trilha?: string[] }) {
-  const [busca, setBusca] = useState("");
-  const [janela, setJanela] = useState<{ artigo?: string } | null>(null);
-  const termo = busca.trim();
-  const lista = useMemo(() => (termo ? buscarArtigos(ARTIGOS_DIVIDAS, termo) : artigosDaTela(ARTIGOS_DIVIDAS, tela)).slice(0, 8), [termo, tela]);
-  return (
-    <>
-      <aside className="hidden w-72 shrink-0 border-l border-borda-painel bg-painel xl:block" aria-label="Central de Ajuda">
-        <div className="sticky top-14 space-y-4 p-4">
-          <div>
-            <h2 className="text-sm font-semibold text-gray-800">Central de Ajuda</h2>
-            <p className="text-xs text-gray-500">Como podemos ajudá-lo?</p>
-          </div>
-          {trilha.length > 0 && (
-            <nav aria-label="Onde você está" className="text-xs text-gray-500">
-              {["Início", ...trilha].join(" > ")}
-            </nav>
-          )}
-          <label className="flex h-9 items-center gap-2 rounded-md border border-borda bg-white px-3 text-sm text-gray-700 focus-within:border-verde">
-            <Search className="h-4 w-4 shrink-0 text-gray-400" aria-hidden="true" />
-            <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar artigos" aria-label="Buscar artigos" className="w-full bg-transparent outline-none placeholder:text-gray-400" />
-          </label>
-          {lista.length > 0 ? (
-            <ul className="space-y-1">
-              {lista.map((a) => (
-                <li key={a.id}>
-                  <button type="button" onClick={() => setJanela({ artigo: a.id })} className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm text-gray-700 hover:bg-white hover:text-verde">
-                    <BookOpen className="mt-0.5 h-4 w-4 shrink-0 text-verde" aria-hidden="true" />
-                    {a.titulo}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-xs text-gray-500">{SEM_RESULTADO}</p>
-          )}
-          <button type="button" onClick={() => setJanela({})} className="text-sm font-semibold text-verde hover:underline">
-            Ver todos os artigos
-          </button>
-        </div>
-      </aside>
-      <JanelaAjuda tela={tela} artigoInicial={janela?.artigo} aberto={janela !== null} aoFechar={() => setJanela(null)} />
     </>
   );
 }

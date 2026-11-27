@@ -1,6 +1,6 @@
 import { desc } from "drizzle-orm";
 import { CabecalhoPagina } from "@/components/layout/cabecalho-pagina";
-import { PainelAjudaDividas } from "@/components/ajuda/central-ajuda";
+import { PainelAjuda } from "@/components/layout/painel-ajuda";
 import { RecursoDesativado } from "@/components/layout/recurso-desativado";
 import { getDb, schema } from "@/db";
 import { parametro, type ParametrosBusca } from "@/lib/cadastros/filtros";
@@ -118,7 +118,7 @@ export default async function PaginaPlano({ searchParams }: { searchParams: Prom
           />
         </div>
       </main>
-      <PainelAjudaDividas tela="plano" trilha={["Gestão", "Gestão de Dívidas", "Plano de Quitação"]} />
+      <PainelAjuda />
     </>
   );
 }

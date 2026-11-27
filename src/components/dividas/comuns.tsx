@@ -7,17 +7,8 @@ import { formatarData } from "@/lib/datas";
 import { rotuloSituacaoNegociacao, type SituacaoNegociacao } from "@/lib/dividas/negociacao";
 import { ROTULO_SITUACAO_DIVIDA, type ResumoSaldo, type SituacaoDivida } from "@/lib/dividas/regras";
 import { formatarReais } from "@/lib/dividas/simulador";
-import type { TelaAjuda } from "@/lib/ajuda/tipos";
+import { TELA_DA_ABA } from "@/lib/ajuda/contexto";
 import { ABAS_DIVIDAS } from "@/lib/menu";
-
-const TELA_DA_ABA: Record<string, TelaAjuda> = {
-  "/gestao/dividas": "visao",
-  "/gestao/dividas/minhas": "minhas",
-  "/gestao/dividas/negociacoes": "negociacoes",
-  "/gestao/dividas/simulador": "simulador",
-  "/gestao/dividas/plano": "plano",
-  "/gestao/dividas/consultor": "consultor",
-};
 
 /** Abas do módulo, no estilo das abas de Lançamentos. Cada uma tem endereço próprio. */
 export function AbasDividas({ ativa }: { ativa: string }) {
@@ -34,7 +25,8 @@ export function AbasDividas({ ativa }: { ativa: string }) {
           {a.titulo}
         </Link>
       ))}
-      <BotaoAjuda tela={TELA_DA_ABA[ativa] ?? "visao"} />
+      {/* Do xl para cima a ajuda fica na barra do painel lateral; o botão só serve a telas menores. */}
+      <BotaoAjuda tela={TELA_DA_ABA[ativa] ?? "visao"} className="xl:hidden" />
     </div>
   );
 }
