@@ -6,6 +6,7 @@ import { Botao } from "@/components/ui/botao";
 import { CampoTexto, EntradaValor, Rotulo, TextoComDestaque } from "@/components/ui/campo";
 import { FaixaErro } from "@/components/ui/faixa-erro";
 import { Modal } from "@/components/ui/modal";
+import { SeletorCategoria } from "@/components/ui/seletor-categoria";
 import { cn } from "@/lib/cn";
 import { CAMPOS_CONDICAO, OPERADORES } from "@/lib/importacao/regras";
 import type { Condicao, DadosRegra } from "@/lib/importacao/tipos";
@@ -34,25 +35,11 @@ const estilo = "h-10 w-full rounded-md border border-borda bg-white px-3 text-sm
 /** Categoria de qualquer natureza (a regra pode valer para despesas e receitas). */
 export function CampoCategoriaTodas({ valor, aoMudar, opcoes, rotulo = "Categoria", natureza }: { valor: string; aoMudar: (v: string) => void; opcoes: Opcoes; rotulo?: string; natureza?: "receita" | "despesa" }) {
   const id = useId();
-  const grupos = (["despesa", "receita"] as const).filter((n) => !natureza || n === natureza);
+  const lista = opcoes.categorias.filter((c) => (!natureza || c.natureza === natureza) && (c.ativo || String(c.id) === valor));
   return (
     <div>
       <Rotulo texto={rotulo} htmlFor={id} />
-      <select id={id} value={valor} onChange={(e) => aoMudar(e.target.value)} className={estilo}>
-        <option value="">Não preencher</option>
-        {grupos.map((n) => (
-          <optgroup key={n} label={n === "despesa" ? "Despesas" : "Receitas"}>
-            {opcoes.categorias
-              .filter((c) => c.natureza === n && (c.ativo || String(c.id) === valor))
-              .map((c) => (
-                <option key={c.id} value={c.id}>
-                  {"   ".repeat(c.nivel - 1)}
-                  {c.rotulo}
-                </option>
-              ))}
-          </optgroup>
-        ))}
-      </select>
+      <SeletorCategoria id={id} valor={valor} aoMudar={aoMudar} categorias={lista} vazio="Não preencher" agrupar={!natureza} className="h-10 px-3" />
     </div>
   );
 }

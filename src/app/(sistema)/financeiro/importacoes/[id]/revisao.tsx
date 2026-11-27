@@ -11,6 +11,7 @@ import { Cartao } from "@/components/ui/cartao";
 import { Chave } from "@/components/ui/chave";
 import { FaixaErro } from "@/components/ui/faixa-erro";
 import { Modal } from "@/components/ui/modal";
+import { SeletorCategoria } from "@/components/ui/seletor-categoria";
 import { Valor } from "@/components/ui/valor";
 import { cn } from "@/lib/cn";
 import { formatarData } from "@/lib/datas";
@@ -449,23 +450,15 @@ function LinhaTabela({ l, imp, opcoes, somenteLeitura, ocupado, marcado, aoMarca
       </td>
       <td className="min-w-52 px-3 py-2.5">
         {editavel ? (
-          <select
-            aria-label={`Categoria de ${descricao}`}
-            value={l.campos.categoriaId ? String(l.campos.categoriaId) : ""}
-            disabled={ocupado}
-            onChange={(e) => aoMudarCategoria(e.target.value)}
-            className={cn("h-8 w-full rounded-md border bg-white px-2 text-sm outline-none focus:border-verde", !l.campos.categoriaId && l.status === "novo" ? "border-despesa/50" : "border-borda")}
-          >
-            <option value="">Escolha a categoria</option>
-            {opcoes.categorias
-              .filter((c) => c.natureza === l.tipo && (c.ativo || c.id === l.campos.categoriaId))
-              .map((c) => (
-                <option key={c.id} value={c.id}>
-                  {"   ".repeat(c.nivel - 1)}
-                  {c.rotulo}
-                </option>
-              ))}
-          </select>
+          <SeletorCategoria
+            rotulo={`Categoria de ${descricao}`}
+            vazio="Escolha a categoria"
+            valor={l.campos.categoriaId ? String(l.campos.categoriaId) : ""}
+            desabilitado={ocupado}
+            aoMudar={aoMudarCategoria}
+            categorias={opcoes.categorias.filter((c) => c.natureza === l.tipo && (c.ativo || c.id === l.campos.categoriaId))}
+            alerta={!l.campos.categoriaId && l.status === "novo"}
+          />
         ) : l.status === "encontrado" || l.status === "pendente" ? (
           <span className="text-xs text-gray-500" title="Ao conciliar, o lançamento que já existe mantém a categoria dele.">Fica a do lançamento existente</span>
         ) : (
