@@ -106,7 +106,7 @@ const TOLERANCIAS = [
   { valor: "15", rotulo: "15 dias antes ou depois" },
 ];
 
-/** Informações que vieram no arquivo OFX (banco, conta, período, saldo). */
+/** Informações que vieram no arquivo OFX ou na fatura em PDF (banco, conta, período, saldo). */
 function InfoArquivo({ imp }: { imp: DetalheImportacao }) {
   const i = imp.infoArquivo as { banco?: string; agencia?: string; conta?: string; cartao?: boolean; inicio?: string; fim?: string; saldoCentavos?: number | null; saldoData?: string; transacoes?: number };
   return (
@@ -130,10 +130,36 @@ function InfoArquivo({ imp }: { imp: DetalheImportacao }) {
             </span>
           )}
         </>
+      ) : imp.formato === "pdf" ? (
+        <InfoFaturaPdf info={imp.infoArquivo as InfoFatura} />
       ) : (
         <span>Arquivo CSV: na próxima etapa você diz o que é cada coluna.</span>
       )}
     </div>
+  );
+}
+
+type InfoFatura = { banco?: string; conta?: string | null; fim?: string; vencimento?: string | null; totalCentavos?: number | null; transacoes?: number; ignorados?: number; confere?: boolean };
+
+/** Fatura do cartão em PDF: banco, cartão, fechamento, vencimento e total, e se os lançamentos batem com o total. */
+function InfoFaturaPdf({ info: i }: { info: InfoFatura }) {
+  return (
+    <>
+      {i.banco && <span>Banco: {i.banco}</span>}
+      {i.conta && <span>Cartão: {i.conta}</span>}
+      {i.fim && <span>Fechada em {formatarData(i.fim)}</span>}
+      {i.vencimento && <span>Vencimento: {formatarData(i.vencimento)}</span>}
+      {typeof i.totalCentavos === "number" && (
+        <span>
+          Total da fatura: <Valor centavos={i.totalCentavos} />
+        </span>
+      )}
+      {!!i.transacoes && <span>{i.transacoes} lançamentos</span>}
+      {!!i.ignorados && <span className="w-full text-xs text-gray-500">O saldo da fatura anterior e o pagamento da fatura não entram: o pagamento é feito pela própria fatura no Gui.</span>}
+      {i.confere === false && (
+        <span className="w-full text-xs font-semibold text-amarelo-texto">Atenção: a soma dos lançamentos lidos não bateu com o total da fatura. Confira na revisão se falta alguma linha.</span>
+      )}
+    </>
   );
 }
 

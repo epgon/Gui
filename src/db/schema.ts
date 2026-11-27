@@ -538,7 +538,7 @@ export const recorrenciaExcecao = pgTable(
 // 4.7. Importação OFX e CSV, regras e conciliação (Fase 6)
 // ---------------------------------------------------------------------------
 
-export const formatoImportacaoEnum = pgEnum("formato_importacao", ["ofx", "csv"]);
+export const formatoImportacaoEnum = pgEnum("formato_importacao", ["ofx", "csv", "pdf"]);
 export const situacaoImportacaoEnum = pgEnum("situacao_importacao", ["rascunho", "concluida", "cancelada"]);
 /** Em que passo do assistente a importação parou (para retomar o rascunho). */
 export const etapaImportacaoEnum = pgEnum("etapa_importacao", ["destino", "vinculo", "revisao"]);

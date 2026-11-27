@@ -9,6 +9,7 @@ import { contemTexto } from "@/lib/cadastros/filtros";
 import { formatarData } from "@/lib/datas";
 import { formatarCentavos } from "@/lib/dinheiro";
 import { aplicarConfiguracao, conferirConfiguracao } from "@/lib/importacao/csv";
+import { lerFaturaBb } from "@/lib/importacao/fatura-bb";
 import { ErroArquivo, lerOfx } from "@/lib/importacao/ofx";
 import { CAMPOS_CONDICAO, OPERADORES } from "@/lib/importacao/regras";
 import { ErroImportacao, erro, gravarLinhas, processarLinhas, type Importacao, type LinhaImportacao } from "@/lib/importacao/servidor";
@@ -96,6 +97,7 @@ export async function definirDestino(id: number, d: DadosDestino): Promise<R<{ e
     const tolerancia = Number(d.toleranciaDias);
     if (!Number.isInteger(tolerancia) || tolerancia < 0 || tolerancia > 30) erro("Informe de 0 a 30 dias no campo **Tolerância da data**.");
     const eConta = m![1] === "conta";
+    if (eConta && imp.formato === "pdf") erro("A fatura em PDF é de cartão de crédito: escolha o **cartão** que recebe os lançamentos.");
     const valores = {
       contaId: eConta ? destinoId : null,
       cartaoId: eConta ? null : destinoId,
@@ -111,7 +113,7 @@ export async function definirDestino(id: number, d: DadosDestino): Promise<R<{ e
       await tx.update(importacao).set({ etapa: "vinculo" }).where(eq(importacao.id, id));
       return { etapa: "vinculo" };
     }
-    const { transacoes, puladas } = lerOfx(atual.conteudo);
+    const { transacoes, puladas } = atual.formato === "pdf" ? lerFaturaBb(atual.conteudo) : lerOfx(atual.conteudo);
     await gravarLinhas(tx, atual, transacoes);
     await tx.update(importacao).set({ etapa: "revisao", linhasPuladas: puladas }).where(eq(importacao.id, id));
     return { etapa: "revisao" };
@@ -185,7 +187,7 @@ export async function voltarEtapa(id: number, etapa: "destino" | "vinculo"): Pro
   return executar(async (tx) => {
     const imp = await rascunho(tx, id);
     await semAcoesFeitas(tx, imp);
-    if (etapa === "vinculo" && imp.formato !== "csv") erro("Arquivos OFX não têm vínculo de colunas.");
+    if (etapa === "vinculo" && imp.formato !== "csv") erro("Só arquivos CSV têm vínculo de colunas.");
     await tx.delete(linha).where(eq(linha.importacaoId, id));
     await tx.update(importacao).set({ etapa: etapa === "vinculo" ? "vinculo" : "destino" }).where(eq(importacao.id, id));
     return {};
